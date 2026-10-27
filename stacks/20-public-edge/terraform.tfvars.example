@@ -29,3 +29,10 @@ admin = {
 }
 
 public_dns = { zone = "example.org.", names = ["", "www"], ttl = 300 }
+
+# Optional bastion with a floating IP on an administration network; with it, admin.ssh_cidrs
+# can stay empty.
+bastion = {
+  external_network = { network = "intranet", subnet = "intranet" }
+  ssh_cidrs        = ["192.0.2.0/24"]
+}
