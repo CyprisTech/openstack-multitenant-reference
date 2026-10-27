@@ -29,6 +29,6 @@ A reference architecture for a multi-tenant OpenStack cloud, built on the
 
 | Version | Content |
 |---|---|
-| v0.1 | Layers 20 and 30 in one site, layer 10 provided by the operator. Before release: tag terraform-openstack-tenant `v0.1.2` and move the stacks from commit `fa88feb` to that tag |
+| v0.1 | Layers 20 and 30 in one site, layer 10 provided by the operator. Stacks pinned to terraform-openstack-tenant `v0.1.2` |
 | v0.2 | Layer 10 with cloud-baseline (terraform-openstack-tenant v0.2) |
 | later | Failover between sites: an edge per site, runbook, failover drill |

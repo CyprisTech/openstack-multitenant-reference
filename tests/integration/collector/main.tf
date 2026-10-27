@@ -38,7 +38,7 @@ locals {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
 
   hostname       = local.name
   package_update = false
@@ -46,7 +46,7 @@ module "cloudinit" {
 }
 
 module "collector" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=fa88febb8a2676282d9995ca36396be353e667df"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
 
   tenant = {
     existing = {
