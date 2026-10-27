@@ -142,7 +142,9 @@ Each row is checked by the acceptance test after deployment. *Enforced by* names
 | `platform` | `intranet` | any | allowed | router to `intranet` |
 | `web` | `intranet` | any | denied | no router to `intranet` |
 | `isolated` | `web`, `platform`, `edge` | any | denied | no route |
-| `monitoring` plane | every project | metrics ports | allowed | router to `monitoring`, security group |
+| Collector | every instance, through its `monitoring` floating IP | metrics ports | allowed | floating IP of `monitoring`, route to the plane range, security group (source = `collector_cidrs`) |
+| Any tenant | another tenant, through `monitoring` floating IPs | metrics ports | denied | security group (source = `collector_cidrs` only: every tenant reaches the plane with an address of its range, through source NAT) |
+| `isolated` | the Internet | any | denied | no egress router |
 
 ## Layer 10 contract
 
@@ -153,6 +155,8 @@ Until cloud-baseline (module v0.2) provides layer 10, the operator must supply t
 | Networks `svc_public`, `intranet`, `monitoring` | Visible to the tenant projects (shared or external), each with one subnet usable as a router gateway |
 | Plane routes | The CIDR of each plane, to be advertised by DHCP in the tenant subnets |
 | MTU | The MTU of each plane, and the largest MTU the cloud carries for tenant networks (lower when the tenant overlay itself runs over a tunnel). Tenant networks that join a plane use the smallest of these values (`network_mtu`): OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets |
+| Monitoring zone | A DNS zone shared with the tenant projects, where each stack writes the A records of its instances (collector service discovery) |
+| Collector | A collector with an address in the `monitoring` range, outgoing TCP to the metrics ports, and its addresses published (`monitoring.collector_cidrs` of the stacks) |
 | Reserved ranges | The ranges tenants must not use for their networks (ranges used by the cloud infrastructure) |
 | Public network | A network providing floating IPs reachable from the internet, for the edge load balancer |
 | Octavia | Available to the projects, with a load balancer flavor (amphora topology) |
@@ -182,9 +186,10 @@ Indicative minimum to run the whole scenario.
 
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|
-| `edge` | 2 | 4 | 4 GiB | 1 | 1 (public) |
-| `web` | 2 | 4 | 4 GiB | 0 | 0 |
-| `platform` | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 2 (API, ingress) | 0 |
-| `isolated` | 1 | 1 | 1 GiB | 0 | 0 |
+| `edge` | 2 | 4 | 4 GiB | 1 | 1 public + 2 `monitoring` |
+| `web` | 2 | 4 | 4 GiB | 0 | 2 `svc_public` + 2 `monitoring` |
+| `platform` | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 2 (API, ingress) | 1 `svc_public` (ingress) + monitoring to be defined with the cluster |
+| `isolated` | 1 | 1 | 1 GiB | 0 | 1 `monitoring` |
 | bootstrap (CAPO management) | 1 | 2 | 4 GiB | 0 | 0 |
-| **Total** | **11** | **21** | **33 GiB** | **3** | **1** |
+| optional bastions (one per tenant) | 1 each | 2 each | 2 GiB each | 0 | 1 each, on the administration network |
+| **Total without bastions** | **11** | **21** | **33 GiB** | **3** | **12** |
