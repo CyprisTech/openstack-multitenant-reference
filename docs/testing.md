@@ -43,3 +43,19 @@ Findings:
 - **Path MTU black hole.** Small packets crossed `svc_public`, large ones were dropped: the tenant networks used MTU 1442, the planes 1382, and the tenant overlay of the test cloud runs itself over a tunnel. A packet capture on the backend showed the 1390-byte TLS segment retransmitted until timeout while the 37-byte tail was acknowledged. Fixed by `network_mtu = 1362` on every network of the stacks; the contract now asks the operator to publish the MTUs.
 - **cloud-init.** nginx failed to start at package installation because the demo certificate was created later; the certificate is now created in `bootcmd`.
 - **Bastion routes.** The second interface of a bastion received the default route, plane routes and resolvers of the tenant network; DHCP routes and resolvers are now ignored on that interface.
+
+### Two floating IPs on one port (2026-10-27)
+
+Test configuration: [`tests/integration/dual-floating-ip`](../tests/integration/dual-floating-ip/README.md). Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
+
+| Check | Result |
+|---|---|
+| Neutron accepts a floating IP from `svc_public` and one from `monitoring` on the same fixed IP, through two routers | ✅ both `ACTIVE` |
+| From an instance of another tenant (routed source): TCP to the target through `svc_public` and through `monitoring`, three times each | ✅ 6/6 |
+| Plan empty after apply, destroy | ✅ 41 resources, destroyed in 25 s, no leftover |
+| From a host attached directly to the `monitoring` network (not routed) to the `monitoring` floating IP | ❌ ARP resolved, TCP times out — open question |
+
+Findings:
+
+- **Replies follow the routes of the instance.** A floating IP on a plane answers only clients whose address is routed back through that plane's router: the plane CIDR is advertised by DHCP, so clients inside the plane work. A client whose address is outside the advertised ranges (for example an administration network reached without source NAT) gets its replies through the default gateway and the connection fails. This is why bastions use their administration router as default gateway.
+- **A host attached directly to the plane** could not reach a floating IP on that same plane, while routed sources could. To be clarified before relying on a collector placed directly on the plane.
