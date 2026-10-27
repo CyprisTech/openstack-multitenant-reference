@@ -19,3 +19,8 @@ output "routes" {
   description = "Domains currently routed by the entry point."
   value       = sort(keys(var.routes))
 }
+
+output "bastion" {
+  description = "Floating IP of the bastion on the administration network, or null."
+  value       = local.with_bastion ? module.edge.instances[local.bastion_name].ports["admin"].floating_ip : null
+}
