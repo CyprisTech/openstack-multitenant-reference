@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+# The values below mirror the ones used for the integration tests, with generic names and
+# documentation address ranges.
+cloud = "example-site-a"
+site  = "site-a" # same site as the entry point (stack 20)
+az    = "nova"
+image = "ubuntu-24.04"
+
+flavor           = "m1.small-nodisk"
+boot_volume_size = 8 # null with a flavor that has a local disk
+
+# Default route of the web network (package installation at first boot). The instances get no
+# public address on it.
+egress_network = { network = "public", subnet = "public-subnet" }
+
+planes = {
+  svc_public = { network = "svc_public", subnet = "svc_public", cidr = "198.51.100.0/24" }
+  monitoring = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
+}
+
+# Resolvers reachable through the egress network.
+dns_nameservers = ["9.9.9.9", "1.1.1.1"]
+
+# Smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract).
+network_mtu = 1362
+
+domains = ["site-a.example.org", "site-b.example.org"]
+
+# SSH users, created on the bastion and on the web instances. No direct SSH source:
+# administration goes through the bastion.
+admin = {
+  users     = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+  ssh_cidrs = []
+}
+
+# Optional bastion with a floating IP on an administration network.
+bastion = {
+  external_network = { network = "intranet", subnet = "intranet" }
+  ssh_cidrs        = ["192.0.2.0/24"]
+}
