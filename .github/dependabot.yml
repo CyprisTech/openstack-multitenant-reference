@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Module tags and provider constraints of every root configuration.
+  - package-ecosystem: terraform
+    directories:
+      - /stacks/20-public-edge
+      - /stacks/30-tenants/web
+      - /stacks/30-tenants/isolated
+      - /tests/integration/collector
+      - /tests/integration/dual-floating-ip
+    schedule:
+      interval: weekly
