@@ -22,3 +22,11 @@ A reference architecture for a multi-tenant OpenStack cloud, built on the
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
+
+## Roadmap
+
+| Version | Content |
+|---|---|
+| v0.1 | Layers 20 and 30 in one site, layer 10 provided by the operator |
+| v0.2 | Layer 10 with cloud-baseline (terraform-openstack-tenant v0.2) |
+| later | Failover between sites: an edge per site, runbook, failover drill |

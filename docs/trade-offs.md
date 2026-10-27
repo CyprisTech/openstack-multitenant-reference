@@ -9,7 +9,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 3 | [PROXY protocol](#3-proxy-protocol-end-to-end) | Client address carried end to end |
 | 4 | [Octavia topology](#4-octavia-topology) | Chosen per load balancer flavor |
 | 5 | [The edge as a shared dependency](#5-the-edge-as-a-shared-dependency) | One entry point for every domain |
-| 6 | [Failover between sites](#6-failover-between-sites) | Single site |
+| 6 | [One site in v1](#6-one-site-in-v1) | One site, site-ready code |
 | 7 | [Isolation on `svc_public`](#7-isolation-on-the-svc_public-plane) | Shared plane, isolation by security groups |
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
@@ -81,15 +81,15 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 **Choose it when** tenants need independent failure domains or different exposure policies more than they need a single entry point.
 
-## 6. Failover between sites
+## 6. One site in v1
 
-**Choice.** The architecture runs in one site (one region or availability zone).
+**Choice.** Version 1 runs in one site (one region or availability zone). The code is site-ready: the site is an input of every stack, and no address is written by hand.
 
-**Why.** An Octavia load balancer and its amphorae live in one site. Moving traffic between sites needs a mechanism outside the cloud: DNS failover with short TTLs and health checks, or announcing the same address from both sites (anycast, BGP).
+**Why.** An Octavia load balancer and its amphorae live in one site. Failover between sites needs a standby edge, a DNS switch and a tested runbook: a version of its own.
 
-**Cost.** A site outage takes the entry point down. Data replication between sites is also out of scope.
+**Cost.** In v1, a site outage takes the entry point down. Recovery is a cold rebuild: deploy the same stacks in another site, then change the DNS records. Stateful data (volumes, databases) is not replicated; recovering it needs a backup and restore that this repository does not provide.
 
-**Alternative.** One edge per site, with DNS failover in front. It doubles the edge and needs replicated backends.
+**Next.** A later version adds an edge per site (active/passive), a failover runbook with a DNS switch, and a failover drill that replays the reachability matrix on the second site.
 
 ## 7. Isolation on the `svc_public` plane
 
