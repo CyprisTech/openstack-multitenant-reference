@@ -7,6 +7,14 @@ locals {
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
   members   = [for name in local.instances : "${name}.main"]
 
+  # Traefik metrics (8082) and the metrics ports of the instances, from the collector only.
+  metrics_sources = coalesce(var.monitoring.collector_cidrs, [var.planes.monitoring.cidr])
+  metrics_rules = {
+    for pair in setproduct(distinct(concat([8082], var.monitoring.metrics_ports)), local.metrics_sources) : "metrics-${pair[0]}-${replace(pair[1], "/", "_")}" => {
+      direction = "ingress", protocol = "tcp", port_min = pair[0], port_max = pair[0], remote_ip_prefix = pair[1]
+    }
+  }
+
   bastion_name = "${local.prefix}-bastion"
   with_bastion = var.bastion != null
 
@@ -18,7 +26,7 @@ locals {
 }
 
 module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.1"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
   count  = local.with_bastion ? 1 : 0
 
   hostname = local.bastion_name
@@ -48,14 +56,14 @@ module "cloudinit_bastion" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.1"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
   for_each = toset(local.instances)
 
   hostname = each.key
   users = {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
-  packages = ["podman"]
+  packages = ["podman", "prometheus-node-exporter"]
 
   write_files = {
     "/etc/traefik/traefik.yml" = {
@@ -77,7 +85,7 @@ module "cloudinit" {
 
 module "edge" {
   # Git source: works with OpenTofu and Terraform alike (registry: CyprisTech/tenant/openstack).
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.1"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=fa88febb8a2676282d9995ca36396be353e667df"
 
   tenant = {
     existing = {
@@ -90,7 +98,10 @@ module "edge" {
           name = try(var.bastion.external_network.network, ""), subnets = { main = { name = try(var.bastion.external_network.subnet, "") } }
         }
       })
-      dns_zones = var.public_dns == null ? {} : { public = { name = var.public_dns.zone } }
+      dns_zones = merge(
+        var.public_dns == null ? {} : { public = { name = var.public_dns.zone } },
+        var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } },
+      )
     }
 
     networks = merge({
@@ -127,10 +138,9 @@ module "edge" {
         description = "Traefik instances of the public entry point"
         rules = merge({
           # Octavia amphorae connect from the edge network.
-          http    = { direction = "ingress", protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = var.edge_cidr }
-          https   = { direction = "ingress", protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = var.edge_cidr }
-          metrics = { direction = "ingress", protocol = "tcp", port_min = 8082, port_max = 8082, remote_ip_prefix = var.planes.monitoring.cidr }
-          }, local.ssh_rules, {
+          http  = { direction = "ingress", protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = var.edge_cidr }
+          https = { direction = "ingress", protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = var.edge_cidr }
+          }, local.metrics_rules, local.ssh_rules, {
           for k in(local.with_bastion ? ["ssh-from-bastion"] : []) : k => {
             direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_group = local.bastion_name
           }
@@ -161,7 +171,19 @@ module "edge" {
         user_data    = module.cloudinit[name].rendered
         labels       = ["edge", "traefik"]
         ports = {
-          main = { network = local.prefix, subnet = "main", security_groups = ["${local.prefix}-proxy"], floating_ip = null }
+          main = {
+            network         = local.prefix
+            subnet          = "main"
+            security_groups = ["${local.prefix}-proxy"]
+            floating_ip     = null
+            # Exposure to the monitoring collector (ADR-0001, D2).
+            extra_floating_ips = {
+              monitoring = {
+                pool = "monitoring"
+                dns  = var.monitoring.dns_zone == null ? [] : [{ name = name, zone = "monitoring" }]
+              }
+            }
+          }
         }
       }
       }, {

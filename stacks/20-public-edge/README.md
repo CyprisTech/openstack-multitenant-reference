@@ -5,7 +5,8 @@ One entry point for every public domain of the site ([ADR-0001](../../docs/adr/0
 - an Octavia load balancer with a public floating IP; listeners in **TCP** on 80 and 443, pools in **PROXY** protocol, **TCP** health monitors;
 - two Traefik instances on plain VMs, in a server group (anti-affinity), Traefik running as a Podman container started by systemd;
 - routes by **SNI with TLS passthrough**, generated from the `routes` variable; PROXY protocol v2 to the backends that accept it;
-- routers to the `svc_public` and `monitoring` planes, with their routes pushed by DHCP.
+- routers to the `svc_public` and `monitoring` planes, with their routes pushed by DHCP;
+- each Traefik instance exposed to the monitoring collector through a floating IP of the monitoring plane, with an A record in the monitoring zone; node exporter (9100) and Traefik metrics (8082) open to the collector's addresses only (`monitoring`).
 
 ## Usage
 

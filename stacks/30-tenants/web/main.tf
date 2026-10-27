@@ -20,6 +20,14 @@ locals {
       direction = "ingress", protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = "${ip}/32"
     }
   }
+  # Metrics ports, from the collector only.
+  metrics_sources = coalesce(var.monitoring.collector_cidrs, [var.planes.monitoring.cidr])
+  metrics_rules = {
+    for pair in setproduct(var.monitoring.metrics_ports, local.metrics_sources) : "metrics-${pair[0]}-${replace(pair[1], "/", "_")}" => {
+      direction = "ingress", protocol = "tcp", port_min = pair[0], port_max = pair[0], remote_ip_prefix = pair[1]
+    }
+  }
+
   bastion_name = "${local.prefix}-bastion"
   with_bastion = var.bastion != null
 
@@ -55,7 +63,7 @@ data "openstack_networking_router_v2" "edge_svc_public" {
 }
 
 module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.1"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
   count  = local.with_bastion ? 1 : 0
 
   hostname = local.bastion_name
@@ -85,14 +93,14 @@ module "cloudinit_bastion" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.1"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
   for_each = toset(local.instances)
 
   hostname = each.key
   users = {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
-  packages = ["nginx"]
+  packages = ["nginx", "prometheus-node-exporter"]
 
   write_files = {
     "/etc/nginx/conf.d/web.conf" = { content = local.nginx_conf }
@@ -114,10 +122,11 @@ module "cloudinit" {
 }
 
 module "web" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.1"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=fa88febb8a2676282d9995ca36396be353e667df"
 
   tenant = {
     existing = {
+      dns_zones = var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } }
       networks = merge({
         egress     = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
         svc_public = { name = var.planes.svc_public.network, subnets = { main = { name = var.planes.svc_public.subnet } } }
@@ -160,7 +169,7 @@ module "web" {
     security_groups = merge({
       "${local.prefix}-https" = {
         description = "Web instances: HTTPS from the public entry point only, SSH from the bastion"
-        rules = merge(local.https_rules, local.ssh_rules, {
+        rules = merge(local.https_rules, local.metrics_rules, local.ssh_rules, {
           for k in(local.with_bastion ? ["ssh-from-bastion"] : []) : k => {
             direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_group = local.bastion_name
           }
@@ -196,6 +205,13 @@ module "web" {
             subnet          = "main"
             security_groups = ["${local.prefix}-https"]
             floating_ip     = { pool = "svc_public" }
+            # Exposure to the monitoring collector (ADR-0001, D2).
+            extra_floating_ips = {
+              monitoring = {
+                pool = "monitoring"
+                dns  = var.monitoring.dns_zone == null ? [] : [{ name = name, zone = "monitoring" }]
+              }
+            }
           }
         }
       }
