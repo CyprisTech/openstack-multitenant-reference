@@ -22,11 +22,13 @@ A reference architecture for a multi-tenant OpenStack cloud, built on the
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
+| [docs/testing.md](docs/testing.md) | Test environment and results |
+| [tests/reachability/](tests/reachability/README.md) | Executable reachability matrix |
 
 ## Roadmap
 
 | Version | Content |
 |---|---|
-| v0.1 | Layers 20 and 30 in one site, layer 10 provided by the operator |
+| v0.1 | Layers 20 and 30 in one site, layer 10 provided by the operator. Before release: tag terraform-openstack-tenant `v0.1.2` and move the stacks from commit `fa88feb` to that tag |
 | v0.2 | Layer 10 with cloud-baseline (terraform-openstack-tenant v0.2) |
 | later | Failover between sites: an edge per site, runbook, failover drill |

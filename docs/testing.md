@@ -59,3 +59,21 @@ Findings:
 
 - **Replies follow the routes of the instance.** A floating IP on a plane answers only clients whose address is routed back through that plane's router: the plane CIDR is advertised by DHCP, so clients inside the plane work. A client whose address is outside the advertised ranges (for example an administration network reached without source NAT) gets its replies through the default gateway and the connection fails. This is why bastions use their administration router as default gateway.
 - **Security groups of the collector.** A host used as a test source had a monitoring port whose security groups allow scraping *into* it (ingress) but no outgoing TCP: its connections never left. A collector on the monitoring plane needs an egress rule to the metrics ports of the plane range.
+
+### Full scenario and reachability matrix (2026-10-27)
+
+Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, monitoring floating IPs and DNS records (module `fa88feb`, after `v0.1.1`).
+
+| Check | Result |
+|---|---|
+| Apply: collector 17, entry point 60, `web` 48, `isolated` 28 resources | ✅ |
+| Routes generated from `web` and rolled onto the entry point, one instance at a time | ✅ |
+| Empty plan after apply, four configurations | ✅ |
+| HTTPS end to end through both domains | ✅ 6/6 `200`, both backends, real client address seen by nginx |
+| A records in the shared monitoring zone, one per instance | ✅ 5 records, resolvable |
+| **Reachability matrix** (`tests/reachability/check.py`) | ✅ **27/27 rows as expected** |
+| Destroy, four configurations | ✅ 153 resources, no leftover (instances, load balancers, networks, routers, volumes, floating IPs, DNS records) |
+
+The matrix covers: the entry point from the outside; the web backends reachable from the entry point only; the collector reaching the metrics of every instance (node exporter, Traefik metrics); no tenant reaching the metrics of another through the monitoring plane; no route between tenants; `isolated` reaching neither the published addresses, nor the other tenants, nor the Internet.
+
+Finding: every tenant joins the monitoring plane through a router with source NAT, so seen from the plane all tenants have addresses of the plane range. Metrics ports opened to the plane range would let tenants scrape each other: they are now opened to the collector's addresses only (`monitoring.collector_cidrs`).
