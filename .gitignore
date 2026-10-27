@@ -6,3 +6,5 @@
 !*.tfvars.example
 crash.log
 *.auto.tfvars.json
+# Local overrides (for example a module source pointing to a local checkout)
+*_override.tf

@@ -36,3 +36,10 @@ bastion = {
   external_network = { network = "intranet", subnet = "intranet" }
   ssh_cidrs        = ["192.0.2.0/24"]
 }
+
+# Exposure to the monitoring collector: a floating IP of the monitoring plane per instance, an
+# A record in the monitoring zone, metrics ports open to the collector's addresses only.
+monitoring = {
+  dns_zone        = "mon.site-a.example.org."
+  collector_cidrs = ["203.0.113.10/32"]
+}

@@ -53,6 +53,12 @@ stacks/
 
 The operator shares three planes: `intranet`, `monitoring` and `svc_public`. A tenant joins only the planes it needs, through dedicated routers; the routes to each plane are advertised by DHCP (`routers` and `advertise_routes` in the module), so instances need no static route.
 
+**Publishing on a plane is one mechanism for every plane: a floating IP of that plane.** Backends are published on `svc_public` with a floating IP of `svc_public`; instances are exposed to the monitoring collector with a floating IP of `monitoring`. A port can carry one floating IP per plane (module ≥ v0.1.2). Tenants stay behind their own routers: nothing but the floating IP is reachable, and security groups open only the published ports. Rejected alternatives: a second port of every instance directly on the `monitoring` network (all tenants on one shared segment), and metrics pushed by an agent in every tenant (more moving parts).
+
+Replies leave through the routes of the instance: a floating IP of a plane serves only clients whose addresses are routed back through that plane's router, that is the plane range advertised by DHCP. The collector must therefore have an address in the `monitoring` range, and its security groups must allow outgoing TCP to the metrics ports. Metrics ports are open to the collector's addresses only: every tenant joins the plane through a router with source NAT, so an address of the plane range does not identify the collector.
+
+**Monitoring targets are discovered by DNS.** Each stack writes an A record per instance in a monitoring zone shared with the projects (for example `mon.site-a.example.org.`), named `<instance>.<tenant>`; the collector uses DNS service discovery. No address is written by hand (D9).
+
 ### D3 — Single public entry point
 
 - Octavia listens in **TCP on port 443** and forwards to a pool in **`PROXY`** protocol: two Traefik replicas on different hosts (anti-affinity).

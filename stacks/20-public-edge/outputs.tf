@@ -24,3 +24,13 @@ output "bastion" {
   description = "Floating IP of the bastion on the administration network, or null."
   value       = local.with_bastion ? module.edge.instances[local.bastion_name].ports["admin"].floating_ip : null
 }
+
+output "monitoring_targets" {
+  description = "Instances exposed to the monitoring collector: floating IP on the monitoring plane and DNS name (or null)."
+  value = {
+    for name in local.instances : name => {
+      address = module.edge.instances[name].ports["main"].floating_ips["monitoring"]
+      fqdn    = var.monitoring.dns_zone == null ? null : "${name}.${var.monitoring.dns_zone}"
+    }
+  }
+}

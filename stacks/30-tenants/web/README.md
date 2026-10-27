@@ -5,6 +5,7 @@ Two web instances serving several domains, published on the `svc_public` plane a
 - two VMs in a server group (anti-affinity), each with a floating IP on `svc_public`;
 - HTTPS admitted only from the addresses of the entry point on `svc_public`, read from its router by name (`<site>-edge-svc-public`): the stack of the entry point must be applied first;
 - routers to the egress network (default route), `svc_public` and `monitoring`, with plane routes pushed by DHCP;
+- each instance exposed to the monitoring collector through a floating IP of the monitoring plane, with an A record in the monitoring zone; node exporter (9100) open to the collector's addresses only (`monitoring`);
 - an optional bastion for administration.
 
 The web server is a demonstration backend: nginx terminates TLS with a self-signed certificate, accepts the PROXY protocol v2 header from the entry point only, and answers with the host, the server name and the client address it received.
@@ -53,3 +54,4 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | `edge_sources` | Addresses of the entry point admitted on port 443 |
 | `instances` | Web instances and their private addresses |
 | `bastion` | Floating IP of the bastion, or null |
+| `monitoring_targets` | Floating IP on the monitoring plane and DNS name of each instance |

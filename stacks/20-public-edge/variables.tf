@@ -164,3 +164,22 @@ variable "network_mtu" {
   type        = number
   default     = null
 }
+
+variable "monitoring" {
+  description = <<-EOT
+    Exposure of the instances to the monitoring collector (ADR-0001, D2): every instance gets a
+    floating IP of the monitoring plane.
+    - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
+      instance is written for the collector's DNS service discovery; null writes no record.
+    - metrics_ports: ports opened to the collector (node exporter by default).
+    - collector_cidrs: addresses of the collector as seen by the instances. null opens the
+      metrics ports to the whole monitoring plane range, which includes the routers of every
+      tenant joining that plane: set it to keep tenants from scraping each other.
+  EOT
+  type = object({
+    dns_zone        = optional(string)
+    metrics_ports   = optional(list(number), [9100])
+    collector_cidrs = optional(list(string))
+  })
+  default = {}
+}
