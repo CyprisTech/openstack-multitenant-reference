@@ -15,6 +15,7 @@ A reference architecture for several tenants sharing one OpenStack cloud, built 
 
 - [What it demonstrates](#what-it-demonstrates)
 - [Architecture](#architecture)
+- [Architecture overview](#architecture-overview)
 - [Status](#status)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
@@ -35,17 +36,76 @@ A reference architecture for several tenants sharing one OpenStack cloud, built 
 
 ## Architecture
 
-Three layers, one state per stack. Stacks find each other's objects by name, never through remote state, and each takes its own `clouds.yaml` entry, so the tenants can live in one project or in several.
+```mermaid
+flowchart TB
+    U(["Internet clients"])
 
-| Layer | Stack | Content |
-|---|---|---|
-| 10 | provided by the operator ([contract](docs/architecture.md#layer-10-contract)) | Shared planes, public network, monitoring DNS zone, collector |
-| 20 | [`stacks/20-public-edge`](stacks/20-public-edge/README.md) | Octavia (TCP 80 and 443, PROXY protocol, TCP health monitors), two Traefik instances in anti-affinity, routers to `svc_public` and `monitoring` |
-| 30 | [`stacks/30-tenants/web`](stacks/30-tenants/web/README.md) | Two web instances in anti-affinity serving two domains, published on `svc_public`, HTTPS admitted from the entry point only |
-| 30 | [`stacks/30-tenants/isolated`](stacks/30-tenants/isolated/README.md) | One workload whose only router joins the monitoring plane: no public address, no path to the other tenants or to the Internet |
-| 30 | `stacks/30-tenants/platform` | Kubernetes with Cluster API Provider OpenStack — **planned** |
+    subgraph EDGE["Stack 20 · public entry point"]
+        LB["Octavia<br/>TCP 80/443 · PROXY"] --> T["2 × Traefik<br/>SNI passthrough"]
+    end
 
-Every stack can add a bastion, with a floating IP on an administration network. The topology, the request flow through the entry point and the cluster creation sequence are drawn as Mermaid diagrams in [docs/architecture.md](docs/architecture.md); the decisions behind them are in [ADR-0001](docs/adr/0001-reference-architecture.md).
+    subgraph TENANTS["Stacks 30 · tenants"]
+        direction LR
+        W["web<br/>2 × backend<br/>site-a · site-b"]
+        I["isolated<br/>workload<br/>no Internet"]
+        K["platform<br/>Kubernetes · CAPO<br/>(planned)"]
+    end
+
+    subgraph L10["Layer 10 · provided by the operator"]
+        direction LR
+        SVC["svc_public plane"]
+        MON["monitoring plane<br/>+ collector + DNS zone"]
+        ADM["administration network"]
+    end
+
+    U -->|HTTPS| LB
+    T -->|"PROXY v2"| SVC -->|"floating IP per backend"| W
+    MON -.->|"metrics · floating IP per instance"| T & W & I
+    ADM -.->|"SSH · one bastion per stack"| EDGE & TENANTS
+
+    classDef planned stroke-dasharray: 5 5,color:#888
+    class K planned
+```
+
+The cloud operator provides **layer 10**: the shared network planes, the public and administration networks, the monitoring DNS zone and the collector. **Layer 20** is the single public entry point. **Layer 30** holds the tenants, each in its own stack, joining only the planes it needs. Every instance is exposed to the collector through a floating IP of the monitoring plane, and administered through an optional bastion of its stack.
+
+One state per stack. Stacks find each other's objects by name, never through remote state, and each takes its own `clouds.yaml` entry, so the tenants can live in one project or in several. The full topology, the request flow and the decisions are in [docs/architecture.md](docs/architecture.md) and [ADR-0001](docs/adr/0001-reference-architecture.md).
+
+## Architecture overview
+
+The components below are deployed in this order by the [quick start](#quick-start); each title matches a step.
+
+### 0. Prerequisites — layer 10, provided by the operator
+
+The shared planes `svc_public` (backends published to the entry point) and `monitoring` (metrics), the public network (floating IP of the entry point, Internet access at first boot), the administration network (bastions), a DNS zone shared with the projects for the monitoring records, and the collector. The operator also publishes the MTU of the planes and of the tenant overlay, and the address ranges tenants must avoid. Full list: [layer 10 contract](docs/architecture.md#layer-10-contract).
+
+### 1. Test collector
+
+[`tests/integration/collector`](tests/integration/collector/README.md) — a small instance standing for the monitoring collector, so that the reachability matrix can be run. It reaches the monitoring plane through its own router with source NAT: the tenants see one known address, the `collector_cidrs` output, which every stack admits on its metrics ports. With a real collector, use its addresses instead.
+
+### 2. Public entry point
+
+[`stacks/20-public-edge`](stacks/20-public-edge/README.md) — one entry point for every public domain: an Octavia load balancer in TCP on 80 and 443 with PROXY protocol pools, in front of two Traefik instances on different hosts that route by SNI without terminating TLS and forward the client address with PROXY protocol v2. Routers join the public network, `svc_public` and `monitoring`. Outputs the addresses the edge uses on `svc_public`, which the tenants admit.
+
+### 3. Tenant `web`
+
+[`stacks/30-tenants/web`](stacks/30-tenants/web/README.md) — two web instances on different hosts serving `site-a` and `site-b`, each published on `svc_public` with a floating IP of that plane and reachable on 443 from the entry point only. The backend is a demonstration nginx that terminates TLS and reports the client address it received. It reads the entry point's addresses by name, so it is applied after stack 20, and outputs the routes the entry point needs.
+
+### 4. Route publication
+
+Not a stack: the `routes` output of `web` becomes the `routes` variable of stack 20, without writing any address by hand. Routes are written by cloud-init, so the two Traefik instances are replaced **one at a time**: the load balancer always keeps a healthy member.
+
+### 5. Tenant `isolated`
+
+[`stacks/30-tenants/isolated`](stacks/30-tenants/isolated/README.md) — a workload whose only router joins the monitoring plane: no public address, no Internet access, no path to the other tenants. Its metrics endpoint is open to the collector only.
+
+### 6. Reachability matrix
+
+[`tests/reachability/check.py`](tests/reachability/README.md) — the isolation claims as a test. It probes every flow of the [matrix](docs/architecture.md#reachability-matrix) from the outside, from inside each tenant through its bastion, and from the collector, and fails on any difference: 27 rows for this release.
+
+### Bastions (optional, every stack)
+
+Each stack can add a bastion: a small instance in its own network, with a floating IP on the administration network and a second port on the tenant network. SSH to the tenant instances is admitted from the bastion only. The reachability matrix needs them.
 
 ## Status
 
@@ -86,67 +146,88 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, Neutron with OVN,
 
 ## Quick start
 
+```mermaid
+flowchart LR
+    P["0. Prerequisites"] --> C["1. Test collector"] --> E["2. Public entry point"] --> W["3. Tenant web"] --> R["4. Route publication"] --> I["5. Tenant isolated"] --> M["6. Reachability matrix"]
+```
+
 > [!WARNING]
-> These steps create real resources (instances, an Octavia load balancer, floating IPs, DNS records). Use a dedicated project. Make sure no `OS_*` variable is set in the shell: the client would mix it with the `clouds.yaml` entry.
+> These steps create real resources: instances, an Octavia load balancer, floating IPs and DNS records. Use a dedicated project.
 
-Each stack has a `terraform.tfvars.example` with fictional names and documentation address ranges: copy it to `terraform.tfvars` (git-ignored) and adapt it to your cloud. Use the same `site` in every stack. The commands use `tofu`; `terraform` works the same.
+Every stack follows the same pattern: copy `terraform.tfvars.example` to `terraform.tfvars` (git-ignored), adapt it to your cloud, then `tofu init && tofu apply` (`terraform` works the same). The examples use fictional names and documentation address ranges.
 
-**1. Test collector** (optional, needed for the reachability matrix). Write `terraform.tfvars` as shown in [its README](tests/integration/collector/README.md), then:
+### 0. Prerequisites
+
+- OpenTofu or Terraform ≥ 1.9, `jq`, Python 3 and `ssh`.
+- A `clouds.yaml` entry for each stack, with a project-scoped credential (`member`, plus `load-balancer_member` if your Octavia policy requires it). No `OS_*` variable in the shell: the client would mix it with the entry.
+- The [layer 10 contract](docs/architecture.md#layer-10-contract) met: plane names and ranges, MTU (`network_mtu`), monitoring DNS zone, reserved ranges to avoid.
+- An SSH key: put its public part in `admin.users` of every stack and in `ssh_keys` of the collector.
+- The same `site` in every stack: it prefixes the resource names, and the tenants find the entry point by it.
+
+### 1. Test collector
 
 ```bash
 cd tests/integration/collector
 tofu init && tofu apply
-tofu output -json collector_cidrs   # give it to every stack as monitoring.collector_cidrs
+tofu output -json collector_cidrs
 ```
 
-**2. Public entry point.** It must exist before the tenants: `web` reads the entry point's addresses on `svc_public` from its router.
+Set this value as `monitoring.collector_cidrs` in the three stacks.
+
+### 2. Public entry point
 
 ```bash
 cd stacks/20-public-edge
-cp terraform.tfvars.example terraform.tfvars   # adapt to your cloud
-tofu init
-tofu apply
+cp terraform.tfvars.example terraform.tfvars   # public_network, planes, network_mtu, monitoring, bastion
+tofu init && tofu apply
 ```
 
-**3. Tenant `web`.**
+Check: `tofu output load_balancer` gives the public floating IP; port 80 answers with a redirection to HTTPS.
+
+### 3. Tenant `web`
 
 ```bash
 cd stacks/30-tenants/web
-cp terraform.tfvars.example terraform.tfvars   # adapt to your cloud
-tofu init
-tofu apply
+cp terraform.tfvars.example terraform.tfvars   # same site, egress_network, planes, network_mtu, monitoring, bastion
+tofu init && tofu apply
 ```
 
-**4. Routes.** Generate the entry point's routes from the `web` outputs, then replace the Traefik instances **one at a time**, so that the load balancer keeps a healthy member (`SITE` is the `site` of the stacks):
+Check: `tofu output routes` lists both domains with their published addresses.
+
+### 4. Route publication
 
 ```bash
-# in stacks/30-tenants/web
-tofu output -json routes \
-  | jq '{routes: .}' > ../../20-public-edge/routes.auto.tfvars.json   # git-ignored
+cd stacks/30-tenants/web
+tofu output -json routes | jq '{routes: .}' > ../../20-public-edge/routes.auto.tfvars.json
 
-# in stacks/20-public-edge
+cd ../../20-public-edge
 tofu apply -replace='module.edge.module.instance["SITE-edge-1"].openstack_compute_instance_v2.this'
 # wait until the member is ONLINE again: openstack loadbalancer member list SITE-edge-https
 tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_compute_instance_v2.this'
 ```
 
-**5. Tenant `isolated`.**
+`SITE` is your `site`. Check: `curl -k --resolve site-a.example.org:443:<public floating IP> https://site-a.example.org/` answers `200` with `host=site-a.example.org` and the client address the backend received through the PROXY protocol.
+
+### 5. Tenant `isolated`
 
 ```bash
 cd stacks/30-tenants/isolated
-cp terraform.tfvars.example terraform.tfvars   # adapt to your cloud
-tofu init
-tofu apply
+cp terraform.tfvars.example terraform.tfvars   # same site, monitoring_plane, network_mtu, monitoring, bastion
+tofu init && tofu apply
 ```
 
-**6. Reachability matrix.** With the three stacks applied with bastions and the collector applied ([prerequisites](tests/reachability/README.md#prerequisites)), from the repository root:
+### 6. Reachability matrix
 
 ```bash
 python3 tests/reachability/check.py --stacks stacks --collector tests/integration/collector \
   --user ops --key ~/.ssh/id_ed25519
 ```
 
-It exits with status 1 if any row differs from the matrix. To remove everything, run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, collector.
+Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs.
+
+### Clean up
+
+Run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, then the collector.
 
 ## Documentation
 

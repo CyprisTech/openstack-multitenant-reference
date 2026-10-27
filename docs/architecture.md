@@ -9,55 +9,51 @@ All names are fictional: the organisation is `example.org`, and address ranges a
 
 ## Topology
 
-Four projects consume three planes shared by the operator. Each project joins only the planes it needs, through its own routers; the routes to each plane are advertised by DHCP.
+Four projects consume the planes shared by the operator. Each project joins only the planes it needs, through its own routers, with the routes advertised by DHCP; it is published on a plane with a floating IP of that plane, and administered through its own bastion.
 
 ```mermaid
 flowchart LR
     U(["Internet clients"])
+    OPS(["Operators"])
 
-    subgraph L10["Layer 10 - shared planes (operator)"]
+    subgraph L10["Layer 10 - provided by the operator"]
         direction TB
+        PUB["public network"]
         SVC["svc_public plane"]
-        INT["intranet plane"]
         MON["monitoring plane"]
+        ADM["administration network"]
+        COL["collector"]
+        INT["intranet plane"]
     end
 
     subgraph EDGE["Project edge - layer 20"]
-        LB["Octavia<br/>TCP 443, pool in PROXY protocol<br/>TCP health monitors"]
-        T1["Traefik replica 1"]
-        T2["Traefik replica 2"]
-        LB --> T1
-        LB --> T2
+        LB["Octavia<br/>TCP 80/443, PROXY pools<br/>TCP health monitors"]
+        T["Traefik x 2<br/>anti-affinity"]
+        LB --> T
     end
 
     subgraph WEB["Project web - layer 30"]
-        W1["VM www-1"]
-        W2["VM www-2"]
-    end
-
-    subgraph PLAT["Project platform - layer 30"]
-        API["Octavia - Kubernetes API"]
-        CP["3 control-plane nodes"]
-        WK["worker nodes"]
-        ING["ingress load balancer"]
-        API --> CP
-        CP --- WK
-        WK --- ING
+        W["web x 2<br/>anti-affinity"]
     end
 
     subgraph ISO["Project isolated - layer 30"]
         J["workload"]
     end
 
-    U -->|"TLS with SNI"| LB
-    T1 & T2 -->|"router"| SVC
-    SVC -->|"site-a, site-b.example.org"| W1 & W2
-    SVC -->|"apps.example.org"| ING
-    PLAT -.->|router| INT
-    PLAT -.->|router| MON
-    WEB -.->|router| MON
-    EDGE -.->|router| MON
-    ISO -.->|"router, only plane"| MON
+    subgraph PLAT["Project platform - layer 30 (planned)"]
+        K["Kubernetes<br/>Cluster API"]
+    end
+
+    U -->|"TLS with SNI"| PUB --> LB
+    T -->|"PROXY v2, router to svc_public"| SVC
+    SVC -->|"floating IP of svc_public"| W
+    COL --> MON
+    MON -.->|"floating IP of monitoring"| T & W & J
+    OPS --> ADM -.->|"bastion of each project"| EDGE & WEB & ISO
+    K -.-> SVC & INT & MON
+
+    classDef planned stroke-dasharray: 5 5,color:#888
+    class PLAT,K planned
 ```
 
 | Project | Layer | Planes | Content |
