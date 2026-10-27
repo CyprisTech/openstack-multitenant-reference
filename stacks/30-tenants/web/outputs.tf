@@ -21,3 +21,8 @@ output "instances" {
   description = "Web instances and their private addresses."
   value       = { for name in local.instances : name => module.web.instances[name].ports["main"].ip }
 }
+
+output "bastion" {
+  description = "Floating IP of the bastion on the administration network, or null."
+  value       = local.with_bastion ? module.web.instances[local.bastion_name].ports["admin"].floating_ip : null
+}

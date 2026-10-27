@@ -37,7 +37,7 @@ variable "boot_volume_size" {
 variable "web_cidr" {
   description = "Range of the web network. Tenants may reuse the same range: they never route to each other."
   type        = string
-  default     = "10.30.0.0/24"
+  default     = "10.21.0.0/24"
 }
 
 variable "dns_nameservers" {
@@ -86,4 +86,22 @@ variable "admin" {
     ssh_cidrs = optional(list(string), [])
   })
   default = {}
+}
+
+variable "bastion" {
+  description = <<-EOT
+    Optional administration bastion. It lives in its own small network whose router joins
+    external_network (an administration network such as an intranet) and carries a floating
+    IP on it. A second port on the web network gives it access to the web instances; the web
+    network itself gets no route to the administration network.
+    - ssh_cidrs: sources allowed to reach the bastion on port 22.
+    The users of var.admin are created on the bastion and on the web instances.
+  EOT
+  type = object({
+    external_network = object({ network = string, subnet = string })
+    cidr             = optional(string, "10.31.0.0/28")
+    flavor           = optional(string)
+    ssh_cidrs        = list(string)
+  })
+  default = null
 }
