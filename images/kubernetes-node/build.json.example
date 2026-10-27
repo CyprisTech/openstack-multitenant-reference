@@ -1,0 +1,10 @@
+{
+  "source_image_filter_name": "ubuntu-24.04",
+  "flavor": "m1.medium-nodisk",
+  "availability_zone": "nova",
+  "use_blockstorage_volume": "true",
+  "volume_availability_zone": "nova",
+  "volume_size": "20",
+  "image_disk_format": "qcow2",
+  "image_visibility": "private"
+}

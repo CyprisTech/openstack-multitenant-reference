@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a-platform"
+site  = "site-a"
+
+egress_network = { network = "public", subnet = "public" }
+admin_network  = { network = "admin", subnet = "admin" }
+
+# Address of the machine that runs Packer, as seen on the administration network.
+ssh_cidrs = ["192.0.2.10/32"]
+
+dns_nameservers = ["9.9.9.9", "1.1.1.1"]
+
+# Smallest of the tenant overlay MTU and the MTU of the networks joined (layer 10 contract).
+network_mtu = 1362
