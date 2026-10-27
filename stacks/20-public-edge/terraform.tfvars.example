@@ -1,0 +1,30 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a"
+site  = "site-a"
+az    = "nova"
+image = "ubuntu-24.04"
+
+flavor           = "m1.small-nodisk"
+boot_volume_size = 10 # null with a flavor that has a local disk
+
+public_network = { network = "public", subnet = "public-subnet" }
+
+planes = {
+  svc_public = { network = "svc_public", subnet = "svc_public", cidr = "198.51.100.0/24" }
+  monitoring = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
+}
+
+dns_nameservers   = ["192.0.2.53"]
+octavia_flavor_id = null # an active/standby flavor if the cloud offers one
+
+routes = {
+  "site-a.example.org" = { backends = ["198.51.100.21:443", "198.51.100.22:443"] }
+  "site-b.example.org" = { backends = ["198.51.100.21:443", "198.51.100.22:443"] }
+}
+
+admin = {
+  users     = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+  ssh_cidrs = ["192.0.2.0/24"]
+}
+
+public_dns = { zone = "example.org.", names = ["", "www"], ttl = 300 }
