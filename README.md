@@ -20,4 +20,5 @@ A reference architecture for a multi-tenant OpenStack cloud, built on the
 | Document | Content |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sizing |
+| [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
