@@ -152,6 +152,8 @@ Until cloud-baseline (module v0.2) provides layer 10, the operator must supply t
 |---|---|
 | Networks `svc_public`, `intranet`, `monitoring` | Visible to the tenant projects (shared or external), each with one subnet usable as a router gateway |
 | Plane routes | The CIDR of each plane, to be advertised by DHCP in the tenant subnets |
+| MTU | The MTU of each plane, and the largest MTU the cloud carries for tenant networks (lower when the tenant overlay itself runs over a tunnel). Tenant networks that join a plane use the smallest of these values (`network_mtu`): OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets |
+| Reserved ranges | The ranges tenants must not use for their networks (ranges used by the cloud infrastructure) |
 | Public network | A network providing floating IPs reachable from the internet, for the edge load balancer |
 | Octavia | Available to the projects, with a load balancer flavor (amphora topology) |
 | Image | An Ubuntu LTS cloud image visible to the projects |

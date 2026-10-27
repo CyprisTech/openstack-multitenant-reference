@@ -131,6 +131,7 @@ module "web" {
 
     networks = merge({
       (local.prefix) = {
+        mtu = var.network_mtu
         subnets = {
           main = { cidr = var.web_cidr, dns_nameservers = var.dns_nameservers }
         }
@@ -150,6 +151,7 @@ module "web" {
       }, {
       # Administration network of the bastion: its only router joins the administration network.
       for k in(local.with_bastion ? ["${local.prefix}-admin"] : []) : k => {
+        mtu     = var.network_mtu
         subnets = { main = { cidr = try(var.bastion.cidr, "10.31.0.0/28"), dns_nameservers = var.dns_nameservers } }
         routers = { admin = { external_network = "admin", internal_subnet = "main", default_gateway = true } }
       }

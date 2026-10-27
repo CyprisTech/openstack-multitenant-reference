@@ -105,3 +105,14 @@ variable "bastion" {
   })
   default = null
 }
+
+variable "network_mtu" {
+  description = <<-EOT
+    MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant
+    networks, nor the MTU of the planes they join (layer 10 contract): a larger value creates a
+    path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator
+    enables it. null keeps the cloud default.
+  EOT
+  type        = number
+  default     = null
+}

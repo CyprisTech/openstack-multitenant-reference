@@ -95,6 +95,7 @@ module "edge" {
 
     networks = merge({
       (local.prefix) = {
+        mtu = var.network_mtu
         subnets = {
           main = { cidr = var.edge_cidr, dns_nameservers = var.dns_nameservers }
         }
@@ -115,6 +116,7 @@ module "edge" {
       }, {
       # Administration network of the bastion: its only router joins the administration network.
       for k in(local.with_bastion ? ["${local.prefix}-admin"] : []) : k => {
+        mtu     = var.network_mtu
         subnets = { main = { cidr = try(var.bastion.cidr, "10.32.0.0/28"), dns_nameservers = var.dns_nameservers } }
         routers = { admin = { external_network = "admin", internal_subnet = "main", default_gateway = true } }
       }
