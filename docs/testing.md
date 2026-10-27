@@ -62,7 +62,7 @@ Findings:
 
 ### Full scenario and reachability matrix (2026-10-27)
 
-Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, monitoring floating IPs and DNS records (module `fa88feb`, after `v0.1.1`).
+Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, monitoring floating IPs and DNS records (module commit `fa88feb`, after `v0.1.1`; the same code is released as `v0.1.2`).
 
 | Check | Result |
 |---|---|

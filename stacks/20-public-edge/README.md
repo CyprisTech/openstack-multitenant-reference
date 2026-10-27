@@ -48,6 +48,7 @@ Connections open on the replaced instance are cut.
 | `boot_volume_size` | Root volume size in GiB; `null` uses the flavor's disk | `null` |
 | `edge_cidr` | Range of the edge network | `10.20.0.0/24` |
 | `dns_nameservers` | Resolvers of the edge network | `[]` |
+| `network_mtu` | MTU of the stack's networks: smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract) | cloud default |
 | `public_network` | External network of the floating IP and default route | required |
 | `planes` | `svc_public` and `monitoring`: network, subnet, CIDR (layer 10 contract) | required |
 | `octavia_flavor_id` | Octavia flavor (active/standby recommended) | cloud default |
@@ -56,6 +57,8 @@ Connections open on the replaced instance are cut.
 | `routes` | Domains, backends, PROXY protocol, connection limit | `{}` |
 | `admin` | SSH users and allowed sources | no access |
 | `public_dns` | A records on the floating IP in an existing zone | none |
+| `bastion` | Optional bastion with a floating IP on an administration network | none |
+| `monitoring` | Monitoring zone for the A records, metrics ports, collector addresses | no record, port 9100 |
 
 ## Outputs
 
@@ -65,3 +68,5 @@ Connections open on the replaced instance are cut.
 | `instances` | Traefik instances and their addresses |
 | `svc_public_source_ips` | Addresses the edge uses on `svc_public` |
 | `routes` | Routed domains |
+| `bastion` | Floating IP of the bastion, or null |
+| `monitoring_targets` | Floating IP on the monitoring plane and DNS name of each instance |
