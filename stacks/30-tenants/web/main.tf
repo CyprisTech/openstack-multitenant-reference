@@ -63,7 +63,7 @@ data "openstack_networking_router_v2" "edge_svc_public" {
 }
 
 module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
   count  = local.with_bastion ? 1 : 0
 
   hostname = local.bastion_name
@@ -93,7 +93,7 @@ module "cloudinit_bastion" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=fa88febb8a2676282d9995ca36396be353e667df"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -122,7 +122,7 @@ module "cloudinit" {
 }
 
 module "web" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=fa88febb8a2676282d9995ca36396be353e667df"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
 
   tenant = {
     existing = {

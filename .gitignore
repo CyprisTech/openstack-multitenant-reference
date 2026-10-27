@@ -1,10 +1,34 @@
+# Local .terraform directories and lock files
 .terraform/
 .terraform.lock.hcl
+
+# State and plan files: never commit them, they contain secrets and infrastructure details
 *.tfstate
 *.tfstate.*
+*.tfplan
+*.tfplan.json
+
+# Variable files may contain secrets and real names; examples use *.tfvars.example
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
-crash.log
+# Generated routes (stack 30 web output, read by stack 20)
 *.auto.tfvars.json
+
 # Local overrides (for example a module source pointing to a local checkout)
+override.tf
+override.tf.json
 *_override.tf
+*_override.tf.json
+
+# Crash logs and CLI configuration
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Python and editors
+__pycache__/
+.*.sw*
+.idea/
+.vscode/

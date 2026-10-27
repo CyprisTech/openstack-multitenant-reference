@@ -4,6 +4,9 @@ This document is the living specification of the reference architecture. The dec
 
 All names are fictional: the organisation is `example.org`, and address ranges are left to the layer 10 contract.
 
+> [!NOTE]
+> **Delivered in v0.1.0:** layers 20 and 30 for the projects `edge`, `web` and `isolated`, with bastions, monitoring and the reachability matrix. **Planned:** the `platform` project (Kubernetes with Cluster API Provider OpenStack). This document specifies it already; the sections and rows that concern it describe the target, not delivered code.
+
 ## Topology
 
 Four projects consume three planes shared by the operator. Each project joins only the planes it needs, through its own routers; the routes to each plane are advertised by DHCP.
@@ -61,7 +64,7 @@ flowchart LR
 |---|---|---|---|
 | `edge` | 20 | `svc_public`, `monitoring` | Octavia load balancer with a public floating IP, two Traefik VMs (anti-affinity) |
 | `web` | 30 | `svc_public`, `monitoring` | Two VMs (anti-affinity) serving `site-a.example.org` and `site-b.example.org`, each with an address on `svc_public` |
-| `platform` | 30 | `svc_public`, `intranet`, `monitoring` | Kubernetes cluster created by CAPO; ingress load balancer with an address on `svc_public` |
+| `platform` (planned) | 30 | `svc_public`, `intranet`, `monitoring` | Kubernetes cluster created by CAPO; ingress load balancer with an address on `svc_public` |
 | `isolated` | 30 | `monitoring` | One workload, no public address, no route to other tenants |
 
 Backends are published on `svc_public` with addresses from that plane. Every project on `svc_public` can therefore reach them at the network level: **security groups restrict them to the edge Traefik instances** (see the reachability matrix).
@@ -112,6 +115,8 @@ flowchart LR
 
 ## Kubernetes cluster creation
 
+Planned: the `platform` stack is not delivered yet.
+
 ```mermaid
 sequenceDiagram
     participant TF as Terraform (module)
@@ -130,7 +135,7 @@ sequenceDiagram
 
 ## Reachability matrix
 
-Each row is checked by the acceptance test after deployment. *Enforced by* names the mechanism that makes the row true.
+Each row is checked by the acceptance test ([`tests/reachability`](../tests/reachability/README.md)) after deployment, except the rows that involve `platform` or the `intranet` plane, which come with the `platform` stack. *Enforced by* names the mechanism that makes the row true.
 
 | From | To | Port | Expected | Enforced by |
 |---|---|---|---|---|
@@ -182,7 +187,7 @@ Planned for a later version: an edge per site (active/passive), a failover runbo
 
 ## Sizing
 
-Indicative minimum to run the whole scenario.
+Indicative minimum to run the whole scenario. Without the planned `platform` project and its bootstrap machine, v0.1.0 needs 5 instances, 9 vCPU, 9 GiB of RAM, 1 load balancer and 8 floating IPs (1 public, 2 `svc_public`, 5 `monitoring`), plus the optional bastions and, for the reachability matrix, the test collector.
 
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|
