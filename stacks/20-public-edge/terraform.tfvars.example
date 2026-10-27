@@ -15,6 +15,7 @@ planes = {
 }
 
 dns_nameservers   = ["192.0.2.53"]
+network_mtu       = 1362 # smallest of the tenant overlay MTU and the plane MTUs
 octavia_flavor_id = null # an active/standby flavor if the cloud offers one
 
 routes = {

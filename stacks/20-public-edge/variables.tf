@@ -135,3 +135,32 @@ variable "public_dns" {
   })
   default = null
 }
+
+variable "bastion" {
+  description = <<-EOT
+    Optional administration bastion. It lives in its own small network whose router joins
+    external_network (an administration network such as an intranet) and carries a floating
+    IP on it. A second port on the edge network gives it access to the Traefik instances; the edge
+    network itself gets no route to the administration network.
+    - ssh_cidrs: sources allowed to reach the bastion on port 22.
+    The users of var.admin are created on the bastion and on the Traefik instances.
+  EOT
+  type = object({
+    external_network = object({ network = string, subnet = string })
+    cidr             = optional(string, "10.32.0.0/28")
+    flavor           = optional(string)
+    ssh_cidrs        = list(string)
+  })
+  default = null
+}
+
+variable "network_mtu" {
+  description = <<-EOT
+    MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant
+    networks, nor the MTU of the planes they join (layer 10 contract): a larger value creates a
+    path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator
+    enables it. null keeps the cloud default.
+  EOT
+  type        = number
+  default     = null
+}
