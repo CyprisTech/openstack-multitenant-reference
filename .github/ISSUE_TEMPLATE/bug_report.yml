@@ -1,0 +1,77 @@
+name: Bug report
+description: A stack, the reachability matrix or the documentation does not behave as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Remove credentials, addresses, domains and real names** from everything you paste.
+        Security issues must be reported privately (see SECURITY.md). Problems of the module itself belong to
+        [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant/issues).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Tag or commit of this repository.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - stacks/20-public-edge
+        - stacks/30-tenants/web
+        - stacks/30-tenants/isolated
+        - tests/reachability (matrix)
+        - tests/integration
+        - documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      options: [OpenTofu, Terraform]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Tool and provider versions
+      description: Output of `tofu version` or `terraform version` in the stack directory.
+    validations:
+      required: true
+  - type: input
+    id: openstack
+    attributes:
+      label: OpenStack release and distribution
+      placeholder: 2025.1, OpenStack-Ansible / Kolla / DevStack / vendor; Neutron backend (OVN, OVS)
+  - type: textarea
+    id: contract
+    attributes:
+      label: Layer 10 contract
+      description: How your cloud provides the planes (shared or external networks, MTUs, DNS zone). See docs/architecture.md.
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The relevant part of your `terraform.tfvars`, with placeholders.
+      render: hcl
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the relevant part of the plan, the error message or the failing matrix rows.
+      render: text
+    validations:
+      required: true
