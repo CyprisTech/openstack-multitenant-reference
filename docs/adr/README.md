@@ -7,6 +7,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-reference-architecture.md) | Scope and structure of the reference architecture | Proposed |
+| [0002](0002-platform-kubernetes.md) | The `platform` tenant: Kubernetes with Cluster API | Proposed |
 
 ## Writing an ADR
 

@@ -111,23 +111,34 @@ flowchart LR
 
 ## Kubernetes cluster creation
 
-Planned: the `platform` stack is not delivered yet.
+Planned: the `platform` stack is not delivered yet. The design is [ADR-0002](adr/0002-platform-kubernetes.md).
 
 ```mermaid
 sequenceDiagram
-    participant TF as Terraform (module)
+    participant TF as Terraform (stack 30 platform)
     participant OS as OpenStack APIs
-    participant K as Bootstrap machine<br/>kind + CAPO controllers
-    TF->>OS: project network, routers to planes, security groups, application credential
-    K->>OS: image-builder uploads the node image (private image)
-    K->>OS: OpenStackCluster: Octavia load balancer for the Kubernetes API
-    K->>OS: 3 control-plane servers, then workers
-    Note over K,OS: the cluster runs, then kind is deleted or CAPO is moved into the cluster
+    participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
+    participant W as Workload cluster
+    TF->>OS: network, routers to the planes, application credential, bootstrap instance
+    B->>OS: image-builder (OpenStack builder): private node image
+    B->>OS: CAPO: API load balancer (floating IP on the administration network)
+    B->>OS: 3 control-plane servers, then workers (anti-affinity)
+    B->>W: CAAPH: cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus
+    W->>OS: ingress load balancer (floating IP of svc_public), metrics load balancer (floating IP of monitoring)
+    B->>W: clusterctl move: the cluster manages itself
+    Note over TF,B: the bootstrap instance is destroyed
 ```
 
-- CAPO uses the network prepared by Terraform; it does not create the project networks.
-- The application credential is scoped to the `platform` project; no admin role is required.
-- Versions of CAPO, Cluster API and Kubernetes are pinned in the stack.
+| Element | Setting |
+|---|---|
+| Cluster definition | ClusterClass and a `Cluster` object; versions pinned |
+| Control plane | 3 nodes behind the CAPO load balancer |
+| Workers | one machine deployment, anti-affinity |
+| Pod network | Cilium, VXLAN, MTU = network MTU − 50 |
+| Ingress | Traefik (Gateway API) behind a load balancer with a floating IP of `svc_public`, PROXY v2 from the load balancer |
+| Metrics | in-cluster Prometheus behind a load balancer with a floating IP of `monitoring`, federated by the collector |
+| API | floating IP on the administration network, administration sources only |
+| Credentials | application credential scoped to the `platform` project, created by Terraform |
 
 ## Reachability matrix
 
@@ -160,6 +171,7 @@ Until cloud-baseline (module v0.2) provides layer 10, the operator must supply t
 | Collector | A collector with an address in the `monitoring` range, outgoing TCP to the metrics ports, and its addresses published (`monitoring.collector_cidrs` of the stacks) |
 | Reserved ranges | The ranges tenants must not use for their networks (ranges used by the cloud infrastructure) |
 | Public network | A network providing floating IPs reachable from the internet, for the edge load balancer |
+| Administration network and sources | An external network for the bastions and the Kubernetes API floating IPs, and the **operator addresses** allowed on them. Recommended: a network distinct from the intranet. With one network for both roles, the administration sources must be specific addresses, never the network range: tenants joining the intranet reach it with addresses of its range ([ADR-0002](adr/0002-platform-kubernetes.md), D6) |
 | Octavia | Available to the projects, with a load balancer flavor (amphora topology) |
 | Image | An Ubuntu LTS cloud image visible to the projects |
 | Flavors | Sizes listed in the sizing table below |
