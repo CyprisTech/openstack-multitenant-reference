@@ -1,0 +1,30 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a"
+site  = "site-a"
+az    = "nova"
+image = "ubuntu-24.04"
+
+flavor           = "m1.small-nodisk"
+boot_volume_size = 8 # null with a flavor that has a local disk
+
+monitoring_plane = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
+
+# Smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract).
+network_mtu = 1362
+
+# The collector scrapes the instance through its floating IP on the monitoring plane.
+monitoring = {
+  dns_zone        = "mon.site-a.example.org."
+  collector_cidrs = ["203.0.113.10/32"]
+}
+
+# SSH users, created on the bastion and on the instance.
+admin = {
+  users = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+}
+
+# Optional bastion with a floating IP on an administration network.
+bastion = {
+  external_network = { network = "intranet", subnet = "intranet" }
+  ssh_cidrs        = ["192.0.2.0/24"]
+}
