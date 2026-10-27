@@ -47,6 +47,7 @@ stacks/
 
 - Until cloud-baseline v0.2, layer 10 is **provided by the operator**. [The layer 10 contract](../architecture.md#layer-10-contract) lists exactly what layers 20 and 30 expect.
 - Stacks reference each other **by name through `existing`**, never through remote state. Each stack keeps its own state and stays independent of the state backend, as in the module.
+- **Each stack takes its own cloud connection** (a `clouds.yaml` entry). Stacks never assume they share a project: deploying the four tenants in one project or in four projects is a change of configuration, not of code.
 
 ### D2 — Shared network planes
 
@@ -89,6 +90,7 @@ The expected flows between the internet, the planes and the tenants are written 
 ### D7 — Security groups and DNS
 
 - **Each tenant declares its own security groups** with the module. This works on any cloud, including with a single project.
+- Rules that refer to another tenant use **CIDRs** (for example the addresses of the edge instances on `svc_public`), never `remote_group_id`, which only works inside one project.
 - A **central security group catalogue shared by RBAC is an operator option of layer 10**, delivered with cloud-baseline (v0.2). The choice between central governance and tenant autonomy is discussed in the trade-offs.
 - Each tenant has its own DNS zone, created for the project, or records in a shared zone.
 
