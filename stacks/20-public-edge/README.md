@@ -17,6 +17,8 @@ tofu apply
 
 The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. Make sure no `OS_*` variable is set in the shell: the client would mix it with the `clouds.yaml` entry.
 
+The instances need Internet access at first boot (package index, Podman, Traefik image): `public_network` must provide a default route to the Internet, and `dns_nameservers` must be reachable through it. A resolver that is only reachable on a plane the edge does not join (an intranet resolver, for example) makes the first boot fail and the members stay in `ERROR`.
+
 ## Changing the routes
 
 Routes are written by cloud-init, and the module ignores `user_data` changes on existing instances. A change of `routes` takes effect when the instances are replaced, **one at a time**, so that the load balancer keeps one healthy member:

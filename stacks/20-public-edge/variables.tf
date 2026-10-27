@@ -41,7 +41,7 @@ variable "edge_cidr" {
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers pushed by DHCP on the edge network. They must resolve the backend names used in routes."
+  description = "DNS resolvers pushed by DHCP on the edge network. They must be reachable through the edge routes (public network or a plane), and resolve the backend names used in routes. Without them, the first boot cannot install Podman nor pull the Traefik image."
   type        = list(string)
   default     = []
 }
