@@ -89,6 +89,12 @@ if ! kubectl --kubeconfig "$workload" -n traefik get secret platform-tls >/dev/n
 fi
 
 kubectl -n platform wait cluster/${cluster.name} --for=condition=Available --timeout=30m
+# clusterctl move refuses to run while a machine is still provisioning.
+kubectl -n platform wait kubeadmcontrolplane -l cluster.x-k8s.io/cluster-name=${cluster.name} \
+  --for=jsonpath='{.status.readyReplicas}'=${cluster.control_plane_count} --timeout=40m
+kubectl -n platform wait machinedeployment -l cluster.x-k8s.io/cluster-name=${cluster.name} \
+  --for=jsonpath='{.status.readyReplicas}'=${cluster.worker_count} --timeout=30m
+kubectl -n platform wait machine -l cluster.x-k8s.io/cluster-name=${cluster.name} --for=jsonpath='{.status.phase}'=Running --timeout=30m
 kubectl --kubeconfig "$workload" wait nodes --all --for=condition=Ready --timeout=20m
 
 # 4. Self-management: Cluster API moves into the workload cluster.
