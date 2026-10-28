@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - ADR-0001: D4 refined by ADR-0002; open points resolved.
-- Test results ([docs/testing.md](docs/testing.md)): platform deployment, matrix 42/42, rolling replacement of every machine, nine defects found and fixed.
+- Test results ([docs/testing.md](docs/testing.md)): platform deployment, matrix 43/43, rolling replacement of every machine, Service addresses kept across a reinstall, nine defects found and fixed.
 
 ## [0.1.0] - 2026-10-27
 

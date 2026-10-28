@@ -133,10 +133,16 @@ def main():
         def kget(*a):
             return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
 
-        ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
-                       "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
-        metrics = kget("get", "svc", "-A", "-l", "app.kubernetes.io/component=server,app.kubernetes.io/name=prometheus",
-                       "-o", "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
+        # Addresses created by the platform stack (ADR-0002, D5), and the ones the Services carry:
+        # the cloud controller manager silently allocates another address when the requested
+        # one is unavailable.
+        plat = outputs(args.tool, os.path.join(args.stacks, "30-tenants", "platform"))
+        ingress = next(iter(plat["routes"].values()))["backends"][0].split(":")[0]
+        metrics = plat["prometheus"]["address"]
+        svc_ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
+                           "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
+        svc_metrics = kget("get", "svc", "-A", "-l", "app.kubernetes.io/component=server,app.kubernetes.io/name=prometheus",
+                           "-o", "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
         api = kget("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
         intranet = outputs(args.tool, args.intranet_service)["address"]
         kget("run", "reachability-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
@@ -144,6 +150,8 @@ def main():
         kget("wait", "-n", "default", "--for=condition=Ready", "pod/reachability-probe", "--timeout=120s")
         probe_pod = kubectl
 
+        rows.append(("platform Services", f"ingress and Prometheus on the stack addresses", "-", "yes",
+                     lambda: "yes" if (svc_ingress, svc_metrics) == (ingress, metrics) else f"no: {svc_ingress}, {svc_metrics}"))
         rows.append((f"edge {edge_vm[0]}", f"platform ingress {ingress}", 443, "open",
                      lambda: p.remote(edge["bastion"], edge_vm[1], ingress, 443)))
         rows.append(("test runner", f"platform ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)))

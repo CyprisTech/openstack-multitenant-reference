@@ -38,45 +38,45 @@ Cluster API objects live in the cluster itself after `clusterctl move`: one Mach
 ```console
 $ clusterctl describe cluster platform -n platform
 NAME                                                         REPLICAS AVAILABLE READY UP TO DATE STATUS REASON     SINCE MESSAGE                                                               
-Cluster platform/platform, v1.36.5                           5/5      5         5     5          True   Available  30m                                                                         
-├─KubeadmControlPlane platform/platform-ffj9h, v1.36.5       3/3      3         3     3          True   Available  35m                                                                         
-│ └─3 Machines...                                                     3         3     3          True   Ready      35m   See platform-ffj9h-45tfv, platform-ffj9h-g96g9, ...                   
-├─OpenStackCluster platform/platform-m2s9k                                                       True   Ready      12h                                                                         
+Cluster platform/platform, v1.36.5                           5/5      5         5     5          True   Available  142m                                                                        
+├─KubeadmControlPlane platform/platform-ffj9h, v1.36.5       3/3      3         3     3          True   Available  146m                                                                        
+│ └─3 Machines...                                                     3         3     3          True   Ready      146m  See platform-ffj9h-45tfv, platform-ffj9h-g96g9, ...                   
+├─OpenStackCluster platform/platform-m2s9k                                                       True   Ready      14h                                                                         
 └─Workers                                                                                                                                                                                      
-  └─MachineDeployment platform/platform-md-0-bqnvl, v1.36.5  2/2      2         2     2          True   Available  30m                                                                         
-    └─2 Machines...                                                   2         2     2          True   Ready      34m   See platform-md-0-bqnvl-mmltc-qgbl7, platform-md-0-bqnvl-mmltc-v7n5f
+  └─MachineDeployment platform/platform-md-0-bqnvl, v1.36.5  2/2      2         2     2          True   Available  142m                                                                        
+    └─2 Machines...                                                   2         2     2          True   Ready      146m  See platform-md-0-bqnvl-mmltc-qgbl7, platform-md-0-bqnvl-mmltc-v7n5f
 ```
 
 ```console
 $ kubectl -n platform get clusterclass,cluster,kubeadmcontrolplane,machinedeployment
 NAME                                        VARIABLES READY   AGE
-clusterclass.cluster.x-k8s.io/t1-platform   True              12h
+clusterclass.cluster.x-k8s.io/t1-platform   True              14h
 
 NAME                                CLUSTERCLASS   AVAILABLE   CP DESIRED   CP AVAILABLE   CP UP-TO-DATE   W DESIRED   W AVAILABLE   W UP-TO-DATE   PHASE         AGE   VERSION
-cluster.cluster.x-k8s.io/platform   t1-platform    True        3            3              3               2           2             2              Provisioned   12h   v1.36.5
+cluster.cluster.x-k8s.io/platform   t1-platform    True        3            3              3               2           2             2              Provisioned   14h   v1.36.5
 
 NAME                                                               CLUSTER    AVAILABLE   DESIRED   CURRENT   READY   AVAILABLE   UP-TO-DATE   INITIALIZED   AGE   VERSION
-kubeadmcontrolplane.controlplane.cluster.x-k8s.io/platform-ffj9h   platform   True        3         3         3       3           3            true          12h   v1.36.5
+kubeadmcontrolplane.controlplane.cluster.x-k8s.io/platform-ffj9h   platform   True        3         3         3       3           3            true          14h   v1.36.5
 
 NAME                                                     CLUSTER    AVAILABLE   DESIRED   CURRENT   READY   AVAILABLE   UP-TO-DATE   PHASE     AGE   VERSION
-machinedeployment.cluster.x-k8s.io/platform-md-0-bqnvl   platform   True        2         2         2       2           2            Running   12h   v1.36.5
+machinedeployment.cluster.x-k8s.io/platform-md-0-bqnvl   platform   True        2         2         2       2           2            Running   14h   v1.36.5
 ```
 
 ```console
 $ kubectl -n platform get machines,openstackmachines
-NAME                                                       CLUSTER    NODE NAME                         FAILURE DOMAIN   READY   AVAILABLE   UP-TO-DATE   PHASE     AGE   VERSION
-machine.cluster.x-k8s.io/platform-ffj9h-45tfv              platform   platform-ffj9h-45tfv                               True    True        True         Running   51m   v1.36.5
-machine.cluster.x-k8s.io/platform-ffj9h-g96g9              platform   platform-ffj9h-g96g9                               True    True        True         Running   38m   v1.36.5
-machine.cluster.x-k8s.io/platform-ffj9h-w8x46              platform   platform-ffj9h-w8x46                               True    True        True         Running   35m   v1.36.5
-machine.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-qgbl7   platform   platform-md-0-bqnvl-mmltc-qgbl7                    True    True        True         Running   50m   v1.36.5
-machine.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-v7n5f   platform   platform-md-0-bqnvl-mmltc-v7n5f                    True    True        True         Running   38m   v1.36.5
+NAME                                                       CLUSTER    NODE NAME                         FAILURE DOMAIN   READY   AVAILABLE   UP-TO-DATE   PHASE     AGE    VERSION
+machine.cluster.x-k8s.io/platform-ffj9h-45tfv              platform   platform-ffj9h-45tfv                               True    True        True         Running   162m   v1.36.5
+machine.cluster.x-k8s.io/platform-ffj9h-g96g9              platform   platform-ffj9h-g96g9                               True    True        True         Running   150m   v1.36.5
+machine.cluster.x-k8s.io/platform-ffj9h-w8x46              platform   platform-ffj9h-w8x46                               True    True        True         Running   146m   v1.36.5
+machine.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-qgbl7   platform   platform-md-0-bqnvl-mmltc-qgbl7                    True    True        True         Running   162m   v1.36.5
+machine.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-v7n5f   platform   platform-md-0-bqnvl-mmltc-v7n5f                    True    True        True         Running   150m   v1.36.5
 
 NAME                                                                               CLUSTER    PROVIDERID                                          MACHINE                           AGE
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-45tfv              platform   openstack:///f5800b1a-4fc0-4852-8358-6ce713cfcc47   platform-ffj9h-45tfv              51m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-g96g9              platform   openstack:///b648ff41-6533-41a2-8750-90f6be31cce1   platform-ffj9h-g96g9              38m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-w8x46              platform   openstack:///793ba660-9f44-41e2-9c37-c8173114626e   platform-ffj9h-w8x46              35m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-qgbl7   platform   openstack:///a3127cd7-d3f8-4f61-b3b1-6031b407027a   platform-md-0-bqnvl-mmltc-qgbl7   50m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-v7n5f   platform   openstack:///fc6649f2-0fa3-4633-942a-9489529e5501   platform-md-0-bqnvl-mmltc-v7n5f   38m
+openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-45tfv              platform   openstack:///f5800b1a-4fc0-4852-8358-6ce713cfcc47   platform-ffj9h-45tfv              162m
+openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-g96g9              platform   openstack:///b648ff41-6533-41a2-8750-90f6be31cce1   platform-ffj9h-g96g9              150m
+openstackmachine.infrastructure.cluster.x-k8s.io/platform-ffj9h-w8x46              platform   openstack:///793ba660-9f44-41e2-9c37-c8173114626e   platform-ffj9h-w8x46              146m
+openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-qgbl7   platform   openstack:///a3127cd7-d3f8-4f61-b3b1-6031b407027a   platform-md-0-bqnvl-mmltc-qgbl7   162m
+openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-bqnvl-mmltc-v7n5f   platform   openstack:///fc6649f2-0fa3-4633-942a-9489529e5501   platform-md-0-bqnvl-mmltc-v7n5f   150m
 ```
 
 ## Nodes
@@ -85,12 +85,12 @@ Three control-plane nodes and two workers, all on the cluster network; the cloud
 
 ```console
 $ kubectl get nodes -o wide
-NAME                              STATUS   ROLES           AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION              CONTAINER-RUNTIME
-platform-ffj9h-45tfv              Ready    control-plane   40m   v1.36.5   10.24.0.60    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-ffj9h-g96g9              Ready    control-plane   36m   v1.36.5   10.24.0.205   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-ffj9h-w8x46              Ready    control-plane   32m   v1.36.5   10.24.0.83    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-md-0-bqnvl-mmltc-qgbl7   Ready    <none>          40m   v1.36.5   10.24.0.36    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-md-0-bqnvl-mmltc-v7n5f   Ready    <none>          35m   v1.36.5   10.24.0.235   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+NAME                              STATUS   ROLES           AGE    VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION              CONTAINER-RUNTIME
+platform-ffj9h-45tfv              Ready    control-plane   152m   v1.36.5   10.24.0.60    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+platform-ffj9h-g96g9              Ready    control-plane   147m   v1.36.5   10.24.0.205   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+platform-ffj9h-w8x46              Ready    control-plane   144m   v1.36.5   10.24.0.83    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+platform-md-0-bqnvl-mmltc-qgbl7   Ready    <none>          152m   v1.36.5   10.24.0.36    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+platform-md-0-bqnvl-mmltc-v7n5f   Ready    <none>          147m   v1.36.5   10.24.0.235   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
 ```
 
 ## What runs
@@ -100,53 +100,53 @@ System components in kube-system, Cluster API and its providers, then the add-on
 ```console
 $ kubectl get namespaces
 NAME                                STATUS   AGE
-caaph-system                        Active   12h
-capi-kubeadm-bootstrap-system       Active   12h
-capi-kubeadm-control-plane-system   Active   12h
-capi-system                         Active   12h
-capo-system                         Active   12h
-cert-manager                        Active   12h
-cilium-secrets                      Active   13h
-default                             Active   14h
-demo                                Active   5h27m
-kube-node-lease                     Active   14h
-kube-public                         Active   14h
-kube-system                         Active   14h
-monitoring                          Active   13h
-orc-system                          Active   12h
-platform                            Active   12h
-traefik                             Active   13h
+caaph-system                        Active   14h
+capi-kubeadm-bootstrap-system       Active   14h
+capi-kubeadm-control-plane-system   Active   14h
+capi-system                         Active   14h
+capo-system                         Active   14h
+cert-manager                        Active   14h
+cilium-secrets                      Active   15h
+default                             Active   16h
+demo                                Active   7h19m
+kube-node-lease                     Active   16h
+kube-public                         Active   16h
+kube-system                         Active   16h
+monitoring                          Active   15h
+orc-system                          Active   14h
+platform                            Active   14h
+traefik                             Active   15h
 ```
 
 ```console
 $ kubectl get deploy,daemonset -A
 NAMESPACE                           NAME                                                            READY   UP-TO-DATE   AVAILABLE   AGE
-caaph-system                        deployment.apps/caaph-controller-manager                        1/1     1            1           12h
-capi-kubeadm-bootstrap-system       deployment.apps/capi-kubeadm-bootstrap-controller-manager       1/1     1            1           12h
-capi-kubeadm-control-plane-system   deployment.apps/capi-kubeadm-control-plane-controller-manager   1/1     1            1           12h
-capi-system                         deployment.apps/capi-controller-manager                         1/1     1            1           12h
-capo-system                         deployment.apps/capo-controller-manager                         1/1     1            1           12h
-cert-manager                        deployment.apps/cert-manager                                    1/1     1            1           12h
-cert-manager                        deployment.apps/cert-manager-cainjector                         1/1     1            1           12h
-cert-manager                        deployment.apps/cert-manager-webhook                            1/1     1            1           12h
-demo                                deployment.apps/whoami                                          2/2     2            2           5h27m
-kube-system                         deployment.apps/cilium-operator                                 1/1     1            1           13h
-kube-system                         deployment.apps/coredns                                         2/2     2            2           14h
-kube-system                         deployment.apps/kubelet-csr-approver                            2/2     2            2           71m
-kube-system                         deployment.apps/metrics-server                                  2/2     2            2           71m
-kube-system                         deployment.apps/openstack-cinder-csi-controllerplugin           1/1     1            1           13h
-monitoring                          deployment.apps/prometheus-1793171368-kube-state-metrics        1/1     1            1           12h
-monitoring                          deployment.apps/prometheus-1793171368-server                    1/1     1            1           12h
-orc-system                          deployment.apps/orc-controller-manager                          1/1     1            1           12h
-traefik                             deployment.apps/traefik-1793168624                              2/2     2            2           13h
+caaph-system                        deployment.apps/caaph-controller-manager                        1/1     1            1           14h
+capi-kubeadm-bootstrap-system       deployment.apps/capi-kubeadm-bootstrap-controller-manager       1/1     1            1           14h
+capi-kubeadm-control-plane-system   deployment.apps/capi-kubeadm-control-plane-controller-manager   1/1     1            1           14h
+capi-system                         deployment.apps/capi-controller-manager                         1/1     1            1           14h
+capo-system                         deployment.apps/capo-controller-manager                         1/1     1            1           14h
+cert-manager                        deployment.apps/cert-manager                                    1/1     1            1           14h
+cert-manager                        deployment.apps/cert-manager-cainjector                         1/1     1            1           14h
+cert-manager                        deployment.apps/cert-manager-webhook                            1/1     1            1           14h
+demo                                deployment.apps/whoami                                          2/2     2            2           7h19m
+kube-system                         deployment.apps/cilium-operator                                 1/1     1            1           15h
+kube-system                         deployment.apps/coredns                                         2/2     2            2           16h
+kube-system                         deployment.apps/kubelet-csr-approver                            2/2     2            2           3h3m
+kube-system                         deployment.apps/metrics-server                                  2/2     2            2           3h3m
+kube-system                         deployment.apps/openstack-cinder-csi-controllerplugin           1/1     1            1           15h
+monitoring                          deployment.apps/prometheus-kube-state-metrics                   1/1     1            1           23m
+monitoring                          deployment.apps/prometheus-server                               1/1     1            1           23m
+orc-system                          deployment.apps/orc-controller-manager                          1/1     1            1           14h
+traefik                             deployment.apps/traefik                                         2/2     2            2           3m50s
 
-NAMESPACE     NAME                                                            DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                            AGE
-kube-system   daemonset.apps/cilium                                           5         5         5       5            5           kubernetes.io/os=linux                   13h
-kube-system   daemonset.apps/cilium-envoy                                     5         5         5       5            5           kubernetes.io/os=linux                   13h
-kube-system   daemonset.apps/kube-proxy                                       5         5         5       5            5           kubernetes.io/os=linux                   14h
-kube-system   daemonset.apps/openstack-cinder-csi-nodeplugin                  5         5         5       5            5           <none>                                   13h
-kube-system   daemonset.apps/openstack-cloud-controller-manager               3         3         3       3            3           node-role.kubernetes.io/control-plane=   13h
-monitoring    daemonset.apps/prometheus-1793171368-prometheus-node-exporter   5         5         5       5            5           kubernetes.io/os=linux                   12h
+NAMESPACE     NAME                                                 DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                            AGE
+kube-system   daemonset.apps/cilium                                5         5         5       5            5           kubernetes.io/os=linux                   15h
+kube-system   daemonset.apps/cilium-envoy                          5         5         5       5            5           kubernetes.io/os=linux                   15h
+kube-system   daemonset.apps/kube-proxy                            5         5         5       5            5           kubernetes.io/os=linux                   16h
+kube-system   daemonset.apps/openstack-cinder-csi-nodeplugin       5         5         5       5            5           <none>                                   15h
+kube-system   daemonset.apps/openstack-cloud-controller-manager    3         3         3       3            3           node-role.kubernetes.io/control-plane=   15h
+monitoring    daemonset.apps/prometheus-prometheus-node-exporter   5         5         5       5            5           kubernetes.io/os=linux                   23m
 ```
 
 ```console
@@ -157,7 +157,7 @@ helmchartproxy.addons.cluster.x-k8s.io/cinder-csi             True    InfoReport
 helmchartproxy.addons.cluster.x-k8s.io/kubelet-csr-approver   True    InfoReported
 helmchartproxy.addons.cluster.x-k8s.io/metrics-server         True    InfoReported
 helmchartproxy.addons.cluster.x-k8s.io/occm                   True    InfoReported
-helmchartproxy.addons.cluster.x-k8s.io/prometheus             False   IssuesReported
+helmchartproxy.addons.cluster.x-k8s.io/prometheus             True    InfoReported
 helmchartproxy.addons.cluster.x-k8s.io/traefik                True    InfoReported
 
 NAME                                                                                         CLUSTER    READY   REASON         STATUS     REVISION
@@ -166,32 +166,31 @@ helmreleaseproxy.addons.cluster.x-k8s.io/kubelet-csr-approver-platform-4j5dz    
 helmreleaseproxy.addons.cluster.x-k8s.io/metrics-server-platform-td876                       platform   True    InfoReported   deployed   1
 helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cinder-csi-platform-6vgp6                 platform   True    InfoReported   deployed   1
 helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cloud-controller-manager-platform-mfz86   platform   True    InfoReported   deployed   2
-helmreleaseproxy.addons.cluster.x-k8s.io/prometheus-platform-nwhqn                           platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/prometheus-platform-psggd                           platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/traefik-platform-vj45z                              platform   True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/prometheus-platform-rg4xg                           platform   True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/traefik-platform-kbt9l                              platform   True    InfoReported   deployed   1
 ```
 
 ## How it is exposed
 
-Each `LoadBalancer` Service is an Octavia load balancer created by the cloud controller manager, with a floating IP of the plane it is published on.
+Each `LoadBalancer` Service is an Octavia load balancer created by the cloud controller manager; its floating IP, on the plane it is published on, is created by the stack and requested by the Service.
 
 ```console
 $ kubectl get svc -A --field-selector spec.type=LoadBalancer
-NAMESPACE    NAME                           TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
-monitoring   prometheus-1793171368-server   LoadBalancer   10.104.148.230   198.51.100.1   9090:31885/TCP               12h
-traefik      traefik-1793168624             LoadBalancer   10.97.10.126     203.0.113.1    80:32078/TCP,443:32507/TCP   13h
+NAMESPACE    NAME                TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
+monitoring   prometheus-server   LoadBalancer   10.111.200.111   198.51.100.1   9090:32393/TCP               23m
+traefik      traefik             LoadBalancer   10.106.38.157    203.0.113.1    80:30738/TCP,443:31906/TCP   3m50s
 ```
 
 ```console
 $ kubectl get gatewayclass,gateway,httproute -A
 NAME                                             CONTROLLER                      ACCEPTED   AGE
-gatewayclass.gateway.networking.k8s.io/traefik   traefik.io/gateway-controller   True       13h
+gatewayclass.gateway.networking.k8s.io/traefik   traefik.io/gateway-controller   True       3m49s
 
 NAMESPACE   NAME                                                CLASS     ADDRESS        PROGRAMMED   AGE
-traefik     gateway.gateway.networking.k8s.io/traefik-gateway   traefik   203.0.113.1   True         13h
+traefik     gateway.gateway.networking.k8s.io/traefik-gateway   traefik   203.0.113.1   True         3m49s
 
 NAMESPACE   NAME                                         HOSTNAMES                       AGE
-demo        httproute.gateway.networking.k8s.io/whoami   ["apps.platform.example.org"]   5h27m
+demo        httproute.gateway.networking.k8s.io/whoami   ["apps.platform.example.org"]   7h19m
 ```
 
 ## Storage
@@ -201,8 +200,8 @@ Cinder CSI provides the default storage class.
 ```console
 $ kubectl get storageclass
 NAME                             PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
-csi-cinder-sc-delete (default)   cinder.csi.openstack.org   Delete          Immediate           true                   13h
-csi-cinder-sc-retain             cinder.csi.openstack.org   Retain          Immediate           true                   13h
+csi-cinder-sc-delete (default)   cinder.csi.openstack.org   Delete          Immediate           true                   15h
+csi-cinder-sc-retain             cinder.csi.openstack.org   Retain          Immediate           true                   15h
 ```
 
 ## Resource usage
@@ -212,10 +211,10 @@ metrics-server feeds `kubectl top`.
 ```console
 $ kubectl top nodes
 NAME                              CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
-platform-ffj9h-45tfv              358m         17%      2008Mi          52%         
-platform-ffj9h-g96g9              331m         16%      1749Mi          45%         
-platform-ffj9h-w8x46              88m          4%       1444Mi          37%         
-platform-md-0-bqnvl-mmltc-qgbl7   109m         5%       1693Mi          44%         
-platform-md-0-bqnvl-mmltc-v7n5f   142m         7%       874Mi           22%
+platform-ffj9h-45tfv              422m         21%      2179Mi          57%         
+platform-ffj9h-g96g9              320m         16%      1861Mi          48%         
+platform-ffj9h-w8x46              99m          4%       1488Mi          39%         
+platform-md-0-bqnvl-mmltc-qgbl7   88m          4%       1607Mi          42%         
+platform-md-0-bqnvl-mmltc-v7n5f   151m         7%       898Mi           23%
 ```
 

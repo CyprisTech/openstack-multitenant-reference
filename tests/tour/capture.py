@@ -34,7 +34,8 @@ STEPS = [
      [["kubectl", "get", "namespaces"], ["kubectl", "get", "deploy,daemonset", "-A"],
       ["kubectl", "-n", "platform", "get", "helmchartproxies,helmreleaseproxies"]]),
     ("How it is exposed", "Each `LoadBalancer` Service is an Octavia load balancer created by the cloud "
-     "controller manager, with a floating IP of the plane it is published on.",
+     "controller manager; its floating IP, on the plane it is published on, is created by the stack "
+     "and requested by the Service.",
      [["kubectl", "get", "svc", "-A", "--field-selector", "spec.type=LoadBalancer"],
       ["kubectl", "get", "gatewayclass,gateway,httproute", "-A"]]),
     ("Storage", "Cinder CSI provides the default storage class.", [["kubectl", "get", "storageclass"]]),

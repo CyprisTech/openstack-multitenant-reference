@@ -9,7 +9,7 @@
 A reference architecture for several tenants sharing one OpenStack cloud, Kubernetes included: each tenant isolated in its own project, published through a single public entry point, monitored and administered through dedicated network planes, and **every isolation claim checked by an executable test**. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, with its design choices argued in ADRs and their costs stated.
 
 > [!NOTE]
-> **First release, `v0.1.0`:** the public entry point and the `web` and `isolated` tenants, with bastions and monitoring; reachability matrix **27/27**. **Since v0.1.0, on `main`, tested, not yet released:** the Kubernetes `platform` tenant (Cluster API Provider OpenStack); the matrix passes **42/42** rows with it ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
+> **First release, `v0.1.0`:** the public entry point and the `web` and `isolated` tenants, with bastions and monitoring; reachability matrix **27/27**. **Since v0.1.0, on `main`, tested, not yet released:** the Kubernetes `platform` tenant (Cluster API Provider OpenStack); the matrix passes **43/43** rows with it ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
 
 **Start here:** [quick start](#quick-start) to deploy it, [what it demonstrates](#what-it-demonstrates) to judge it, [landscape](docs/landscape.md) for the technologies.
 
@@ -39,7 +39,7 @@ Platform teams, integrators and cloud architects who run workloads for several t
 
 | Claim | How | Proof |
 |---|---|---|
-| **Isolation is tested, not asserted** | The reachability matrix of the specification is a script: it probes every flow from outside, from inside each tenant and from the Kubernetes cluster, and fails on any difference | [`tests/reachability`](tests/reachability/README.md): 42/42 rows |
+| **Isolation is tested, not asserted** | The reachability matrix of the specification is a script: it probes every flow from outside, from inside each tenant and from the Kubernetes cluster, and fails on any difference | [`tests/reachability`](tests/reachability/README.md): 43/43 rows |
 | **A network model where every flow is explicit** | One project per tenant; shared planes (`svc_public`, `monitoring`, `intranet`); one router per plane with source NAT; publishing on a plane with a floating IP of that plane; security groups that admit addresses as seen through source NAT | [Network topology of a tenant](docs/architecture.md#network-topology-of-a-tenant) |
 | **One public entry point, TLS kept by each tenant** | Octavia in TCP mode and two Traefik instances routing by SNI without decrypting; the client address carried by a single PROXY v2 header to the application, through a second load balancer for Kubernetes | [Ingress data path](docs/architecture.md#ingress-data-path); 12/12 requests with the client address |
 | **Kubernetes inside the same model** | Cluster API with CAPO: declarative cluster from a ClusterClass, self-managed after `clusterctl move`; ingress, metrics and API published on the planes like any tenant; machine remediation, certificate rotation, metrics-server | [ADR-0002](docs/adr/0002-platform-kubernetes.md), [platform tour](docs/platform-tour.md) |
@@ -120,7 +120,7 @@ One state per stack. Stacks find each other's objects by name, never through rem
 | Stack 20 `public-edge` | delivered, tested |
 | Stacks 30 `web` and `isolated`, bastions | delivered, tested |
 | Monitoring through floating IPs and DNS discovery | delivered, tested |
-| Executable reachability matrix and test collector | delivered; 27/27 rows in v0.1.0, 42/42 with `platform` |
+| Executable reachability matrix and test collector | delivered; 27/27 rows in v0.1.0, 43/43 with `platform` |
 | Kubernetes node image (image-builder) | on `main`, tested |
 | Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators | on `main`, tested, not yet released |
 | Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | tested; requests lost during node drains, fix to do ([testing](docs/testing.md)) |
