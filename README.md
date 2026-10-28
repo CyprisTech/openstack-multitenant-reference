@@ -233,6 +233,7 @@ Run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, th
 
 | Document | Content |
 |---|---|
+| [docs/landscape.md](docs/landscape.md) | Technologies per layer, alternatives considered, why |
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sites, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
