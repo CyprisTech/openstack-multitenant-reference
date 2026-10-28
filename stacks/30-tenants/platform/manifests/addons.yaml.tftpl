@@ -26,6 +26,8 @@
         name: cloud-config
       cluster:
         name: ${cluster.name}
+      # The node resolver, not CoreDNS: CoreDNS waits for the nodes this controller initializes.
+      dnsPolicy: Default
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
       tolerations:
