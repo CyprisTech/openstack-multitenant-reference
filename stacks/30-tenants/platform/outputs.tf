@@ -12,3 +12,8 @@ output "manifests" {
   description = "Rendered Cluster API manifests, as written on the bootstrap instance."
   value       = local.manifests
 }
+
+output "scripts" {
+  description = "Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change)."
+  value       = local.scripts
+}

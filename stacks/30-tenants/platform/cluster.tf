@@ -72,6 +72,9 @@ module "cloudinit" {
   packages = ["docker.io", "jq"]
 
   write_files = merge(
+    # kind takes the MTU of the default Docker bridge: it must not exceed the MTU of the cluster
+    # network, or large replies of the cloud APIs are dropped silently (no "fragmentation needed").
+    var.network_mtu == null ? {} : { "/etc/docker/daemon.json" = { content = jsonencode({ mtu = var.network_mtu }) } },
     { for name, content in local.manifests : "/opt/platform/manifests/${name}" => { content = content } },
     { for name, content in local.scripts : "/opt/platform/${name}" => { content = content, permissions = "0755" } },
   )

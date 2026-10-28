@@ -16,7 +16,8 @@ planes = {
 # admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the intranet
 
 network_mtu     = 1362
-dns_nameservers = ["9.9.9.9", "1.1.1.1"]
+# Must resolve the cloud API endpoints (an intranet resolver when they are internal names).
+dns_nameservers = ["192.0.2.53"]
 
 # Operators as seen on the administration network (specific addresses, never a network range).
 admin = {

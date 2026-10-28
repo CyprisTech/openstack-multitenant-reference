@@ -21,6 +21,9 @@ Every version is pinned in [`cluster.tf`](cluster.tf).
     --role member --role load-balancer_member --expiration 2027-01-01T00:00:00
   ```
 
+- Resolvers (`dns_nameservers`) that resolve the cloud API endpoints: the controllers call them from the bootstrap instance and from the cluster.
+- When the cloud APIs use a private certificate authority, its certificates in a file: `create-cluster.sh` gives them to Cluster API, ORC, the cloud controller manager and Cinder CSI.
+
 ## Usage
 
 ```bash
@@ -29,10 +32,11 @@ tofu init && tofu apply
 
 # Copy the cluster credential as the clouds.yaml entry "openstack", then create the cluster.
 scp clouds.yaml ops@$(tofu output -raw bootstrap):/tmp/clouds.yaml
-ssh ops@$(tofu output -raw bootstrap) 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && rm /tmp/clouds.yaml && sudo /opt/platform/create-cluster.sh'
+scp cacert.pem ops@$(tofu output -raw bootstrap):/tmp/cacert.pem      # private CA only
+ssh ops@$(tofu output -raw bootstrap) 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem; sudo /opt/platform/create-cluster.sh'
 ```
 
-The script ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance. The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
+The script can be run again after a failure: each step skips what already exists. It ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance. The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
 
 Publish the ingress through the entry point: add the domains of `cluster.domains` to the routes of stack 20, with the floating IP of the Traefik service (`kubectl -n traefik get svc traefik`) as backend on port 443.
 

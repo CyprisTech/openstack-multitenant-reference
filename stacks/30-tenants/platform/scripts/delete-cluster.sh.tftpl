@@ -16,7 +16,7 @@ kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap -
 kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
 kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
 export CLUSTER_TOPOLOGY=true
-clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
 
