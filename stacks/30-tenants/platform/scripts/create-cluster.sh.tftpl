@@ -9,6 +9,32 @@ cd /opt/platform
 
 export KUBECONFIG=/opt/platform/bootstrap.kubeconfig
 workload=/opt/platform/${cluster.name}.kubeconfig
+
+# Address under which this bootstrap instance reaches the API floating IP: its own floating IP
+# (read from Neutron with the cluster credential). Admitted on the API load balancer only while
+# the bootstrap instance manages the cluster.
+bootstrap_source() {
+  python3 - <<'PY'
+import json, os, socket, ssl, urllib.parse, urllib.request, yaml
+c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+a = c["auth"]
+ctx = ssl.create_default_context(cafile="/opt/platform/cacert.pem" if os.path.exists("/opt/platform/cacert.pem") else None)
+body = {"auth": {"identity": {"methods": ["application_credential"], "application_credential": {
+    "id": a["application_credential_id"], "secret": a["application_credential_secret"]}}}}
+def fqdn(url):  # Python checks certificates against the name without the root dot
+    u = urllib.parse.urlsplit(url)
+    return u._replace(netloc=u.netloc.replace(u.hostname, u.hostname.rstrip("."), 1)).geturl().rstrip("/")
+req = urllib.request.Request(fqdn(a["auth_url"]) + "/auth/tokens", json.dumps(body).encode(), {"Content-Type": "application/json"})
+with urllib.request.urlopen(req, context=ctx) as r:
+    token, catalog = r.headers["X-Subject-Token"], json.load(r)["token"]["catalog"]
+neutron = next(e["url"] for s in catalog if s["type"] == "network" for e in s["endpoints"]
+               if e["interface"] == c.get("interface", "public") and e.get("region_id", e.get("region")) == c.get("region_name", "RegionOne"))
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("192.0.2.1", 9)); ip = s.getsockname()[0]
+req = urllib.request.Request(fqdn(neutron) + "/v2.0/floatingips?fixed_ip_address=" + ip, headers={"X-Auth-Token": token})
+with urllib.request.urlopen(req, context=ctx) as r:
+    print(json.load(r)["floatingips"][0]["floating_ip_address"] + "/32")
+PY
+}
 [[ -f clouds.yaml ]] || { echo "copy clouds.yaml (entry \"openstack\") to /opt/platform first" >&2; exit 1; }
 
 # 1. Management cluster in kind, with Cluster API, CAPO, ORC and CAAPH.
@@ -27,7 +53,8 @@ ca_args=()
 kubectl -n platform create secret generic ${prefix}-cloud-config --from-file=clouds.yaml "$${ca_args[@]}" \
   --dry-run=client -o yaml | kubectl label --local -f - clusterctl.cluster.x-k8s.io/move= -o yaml | kubectl apply -f -
 kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
-kubectl apply -f manifests/cluster.yaml
+source=$(bootstrap_source)
+sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
 kubectl -n platform wait cluster/${cluster.name} --for=condition=ControlPlaneInitialized --timeout=30m
 clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
 
@@ -69,6 +96,8 @@ kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || cl
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
 clusterctl move -n platform --to-kubeconfig "$workload"
+# The bootstrap instance no longer manages the cluster: its address leaves the API sources.
+sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 kind delete cluster --name bootstrap
 
 echo "Cluster ${cluster.name} manages itself. Kubeconfig: $workload"

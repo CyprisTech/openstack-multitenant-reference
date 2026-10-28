@@ -19,6 +19,11 @@ spec:
     classRef:
       name: ${prefix}
     version: ${cluster.kubernetes_version}
+    variables:
+    # Operators, plus the bootstrap instance while it manages the cluster (create-cluster.sh
+    # replaces BOOTSTRAP_SOURCE with its address, then removes it after clusterctl move).
+    - name: apiAllowedCIDRs
+      value: ${jsonencode(concat(admin_sources, ["BOOTSTRAP_SOURCE"]))}
     controlPlane:
       replicas: ${cluster.control_plane_count}
     workers:
