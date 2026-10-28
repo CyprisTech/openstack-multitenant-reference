@@ -34,7 +34,7 @@ The tests of v0.1.0 also showed two facts this design must respect: a tenant joi
 | Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring` and `intranet` with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster) |
 | Node image | image-builder, OpenStack builder (Packer) | private image of the project, built in the project itself |
 | Cluster | Cluster API with CAPO, kubeadm | control plane and workers, API load balancer |
-| Cluster add-ons | Cluster API Add-on Provider Helm (CAAPH) | OpenStack cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus |
+| Cluster add-ons | Cluster API Add-on Provider Helm (CAAPH) | OpenStack cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus, metrics-server, kubelet-csr-approver |
 
 CAPO uses the network prepared by Terraform and creates no network or router. Its security groups (control plane, workers) are managed by CAPO.
 
@@ -49,6 +49,8 @@ CAPO uses the network prepared by Terraform and creates no network or router. It
 - **Three control-plane nodes** behind an Octavia load balancer created by CAPO, and one machine deployment of workers, each group spread across hosts (server groups with **soft** anti-affinity: the cluster still starts when the cloud has fewer hosts than machines).
 - Versions of Cluster API, CAPO, CAAPH, Kubernetes and every add-on are pinned in the repository.
 - Cluster API templates are immutable: their names carry a revision derived from their content, so that a change creates new templates and Cluster API replaces the machines one at a time.
+- Machines are remediated by MachineHealthCheck (a node not Ready for 5 minutes is replaced; at most one worker at a time), and control-plane machines are replaced 21 days before their certificates expire.
+- Kubelet serving certificates are signed by the cluster CA and approved by kubelet-csr-approver for this cluster's nodes only, so that metrics-server verifies the kubelets.
 
 ### D3 — Bootstrap and self-management
 
