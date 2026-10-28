@@ -1,60 +1,20 @@
 # Technology landscape
 
 ```mermaid
-block-beta
-  columns 1
-  block:TESTS:1
-    columns 6
-    tT["Tests"] t1["Integration tests on a real cloud"] t2["Reachability matrix"] space space space
-  end
-  block:OBS:1
-    columns 6
-    tO["Monitoring"] o1["Monitoring plane floating IPs"] o2["Shared DNS zone"] o3["Prometheus federation"] space space
-  end
-  block:ING:1
-    columns 6
-    tI["Kubernetes ingress"] i1["Traefik"] i2["Gateway API"] space space space
-  end
-  block:CNI:1
-    columns 6
-    tN["Pod network"] n1["Cilium · VXLAN"] space space space space
-  end
-  block:CI:1
-    columns 6
-    tC["Cloud integration"] c1["OpenStack cloud controller manager"] c2["Cinder CSI"] space space space
-  end
-  block:ADD:1
-    columns 6
-    tA["Kubernetes add-ons"] a1["CAAPH"] a2["Helm"] space space space
-  end
-  block:LC:1
-    columns 6
-    tL["Kubernetes lifecycle"] l1["Cluster API"] l2["CAPO"] l3["ORC"] l4["kind · clusterctl move"] space
-  end
-  block:IMG:1
-    columns 6
-    tM["Kubernetes node image"] m1["image-builder"] m2["Packer"] m3["Ubuntu 24.04"] space space
-  end
-  block:ADM:1
-    columns 6
-    tD["Administration"] d1["Bastions"] d2["Administration network"] space space space
-  end
-  block:EDGE:1
-    columns 6
-    tE["Public entry point"] e1["Octavia · TCP · PROXY"] e2["Traefik on VMs · SNI passthrough"] space space space
-  end
-  block:NET:1
-    columns 6
-    tW["Network isolation"] w1["Project per tenant"] w2["Shared planes"] w3["Router per plane"] w4["Security groups by source"] space
-  end
-  block:IAC:1
-    columns 6
-    tX["Infrastructure as code"] x1["OpenTofu / Terraform"] x2["terraform-openstack-tenant"] space space space
-  end
-  block:CLOUD:1
-    columns 6
-    tK["Cloud"] k1["Nova"] k2["Neutron · OVN"] k3["Cinder"] k4["Octavia"] k5["Designate"]
-  end
+flowchart LR
+  tT["Tests"] ~~~ t1["Integration tests on a real cloud"] ~~~ t2["Reachability matrix"]
+  tO["Monitoring"] ~~~ o1["Monitoring plane floating IPs"] ~~~ o2["Shared DNS zone"] ~~~ o3["Prometheus federation"]
+  tI["Kubernetes ingress"] ~~~ i1["Traefik"] ~~~ i2["Gateway API"]
+  tN["Pod network"] ~~~ n1["Cilium · VXLAN"]
+  tC["Cloud integration"] ~~~ c1["OpenStack cloud controller manager"] ~~~ c2["Cinder CSI"]
+  tA["Kubernetes add-ons"] ~~~ a1["CAAPH"] ~~~ a2["Helm"]
+  tL["Kubernetes lifecycle"] ~~~ l1["Cluster API"] ~~~ l2["CAPO"] ~~~ l3["ORC"] ~~~ l4["kind · clusterctl move"]
+  tM["Kubernetes node image"] ~~~ m1["image-builder"] ~~~ m2["Packer"] ~~~ m3["Ubuntu 24.04"]
+  tD["Administration"] ~~~ d1["Bastions"] ~~~ d2["Administration network"]
+  tE["Public entry point"] ~~~ e1["Octavia · TCP · PROXY"] ~~~ e2["Traefik on VMs · SNI passthrough"]
+  tW["Network isolation"] ~~~ w1["Project per tenant"] ~~~ w2["Shared planes"] ~~~ w3["Router per plane"] ~~~ w4["Security groups by source"]
+  tX["Infrastructure as code"] ~~~ x1["OpenTofu / Terraform"] ~~~ x2["terraform-openstack-tenant"]
+  tK["Cloud"] ~~~ k1["Nova"] ~~~ k2["Neutron · OVN"] ~~~ k3["Cinder"] ~~~ k4["Octavia"] ~~~ k5["Designate"]
   classDef layer fill:#ffffff,stroke:#ffffff,color:#111827,font-weight:bold
   classDef infra fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
   classDef iac fill:#e5e7eb,stroke:#4b5563,color:#111827
@@ -73,7 +33,7 @@ block-beta
   class t1,t2 test
 ```
 
-Colours by family: blue, the cloud; grey, infrastructure as code; orange, network, entry point and administration; violet, Kubernetes image, lifecycle and add-ons; green, components running in the cluster; yellow, monitoring; cyan, tests.
+One row per layer, from the cloud (bottom) to the tests (top). Colours by family: blue, the cloud; grey, infrastructure as code; orange, network, entry point and administration; violet, Kubernetes image, lifecycle and add-ons; green, components running in the cluster; yellow, monitoring; cyan, tests.
 
 One row per layer of the architecture: what is used, what was considered instead, and why. The reasoning is in the ADRs and in [trade-offs.md](trade-offs.md); this page is the map.
 
