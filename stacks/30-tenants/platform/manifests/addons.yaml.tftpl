@@ -121,6 +121,9 @@ spec:
       platform.example.org/addons: "true"
   repoURL: ${chart.repo}
   chartName: ${chart.chart}
+  # A fixed release name: a generated one may change when the proxies are reconciled again
+  # (after clusterctl move), and the chart is then installed twice.
+  releaseName: ${name}
   version: ${chart.version}
   namespace: ${chart.namespace}
   options:

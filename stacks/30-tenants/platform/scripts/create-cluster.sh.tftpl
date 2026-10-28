@@ -102,6 +102,9 @@ kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || cl
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
 clusterctl move -n platform --to-kubeconfig "$workload"
+# clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
+python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
+  | kubectl --kubeconfig "$workload" apply -f -
 # The bootstrap instance no longer manages the cluster: its address leaves the API sources.
 sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 kind delete cluster --name bootstrap
