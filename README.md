@@ -11,6 +11,8 @@ A reference architecture for several tenants sharing one OpenStack cloud, Kubern
 > [!NOTE]
 > **First release, `v0.1.0`:** the public entry point and the `web` and `isolated` tenants, with bastions and monitoring; reachability matrix **27/27**. **Since v0.1.0, on `main`, tested, not yet released:** the Kubernetes `platform` tenant (Cluster API Provider OpenStack); the matrix passes **42/42** rows with it ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
 
+**Start here:** [quick start](#quick-start) to deploy it, [what it demonstrates](#what-it-demonstrates) to judge it, [landscape](docs/landscape.md) for the technologies.
+
 ## Table of contents
 
 - [Who it is for](#who-it-is-for)
@@ -229,16 +231,21 @@ Run `delete-cluster.sh` on the platform bootstrap instance, then `tofu destroy` 
 
 ## Documentation
 
-Suggested reading order: this README, the landscape, the architecture, the trade-offs, the ADRs, then the test report and the platform tour.
+Suggested reading order: this README, the landscape, the architecture, the trade-offs, the ADRs, then the test report and the platform tour. To deploy, start with the [quick start](#quick-start).
 
 | Document | Content |
 |---|---|
+| [Quick start](#quick-start) | Deploy the architecture in four steps |
+| [Acceptance test](#acceptance-test) | Prove every isolation claim with the reachability matrix |
 | [docs/landscape.md](docs/landscape.md) | Technologies per layer, alternatives considered, why |
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sites, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
 | [docs/testing.md](docs/testing.md) | Test environment, results and findings |
 | [docs/platform-tour.md](docs/platform-tour.md) | Guided discovery of the Kubernetes cluster, with real outputs |
+| [docs/specs/plane-bindings.md](docs/specs/plane-bindings.md) | Spec for a later milestone: planes on public clouds |
+| [scripts/publish-routes.sh](scripts/publish-routes.sh) | Publishes the routes of the tenants on the entry point |
+| [CHANGELOG.md](CHANGELOG.md) | Changes per release |
 | [tests/reachability/](tests/reachability/README.md) | Executable reachability matrix |
 | [tests/integration/](tests/integration/) | [Test collector](tests/integration/collector/README.md), [intranet service](tests/integration/intranet-service/README.md), [node image boot check](tests/integration/node-image/README.md), [dual floating IP](tests/integration/dual-floating-ip/README.md) |
 | Stack READMEs | [20-public-edge](stacks/20-public-edge/README.md), [30-tenants/web](stacks/30-tenants/web/README.md), [30-tenants/isolated](stacks/30-tenants/isolated/README.md), [30-tenants/platform](stacks/30-tenants/platform/README.md), [images/kubernetes-node](images/kubernetes-node/README.md) |
