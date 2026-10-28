@@ -1,39 +1,41 @@
 # Technology landscape
 
 ```mermaid
-flowchart LR
-  tT["Tests"] ~~~ t1["Integration tests on a real cloud"] ~~~ t2["Reachability matrix"]
-  tO["Monitoring"] ~~~ o1["Monitoring plane floating IPs"] ~~~ o2["Shared DNS zone"] ~~~ o3["Prometheus federation"]
-  tI["Kubernetes ingress"] ~~~ i1["Traefik"] ~~~ i2["Gateway API"]
-  tN["Pod network"] ~~~ n1["Cilium · VXLAN"]
-  tC["Cloud integration"] ~~~ c1["OpenStack cloud controller manager"] ~~~ c2["Cinder CSI"]
-  tA["Kubernetes add-ons"] ~~~ a1["CAAPH"] ~~~ a2["Helm"]
-  tL["Kubernetes lifecycle"] ~~~ l1["Cluster API"] ~~~ l2["CAPO"] ~~~ l3["ORC"] ~~~ l4["kind · clusterctl move"]
-  tM["Kubernetes node image"] ~~~ m1["image-builder"] ~~~ m2["Packer"] ~~~ m3["Ubuntu 24.04"]
-  tD["Administration"] ~~~ d1["Bastions"] ~~~ d2["Administration network"]
-  tE["Public entry point"] ~~~ e1["Octavia · TCP · PROXY"] ~~~ e2["Traefik on VMs · SNI passthrough"]
-  tW["Network isolation"] ~~~ w1["Project per tenant"] ~~~ w2["Shared planes"] ~~~ w3["Router per plane"] ~~~ w4["Security groups by source"]
-  tX["Infrastructure as code"] ~~~ x1["OpenTofu / Terraform"] ~~~ x2["terraform-openstack-tenant"]
-  tK["Cloud"] ~~~ k1["Nova"] ~~~ k2["Neutron · OVN"] ~~~ k3["Cinder"] ~~~ k4["Octavia"] ~~~ k5["Designate"]
-  classDef layer fill:#ffffff,stroke:#ffffff,color:#111827,font-weight:bold
-  classDef infra fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-  classDef iac fill:#e5e7eb,stroke:#4b5563,color:#111827
-  classDef net fill:#ffedd5,stroke:#c2410c,color:#7c2d12
-  classDef k8s fill:#ede9fe,stroke:#6d28d9,color:#4c1d95
-  classDef runtime fill:#dcfce7,stroke:#15803d,color:#14532d
-  classDef obs fill:#fef9c3,stroke:#a16207,color:#713f12
-  classDef test fill:#cffafe,stroke:#0e7490,color:#164e63
-  class tT,tO,tI,tN,tC,tA,tL,tM,tD,tE,tW,tX,tK layer
-  class k1,k2,k3,k4,k5 infra
-  class x1,x2 iac
-  class w1,w2,w3,w4,e1,e2,d1,d2 net
-  class m1,m2,m3,l1,l2,l3,l4,a1,a2 k8s
-  class c1,c2,n1,i1,i2 runtime
-  class o1,o2,o3 obs
-  class t1,t2 test
+flowchart TB
+    subgraph TOOLS["Operator tools"]
+        direction LR
+        TF["OpenTofu / Terraform<br/>terraform-openstack-tenant"]
+        IB["image-builder<br/>Packer"]
+        CAPI["Cluster API · CAPO · ORC<br/>kind, then self-managed"]
+        TEST["Tests<br/>integration · reachability matrix"]
+    end
+    subgraph RUN["What runs"]
+        direction LR
+        EDGE["Public entry point<br/>Octavia + Traefik VMs"]
+        VMT["VM tenants<br/>web · isolated · bastions"]
+        K8S["Kubernetes cluster<br/>Cilium · OCCM · Cinder CSI · Traefik Gateway API<br/>Prometheus · metrics-server (CAAPH)"]
+    end
+    CLOUD["OpenStack cloud<br/>Neutron · OVN · Nova · Cinder · Octavia · Designate · Glance<br/>one project per tenant · shared planes · router per plane"]
+
+    TF -->|"deploys"| EDGE & VMT
+    CAPI -->|"creates, upgrades, repairs"| K8S
+    TEST -.->|"probes every flow"| RUN
+    IB -->|"node image"| CLOUD
+    RUN -->|"run on"| CLOUD
+
+    classDef tool fill:#e5e7eb,stroke:#4b5563,color:#111827
+    classDef infra fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef vm fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef k8s fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef test fill:#cffafe,stroke:#0e7490,color:#164e63
+    class TF,IB,CAPI tool
+    class CLOUD infra
+    class EDGE,VMT vm
+    class K8S k8s
+    class TEST test
 ```
 
-One row per layer, from the cloud (bottom) to the tests (top). Colours by family: blue, the cloud; grey, infrastructure as code; orange, network, entry point and administration; violet, Kubernetes image, lifecycle and add-ons; green, components running in the cluster; yellow, monitoring; cyan, tests.
+Who builds what: Terraform deploys the infrastructure and the VM workloads, Cluster API creates and maintains the Kubernetes cluster, image-builder provides its node image, and the tests probe every flow. Grey: tools; orange: VM workloads; green: Kubernetes; blue: the cloud; cyan: tests. The table below gives the technology of each layer.
 
 One row per layer of the architecture: what is used, what was considered instead, and why. The reasoning is in the ADRs and in [trade-offs.md](trade-offs.md); this page is the map.
 
