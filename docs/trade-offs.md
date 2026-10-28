@@ -14,6 +14,10 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
 | 10 | [Layer 10](#10-layer-10-provided-by-the-operator) | Provided by the operator until cloud-baseline |
+| 11 | [Administration and intranet](#11-one-network-for-administration-and-intranet) | Two roles; one network accepted with specific sources |
+| 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready, not tested |
+| 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
+| 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -46,11 +50,13 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 ## 3. PROXY protocol end to end
 
-**Choice.** Octavia adds a PROXY header towards Traefik; Traefik sends PROXY protocol v2 to the backends.
+**Choice.** Octavia adds a PROXY header towards Traefik; Traefik sends PROXY protocol v2 to the backends. **Exactly one header reaches each backend.** When the backend is itself behind a load balancer (the `platform` ingress), that load balancer passes the entry point's header through instead of adding its own (TCP pools, no `proxy-protocol` annotation), and the Service uses `externalTrafficPolicy: Local` so that Traefik sees the load balancer, a trusted peer.
 
 **Why.** Without it, every backend sees the edge address as the client. Logs, rate limits and allow lists on the backends need the real client address, and TLS passthrough leaves no `X-Forwarded-For` header to carry it.
 
 **Cost.** Every hop must agree. A backend that does not expect the header fails every connection, and a backend that accepts it from untrusted sources lets clients forge their address. Traefik only trusts the header from the load balancer subnet (`trustedIPs`), and each backend must do the same with the edge addresses.
+
+The `platform` case adds two costs: a second header breaks the TLS handshake within milliseconds (seen in the tests), and with `externalTrafficPolicy: Local` only the nodes running Traefik receive traffic, so Traefik runs on several nodes.
 
 **Alternative.** No PROXY protocol: simpler, but client addresses are lost.
 
@@ -121,7 +127,9 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 **Why.** Cluster API handles the lifecycle Terraform handles badly: rolling upgrades, node replacement, scaling. It needs only project-level rights.
 
-**Cost.** Two tools and two states: Terraform for the infrastructure, Cluster API objects for the clusters. A management cluster must exist and be backed up (or the CAPO resources moved into the workload cluster), and node images must be built and kept current with image-builder.
+**Cost.** Two tools and two states: Terraform for the infrastructure, Cluster API objects for the clusters. Node images must be built and kept current with image-builder. This reference makes the cluster **self-managed** (`clusterctl move`): no management cluster to run, but a broken cluster cannot repair itself; the repair path is to move Cluster API back to a temporary kind cluster (what `delete-cluster.sh` does). The glue between Terraform and Cluster API is a shell script on a bootstrap instance, and the cluster credential is created by the operator, outside Terraform, so that no secret is in the state.
+
+**Choose a dedicated management cluster when** you run several clusters: it manages them all and survives the loss of any one.
 
 **Alternative.** A managed Kubernetes service (Magnum or the cloud's own offer).
 
@@ -137,6 +145,45 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 **Next.** cloud-baseline adds `stacks/10-shared-planes` without changing layers 20 and 30.
 
+## 11. One network for administration and intranet
+
+**Choice.** Administration (bastions, Kubernetes API) and intranet (internal services) are two roles. One network may carry both, provided the administration endpoints admit **specific operator addresses**, never the network range.
+
+**Why.** Many clouds have a single internal network. A tenant joining the intranet appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
+
+**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see [testing.md](testing.md)).
+
+**Choose two networks when** you can: the administration network then admits nobody but operators by construction.
+
+## 12. Add-ons declared with Cluster API, not GitOps
+
+**Choice.** Cluster API Add-on Provider Helm (CAAPH) installs the add-ons, declared next to the cluster and moved with it.
+
+**Why.** One tool and one set of objects for the cluster and its add-ons; nothing more to install.
+
+**Cost.** CAAPH does not correct drift: a manual change to an add-on stays until the chart values change. Release names must be fixed, or a new reconciliation installs a chart twice.
+
+**Choose GitOps (Flux or Argo CD) when** several people change the clusters: drift becomes visible and reverted. The manifests are plain YAML rendered by the stack, so a GitOps tool can reconcile them without change; this setup is not tested yet.
+
+## 13. Kubelet serving certificates from the cluster CA
+
+**Choice.** Kubelets request serving certificates from the cluster CA (`rotate-server-certificates`); kubelet-csr-approver approves them for this cluster's node names and addresses only; metrics-server verifies them.
+
+**Why.** The common shortcut, metrics-server with `--kubelet-insecure-tls`, accepts any certificate presented by anything that answers on the kubelet port.
+
+**Cost.** One more controller, and a policy (node name pattern, address range) to keep in line with the cluster.
+
+## 14. Node image size
+
+**Choice.** The node image is built on a small volume (8 GiB); the root disk of each node is chosen by the cluster, per role.
+
+**Why.** The virtual size of the image is the minimum disk of every node. A 20 GiB image forced 20 GiB per node, test clusters included.
+
+**Cost.** None at run time: cloud-init grows the root partition to the disk each machine gets.
+
 ## Evidence
+
+The architecture is tested on a real cloud, with the findings that shaped several choices above: [testing.md](testing.md).
+
 
 The module this architecture builds on is tested on a real cloud: apply, empty plan after apply, destroy. Results are in the module's [testing report](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/testing.md).

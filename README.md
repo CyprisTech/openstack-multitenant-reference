@@ -6,14 +6,16 @@
 [![OpenTofu >= 1.9](https://img.shields.io/badge/OpenTofu-%3E%3D1.9-ffda18?logo=opentofu)](https://opentofu.org)
 [![Terraform >= 1.9](https://img.shields.io/badge/Terraform-%3E%3D1.9-844fba?logo=terraform)](https://www.terraform.io)
 
-A reference architecture for several tenants sharing one OpenStack cloud, built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, with its design choices argued, its trade-offs stated and its isolation checked by an executable test.
+A reference architecture for several tenants sharing one OpenStack cloud, Kubernetes included: each tenant isolated in its own project, published through a single public entry point, monitored and administered through dedicated network planes, and **every isolation claim checked by an executable test**. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, with its design choices argued in ADRs and their costs stated.
 
 > [!NOTE]
-> **First release, `v0.1.0`.** It delivers layers 20 and 30: the public entry point and the `web` and `isolated` tenants, with bastions and monitoring. The full scenario was tested on a private OpenStack 2025.1 cloud, and the executable reachability matrix passed **27/27** rows ([test report](docs/testing.md)). The Kubernetes `platform` tenant (Cluster API Provider OpenStack) is **planned, not delivered**: [docs/architecture.md](docs/architecture.md) specifies it, but no stack exists yet. Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
+> **First release, `v0.1.0`:** the public entry point and the `web` and `isolated` tenants, with bastions and monitoring; reachability matrix **27/27**. **Since v0.1.0, on `main`, tested, not yet released:** the Kubernetes `platform` tenant (Cluster API Provider OpenStack); the matrix passes **42/42** rows with it ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
 
 ## Table of contents
 
+- [Who it is for](#who-it-is-for)
 - [What it demonstrates](#what-it-demonstrates)
+- [Ready for, not yet demonstrated](#ready-for-not-yet-demonstrated)
 - [Architecture](#architecture)
 - [Architecture overview](#architecture-overview)
 - [Status](#status)
@@ -26,13 +28,33 @@ A reference architecture for several tenants sharing one OpenStack cloud, built 
 - [Security](#security)
 - [License](#license)
 
+## Who it is for
+
+Platform teams, integrators and cloud architects who run workloads for several tenants on a **private or sovereign OpenStack cloud**, without a managed Kubernetes service and without admin rights on the cloud, and who must show that tenants are isolated. Use it as a design to adapt, a set of tested stacks to start from, or a checklist of what bites in practice (the [test report](docs/testing.md) lists every defect the tests revealed).
+
 ## What it demonstrates
 
-- **Shared network planes** (`svc_public`, `monitoring`, `intranet`) that each tenant joins only as needed, through its own routers, with the routes advertised by DHCP.
-- **A single public entry point for many domains**: Octavia in TCP mode in front of two Traefik instances on different hosts, routing by SNI without terminating TLS, client address preserved with the PROXY protocol end to end.
-- **Publishing on a plane with a floating IP of that plane**: backends on `svc_public`, admitted from the entry point only; every instance exposed to the monitoring collector through a `monitoring` floating IP, discovered through DNS records.
-- **Tenant isolation as a test**: the reachability matrix of the specification is a script that probes every flow from inside the tenants and fails on any difference.
-- **No address written by hand**: the entry point's routes are generated from the outputs of the tenant stacks.
+| Claim | How | Proof |
+|---|---|---|
+| **Isolation is tested, not asserted** | The reachability matrix of the specification is a script: it probes every flow from outside, from inside each tenant and from the Kubernetes cluster, and fails on any difference | [`tests/reachability`](tests/reachability/README.md): 42/42 rows |
+| **A network model where every flow is explicit** | One project per tenant; shared planes (`svc_public`, `monitoring`, `intranet`); one router per plane with source NAT; publishing on a plane with a floating IP of that plane; security groups that admit addresses as seen through source NAT | [Network topology of a tenant](docs/architecture.md#network-topology-of-a-tenant) |
+| **One public entry point, TLS kept by each tenant** | Octavia in TCP mode and two Traefik instances routing by SNI without decrypting; the client address carried by a single PROXY v2 header to the application, through a second load balancer for Kubernetes | [Ingress data path](docs/architecture.md#ingress-data-path); 12/12 requests with the client address |
+| **Kubernetes inside the same model** | Cluster API with CAPO: declarative cluster from a ClusterClass, self-managed after `clusterctl move`; ingress, metrics and API published on the planes like any tenant; machine remediation, certificate rotation, metrics-server | [ADR-0002](docs/adr/0002-platform-kubernetes.md), [platform tour](docs/platform-tour.md) |
+
+## Ready for, not yet demonstrated
+
+The design leaves room for the following; none of them is tested yet, so none of them is claimed.
+
+| Topic | Why it fits | What a test would add |
+|---|---|---|
+| **GitOps** | Everything Cluster API needs is plain YAML (ClusterClass, Cluster, add-on proxies), rendered by the stack: Flux or Argo CD can reconcile it as is | A reconciliation loop that reverts drift ([trade-off 12](docs/trade-offs.md#12-add-ons-declared-with-cluster-api-not-gitops)) |
+| **Several sites** | The site is an input of every stack and part of every name; routes and records come from outputs, never from hand-written addresses | An edge per site, a DNS switch, a failover drill ([sites](docs/architecture.md#sites)) |
+| **Backups** | Volumes are Cinder volumes behind the CSI driver; etcd runs on kubeadm control-plane nodes: standard tools (Velero, etcd snapshots) apply unchanged | A restore drill |
+| **Public OpenStack clouds** | Nothing in the stacks assumes admin rights or a specific cloud | Results on a public cloud |
+
+It is a reference, not a product: stacks to read, run and adapt.
+
+The technologies used at each layer, and why, are on one page: [landscape](docs/landscape.md).
 
 ## Architecture
 
@@ -48,23 +70,25 @@ flowchart TB
         direction LR
         W["web<br/>2 × backend<br/>site-a · site-b"]
         I["isolated<br/>workload<br/>no Internet"]
-        K["platform<br/>Kubernetes · CAPO<br/>(planned)"]
+        K["platform<br/>Kubernetes · CAPO"]
     end
 
     subgraph L10["Layer 10 · provided by the operator"]
         direction LR
         SVC["svc_public plane"]
         MON["monitoring plane<br/>+ collector + DNS zone"]
+        INT["intranet plane"]
         ADM["administration network"]
     end
 
     U -->|HTTPS| LB
     T -->|"PROXY v2"| SVC -->|"floating IP per backend"| W
+    SVC -->|"ingress load balancer"| K
     MON -.->|"metrics · floating IP per instance"| T & W & I
-    ADM -.->|"SSH · one bastion per stack"| EDGE & TENANTS
+    MON -.->|"Prometheus federation"| K
+    K -->|"internal services"| INT
+    ADM -.->|"SSH · one bastion per stack<br/>Kubernetes API"| EDGE & TENANTS
 
-    classDef planned stroke-dasharray: 5 5,color:#888
-    class K planned
 ```
 
 The cloud operator provides **layer 10**: the shared network planes, the public and administration networks, the monitoring DNS zone and the collector. **Layer 20** is the single public entry point. **Layer 30** holds the tenants, each in its own stack, joining only the planes it needs. Every instance is exposed to the collector through a floating IP of the monitoring plane, and administered through an optional bastion of its stack.
@@ -99,9 +123,21 @@ Not a stack: the `routes` output of `web` becomes the `routes` variable of stack
 
 [`stacks/30-tenants/isolated`](stacks/30-tenants/isolated/README.md) — a workload whose only router joins the monitoring plane: no public address, no Internet access, no path to the other tenants. Its metrics endpoint is open to the collector only.
 
-### 6. Reachability matrix
+### 6. Kubernetes node image
 
-[`tests/reachability/check.py`](tests/reachability/README.md) — the isolation claims as a test. It probes every flow of the [matrix](docs/architecture.md#reachability-matrix) from the outside, from inside each tenant through its bastion, and from the collector, and fails on any difference: 27 rows for this release.
+[`images/kubernetes-node`](images/kubernetes-node/README.md) — a private image built with image-builder (Packer) in its own build network: Kubernetes, containerd and the images of the control plane preinstalled. It outlives the clusters that use it.
+
+### 7. Tenant `platform`
+
+[`stacks/30-tenants/platform`](stacks/30-tenants/platform/README.md) — Terraform prepares the network, its routers to `svc_public`, `monitoring` and `intranet`, and a bootstrap instance; `create-cluster.sh` creates the cluster with Cluster API (three control-plane nodes, workers, add-ons) and moves Cluster API into it. Its ingress is published on `svc_public` and routed by the entry point like any backend; its Prometheus on `monitoring`; its API on the administration network, for operators only.
+
+### 8. Intranet demonstration service
+
+[`tests/integration/intranet-service`](tests/integration/intranet-service/README.md) — an internal service on the intranet that only `platform` may reach, for the matrix.
+
+### 9. Reachability matrix
+
+[`tests/reachability/check.py`](tests/reachability/README.md) — the isolation claims as a test. It probes every flow of the [matrix](docs/architecture.md#reachability-matrix) from the outside, from inside each tenant through its bastion, from the collector and from a pod of the cluster, and fails on any difference: 42 rows with `platform`.
 
 ### Bastions (optional, every stack)
 
@@ -115,8 +151,12 @@ Each stack can add a bastion: a small instance in its own network, with a floati
 | Stack 20 `public-edge` | delivered, tested |
 | Stacks 30 `web` and `isolated`, bastions | delivered, tested |
 | Monitoring through floating IPs and DNS discovery | delivered, tested |
-| Executable reachability matrix and test collector | delivered; 27/27 rows on the test cloud |
-| Stack 30 `platform` (Kubernetes, CAPO) | planned |
+| Executable reachability matrix and test collector | delivered; 27/27 rows in v0.1.0, 42/42 with `platform` |
+| Kubernetes node image (image-builder) | on `main`, tested |
+| Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators | on `main`, tested, not yet released |
+| Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | in test ([MR in review](docs/testing.md)) |
+| Kubernetes version upgrade, scaling, credential rotation | next |
+| GitOps, several sites, backups | the design is ready for them; not tested |
 | Layer 10 as code (`stacks/10-shared-planes`, cloud-baseline) | planned, with module `v0.2` |
 | Failover between sites | later |
 
@@ -135,7 +175,7 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, Neutron with OVN,
 
 **Layer 10 contract.** The operator must provide, per site ([full list](docs/architecture.md#layer-10-contract)):
 
-- the networks `svc_public` and `monitoring` (`intranet` for the planned `platform`), visible to the tenant projects, each with a subnet usable as a router gateway, and their CIDRs;
+- the networks `svc_public` and `monitoring` (`intranet` for `platform`), visible to the tenant projects, each with a subnet usable as a router gateway, and their CIDRs;
 - a public network with floating IPs reachable from the Internet, and a default route to the Internet for package installation at first boot;
 - the **MTU** of each plane and of the tenant overlay: set `network_mtu` to the smallest value. OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets (the TLS handshake hangs);
 - the address ranges reserved by the cloud, which tenant networks must avoid;
@@ -148,7 +188,7 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, Neutron with OVN,
 
 ```mermaid
 flowchart LR
-    P["0. Prerequisites"] --> C["1. Test collector"] --> E["2. Public entry point"] --> W["3. Tenant web"] --> R["4. Route publication"] --> I["5. Tenant isolated"] --> M["6. Reachability matrix"]
+    P["0. Prerequisites"] --> C["1. Test collector"] --> E["2. Public entry point"] --> W["3. Tenant web"] --> R["4. Route publication"] --> I["5. Tenant isolated"] --> IMG["6. Node image"] --> K["7. Tenant platform"] --> S["8. Intranet service"] --> M["9. Reachability matrix"]
 ```
 
 > [!WARNING]
@@ -216,37 +256,61 @@ cp terraform.tfvars.example terraform.tfvars   # same site, monitoring_plane, ne
 tofu init && tofu apply
 ```
 
-### 6. Reachability matrix
+### 6. Node image (for `platform`)
+
+```bash
+cd images/kubernetes-node/build-network && cp terraform.tfvars.example terraform.tfvars && tofu init && tofu apply
+cd .. && cp build.json.example build.json && OS_CLOUD=<entry> ./build.sh
+cd build-network && tofu destroy      # the image stays
+```
+
+### 7. Tenant `platform`
+
+Follow [`stacks/30-tenants/platform`](stacks/30-tenants/platform/README.md): apply the stack, copy the cluster credential to the bootstrap instance, run `create-cluster.sh`, then add the platform domains to the routes of stack 20 (step 4).
+
+### 8. Intranet demonstration service
+
+```bash
+cd tests/integration/intranet-service && tofu init && tofu apply
+```
+
+### 9. Reachability matrix
 
 ```bash
 python3 tests/reachability/check.py --stacks stacks --collector tests/integration/collector \
-  --user ops --key ~/.ssh/id_ed25519
+  --user ops --key ~/.ssh/id_ed25519 \
+  --platform-kubeconfig platform.kubeconfig   # omit for the v0.1.0 scenario
 ```
 
 Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs.
 
 ### Clean up
 
-Run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, then the collector.
+Run `delete-cluster.sh` on the bootstrap instance, then `tofu destroy` in the reverse order: intranet service, `platform`, `isolated`, `web`, `20-public-edge`, the collector. Delete the node image when you no longer need it.
 
 ## Documentation
 
+Suggested reading order: this README, the landscape, the architecture, the trade-offs, the ADRs, then the test report and the platform tour.
+
 | Document | Content |
 |---|---|
+| [docs/landscape.md](docs/landscape.md) | Technologies per layer, alternatives considered, why |
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sites, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
 | [docs/testing.md](docs/testing.md) | Test environment, results and findings |
+| [docs/platform-tour.md](docs/platform-tour.md) | Guided discovery of the Kubernetes cluster, with real outputs |
 | [tests/reachability/](tests/reachability/README.md) | Executable reachability matrix |
-| [tests/integration/collector/](tests/integration/collector/README.md), [tests/integration/dual-floating-ip/](tests/integration/dual-floating-ip/README.md) | Test collector; the test behind the monitoring design |
-| Stack READMEs | [20-public-edge](stacks/20-public-edge/README.md), [30-tenants/web](stacks/30-tenants/web/README.md), [30-tenants/isolated](stacks/30-tenants/isolated/README.md): inputs, outputs, operations |
+| [tests/integration/](tests/integration/) | [Test collector](tests/integration/collector/README.md), [intranet service](tests/integration/intranet-service/README.md), [node image boot check](tests/integration/node-image/README.md), [dual floating IP](tests/integration/dual-floating-ip/README.md) |
+| Stack READMEs | [20-public-edge](stacks/20-public-edge/README.md), [30-tenants/web](stacks/30-tenants/web/README.md), [30-tenants/isolated](stacks/30-tenants/isolated/README.md), [30-tenants/platform](stacks/30-tenants/platform/README.md), [images/kubernetes-node](images/kubernetes-node/README.md) |
 
 ## Roadmap
 
 | Release | Content | Status |
 |---|---|---|
 | **v0.1.0** | Layers 20 and 30 in one site (entry point, `web`, `isolated`), bastions, monitoring through floating IPs and DNS, reachability matrix; layer 10 provided by the operator; module `v0.1.2` | released |
-| next | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack, published through the entry point | planned |
+| next | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack; node image; day-2 operations (upgrade, scaling, credential rotation) | tested, release pending |
+| later | GitOps for clusters and add-ons, dedicated management cluster, backups | planned |
 | next | Results on a public OpenStack cloud | planned |
 | v0.2 | Layer 10 as code (`stacks/10-shared-planes`) with cloud-baseline (terraform-openstack-tenant `v0.2`) | planned |
 | later | Failover between sites: an edge per site, runbook, failover drill | planned |

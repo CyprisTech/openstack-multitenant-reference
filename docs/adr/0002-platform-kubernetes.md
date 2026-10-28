@@ -1,8 +1,9 @@
 # ADR-0002: The `platform` tenant — Kubernetes with Cluster API
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
+- **Refines:** ADR-0001, D4 (the management cluster becomes the workload cluster itself; Terraform no longer handles the cluster credential)
 
 ## Context
 
@@ -45,30 +46,33 @@ CAPO uses the network prepared by Terraform and creates no network or router. It
 ### D2 — Cluster definition
 
 - A **ClusterClass** describes the cluster shape; a short `Cluster` object instantiates it. Upgrades change the Kubernetes version of the `Cluster`, and Cluster API rolls the machines.
-- **Three control-plane nodes** behind an Octavia load balancer created by CAPO, and one machine deployment of workers spread across hosts (server group, anti-affinity).
+- **Three control-plane nodes** behind an Octavia load balancer created by CAPO, and one machine deployment of workers, each group spread across hosts (server groups with **soft** anti-affinity: the cluster still starts when the cloud has fewer hosts than machines).
 - Versions of Cluster API, CAPO, CAAPH, Kubernetes and every add-on are pinned in the repository.
+- Cluster API templates are immutable: their names carry a revision derived from their content, so that a change creates new templates and Cluster API replaces the machines one at a time.
 
 ### D3 — Bootstrap and self-management
 
 1. A bootstrap instance (created by the stack) runs kind and `clusterctl init` with CAPO and CAAPH.
 2. The workload cluster is created from the bootstrap.
 3. `clusterctl move` transfers the Cluster API objects into the workload cluster, which then manages itself.
-4. The bootstrap instance is destroyed.
+4. The bootstrap instance may then be removed (`bootstrap = false`). It is recreated for teardown, or to repair a cluster that can no longer manage itself: Cluster API is moved back to a kind cluster on it.
+
+While it manages the cluster, the bootstrap instance reaches the API through its own floating IP: its address is admitted on the API load balancer until the move, and again during teardown (D5).
 
 Day-two operations (upgrades, scaling, machine replacement) run against the workload cluster. Teardown deletes the `Cluster` first, waits for the servers and load balancers to disappear, then destroys the stack.
 
 ### D4 — Networking inside the cluster
 
 - **Cilium** with VXLAN encapsulation and an **explicit MTU**: the cluster network MTU minus the encapsulation overhead (50 bytes for VXLAN). With the 1362-byte tenant MTU of the test cloud, pods use 1312.
-- Network policies are Cilium policies; the default namespace policy denies ingress from outside the namespace.
+- Cilium enforces Kubernetes and Cilium network policies. This reference deploys none by default: isolation between tenants is enforced by the cloud (projects, routers, security groups, D8); policies inside the cluster are left to its users.
 
 ### D5 — Exposure
 
 | Purpose | How | Admitted sources |
 |---|---|---|
-| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets a **floating IP of `svc_public`**; listeners in TCP with PROXY protocol, Traefik accepting PROXY v2 from the load balancer | the entry point's addresses on `svc_public` only |
-| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets a **floating IP of `monitoring`**, with an A record in the monitoring zone; the collector federates it | the collector's addresses only |
-| Kubernetes API | the CAPO load balancer with a **floating IP of the administration network** | the administration sources only |
+| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets a **floating IP of `svc_public`**. TCP listeners **without** PROXY on this load balancer: the entry point's PROXY v2 header passes through, so exactly one header reaches Traefik. `externalTrafficPolicy: Local` keeps the load balancer as the peer Traefik trusts; two Traefik replicas on two nodes | the entry point's addresses on `svc_public` only |
+| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets a **floating IP of `monitoring`**; the collector federates it. The address is read from the Service (no DNS record is written for it yet) | the collector's addresses only |
+| Kubernetes API | the CAPO load balancer with a **floating IP of the administration network**. The admitted sources are a variable of the `Cluster`, since templates are immutable and the list changes | the administration sources; the bootstrap instance while it manages the cluster; the cluster's own addresses (added by CAPO) |
 
 The entry point routes the platform's domains to the ingress floating IP by SNI, like the `web` backends: routes are generated from the stack outputs (ADR-0001, D9).
 
@@ -83,7 +87,7 @@ A tenant joining the intranet gets addresses of its range through source NAT. If
 
 - **Recommended:** two networks, administration and intranet.
 - **Accepted with one network:** the administration endpoints (bastion SSH, Kubernetes API) admit **specific operator addresses**, never the range of the network.
-- The stacks already take the two roles as separate inputs (`bastion.external_network`, `api_network` for the platform, and the `intranet` plane), so moving from one network to two is a change of configuration.
+- The stacks already take the two roles as separate inputs (`bastion.external_network` for the VM stacks, `admin_network` for the platform, and the `intranet` plane), so moving from one network to two is a change of configuration.
 
 The reference test cloud has one network for both roles; the tests use restricted administration sources and prove the separation in the matrix.
 
@@ -110,4 +114,4 @@ The reference test cloud has one network for both roles; the tests use restricte
 - Two images to keep current: the node image (rebuilt with image-builder) and the add-on chart versions.
 - The test cloud needs, for the duration of a test: 3 control-plane nodes and 2 workers (2 vCPU, 4 GiB each), a bootstrap instance and a temporary Packer build instance, 3 Octavia load balancers (API, ingress, metrics) and 3 more floating IPs.
 - The administration role must be configured with specific sources in every stack; the layer 10 contract lists them.
-- Delivery in four merge requests: this ADR and the specification; the node image build; the stack and the cluster manifests; the full test cycle with the extended matrix and the report.
+- The first deployment revealed nine defects, all fixed (cloud API names, private CA, MTU of kind, API sources, DNS of the cloud controller manager, timing of the move, ORC image after the move, Helm release names, double PROXY header): see [testing.md](../testing.md). They are the practical cost of this design on a private cloud.
