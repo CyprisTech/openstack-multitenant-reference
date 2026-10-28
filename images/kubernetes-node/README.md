@@ -14,6 +14,10 @@ Private image of the `platform` project, built with [image-builder](https://gith
 1. `build-network/` (OpenTofu or Terraform) creates a small network with two routers: one to an egress network (default route, packages and container images), one to the administration network, which carries the floating IP Packer connects to. Only the administration sources are routed through it, and a security group admits SSH from them only.
 2. `build.sh` reads the outputs, starts a temporary instance, provisions it with Ansible, and turns it into a private image named `ubuntu-2404-kube-v1.36.5`. The temporary instance, its volume and its floating IP are deleted by Packer.
 
+## Image size
+
+The virtual size of the image is the size of the build volume (`volume_size` in `build.json`), and it is the **minimum root disk of every node**: a machine cannot boot from a volume smaller than its image. Keep it close to what the image holds (about 3.5 GiB): 8 GiB leaves room for the build itself. cloud-init grows the root partition to the disk each machine gets, so the size of the node disks is a choice of each cluster (`control_plane_root_volume_size`, `worker_root_volume_size` of the platform stack), not of the image.
+
 ## Usage
 
 ```bash

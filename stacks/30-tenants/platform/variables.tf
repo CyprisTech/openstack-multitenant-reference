@@ -113,22 +113,25 @@ variable "cluster" {
     - node_image: name of the image built by images/kubernetes-node.
     - kubernetes_version: must match the node image.
     - control_plane_count: 3 for a highly available control plane.
-    - root_volume_size: GiB of the root volume of each machine (flavors without local disk).
+    - control_plane_root_volume_size, worker_root_volume_size: GiB of the root volume of each
+      machine (container images, ephemeral storage, logs, and etcd on the control plane). They
+      must not be smaller than the virtual size of the node image.
     - domains: domains served by the ingress and published through the entry point.
     - pod_cidr, service_cidr: must not overlap the cluster network nor the planes.
   EOT
   type = object({
-    name                 = optional(string, "platform")
-    node_image           = string
-    kubernetes_version   = optional(string, "v1.36.5")
-    control_plane_flavor = string
-    worker_flavor        = string
-    control_plane_count  = optional(number, 3)
-    worker_count         = optional(number, 2)
-    root_volume_size     = optional(number, 20)
-    domains              = optional(list(string), ["apps.example.org"])
-    pod_cidr             = optional(string, "10.244.0.0/16")
-    service_cidr         = optional(string, "10.96.0.0/12")
+    name                           = optional(string, "platform")
+    node_image                     = string
+    kubernetes_version             = optional(string, "v1.36.5")
+    control_plane_flavor           = string
+    worker_flavor                  = string
+    control_plane_count            = optional(number, 3)
+    worker_count                   = optional(number, 2)
+    control_plane_root_volume_size = optional(number, 30)
+    worker_root_volume_size        = optional(number, 40)
+    domains                        = optional(list(string), ["apps.example.org"])
+    pod_cidr                       = optional(string, "10.244.0.0/16")
+    service_cidr                   = optional(string, "10.96.0.0/12")
   })
 
   validation {

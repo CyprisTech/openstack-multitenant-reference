@@ -28,6 +28,9 @@ cluster = {
   node_image           = "ubuntu-2404-kube-v1.36.5"
   control_plane_flavor = "m1.medium-nodisk"
   worker_flavor        = "m1.medium-nodisk"
+  # Root disks: container images, ephemeral storage, logs, etcd. Defaults 30 and 40 GiB.
+  # control_plane_root_volume_size = 30
+  # worker_root_volume_size        = 40
   domains              = ["apps.example.org"]
 }
 

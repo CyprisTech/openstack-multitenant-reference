@@ -129,7 +129,7 @@ spec:
             value: external
           - name: provider-id
             value: "openstack:///{{ v1.instance_id }}"
-%{ for role, flavor in { "control-plane" = cluster.control_plane_flavor, "worker" = cluster.worker_flavor } ~}
+%{ for role, m in { "control-plane" = { flavor = cluster.control_plane_flavor, size = cluster.control_plane_root_volume_size }, "worker" = { flavor = cluster.worker_flavor, size = cluster.worker_root_volume_size } } ~}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
@@ -141,12 +141,12 @@ spec:
     spec:
       flavor:
         filter:
-          name: ${flavor}
+          name: ${m.flavor}
       image:
         imageRef:
           name: node-image
       rootVolume:
-        sizeGiB: ${cluster.root_volume_size}
+        sizeGiB: ${m.size}
         availabilityZone:
           from: Name
           name: ${az}
