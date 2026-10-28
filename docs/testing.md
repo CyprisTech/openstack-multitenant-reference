@@ -162,3 +162,24 @@ Findings:
 3. **Release proxies created before the fixed release names.** Two Helm release proxies for one Prometheus release blocked every update of the chart proxy. Deleting them reinstalled the release under its fixed name. A cluster created with the current manifests does not have them.
 4. **Reinstalling a release while its Service is still being deleted.** CAAPH reinstalled Traefik at once; the new release adopted the Service that was being deleted, and was left without a Service when the deletion completed. A second reinstall, once nothing was being deleted, worked. Reinstall a release only after its load balancer Services are gone.
 5. **Resolver of the test collector.** The collector VM resolves with the resolver of its own network, which does not serve the monitoring zone, for any tenant. The federation check queried the cloud resolver; a real collector must use a resolver that serves the monitoring zone.
+
+### Teardown of the whole environment (2026-10-28)
+
+First run of `delete-cluster.sh`, then destroy of every stack.
+
+| Step | Result | Duration |
+|---|---|---|
+| `delete-cluster.sh`: LoadBalancer Services deleted, Cluster API moved back to kind, `Cluster` deleted | ✅ after two manual steps (findings 1 and 2) | 21 min 24 s, of which about 12 min blocked |
+| Stack `platform` | ✅ 30 resources; the Service floating IPs, kept by the cloud controller manager, destroyed by Terraform | 21 s |
+| Test intranet service | ✅ 13 resources (finding 3) | 12 s |
+| Test collector | ✅ 17 resources | 27 s |
+| Stack `isolated` | ✅ 28 resources | 34 s |
+| Stack `web` | ✅ 48 resources | 20 s |
+| Stack `20-public-edge` | ✅ 60 resources | 89 s |
+| Leftovers in the project | ✅ none: no server, volume, load balancer, floating IP, router, network, port, security group, server group or record; only the node image, kept on purpose | |
+
+Findings, fixed in `delete-cluster.sh` and the READMEs (the scripted fixes run for the first time at the next teardown):
+
+1. **The bootstrap instance is no longer admitted on the API.** `create-cluster.sh` removes its address after the move, so the instance cannot reach the API to admit itself again. An operator admits it from an administration source first; the script now checks the API and prints the command to run.
+2. **Cluster deletion blocked twice.** The ORC `Image` was not carried back by `clusterctl move` (as on the way in), so CAPO waited for it; and the `KubeadmControlPlane` was gone before its machines, leaving its `kcp-cleanup` pre-terminate hook on them. The script now declares the image again after the move and removes the hook when the control plane object no longer exists.
+3. **Destroy order.** The test intranet service reads the platform's intranet router: destroy it before the platform stack, or with `-refresh=false`.

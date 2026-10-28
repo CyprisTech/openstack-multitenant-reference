@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
+The Kubernetes `platform` tenant, built with Cluster API, and everything it needs: node image, route publication, reachability rows, hardening, teardown tested.
+
 ### Added
 
 - ADR-0002, the `platform` tenant: Kubernetes with Cluster API, self-managed after `clusterctl move`, Cilium, Traefik with the Gateway API, Prometheus federated by the collector, Kubernetes API on the administration network, administration and intranet as two roles.
@@ -20,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - ADR-0001: D4 refined by ADR-0002; open points resolved.
+- Teardown: `delete-cluster.sh` checks that the API admits the bootstrap instance, declares the ORC image again after the move back, and removes an orphaned control-plane hook; READMEs give the destroy order.
 - Test results ([docs/testing.md](docs/testing.md)): platform deployment, matrix 43/43, rolling replacement of every machine, Service addresses kept across a reinstall, nine defects found and fixed.
 
 ## [0.1.0] - 2026-10-27
@@ -41,5 +46,6 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 
-[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CyprisTech/openstack-multitenant-reference/releases/tag/v0.1.0

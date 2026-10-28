@@ -34,11 +34,21 @@ with urllib.request.urlopen(req, context=ctx) as r:
 PY
 }
 
+# After clusterctl move, the bootstrap instance is no longer admitted on the API (create-cluster.sh
+# removes its address). It cannot admit itself: an operator must do it from an administration
+# source, then run this script again.
+if ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
+  echo "The Kubernetes API does not admit this instance. From an administration source, run:" >&2
+  echo "  sed 's|BOOTSTRAP_SOURCE|$(bootstrap_source)|' manifests/cluster.yaml | kubectl --kubeconfig <cluster kubeconfig> apply -f -" >&2
+  echo "(manifests/cluster.yaml: tofu output -json manifests), wait about a minute, then run this script again." >&2
+  exit 1
+fi
+
 # Load balancers created by the cloud controller manager belong to Services: delete them first,
 # while the cloud controller manager still runs.
 kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
 
-# Admit this bootstrap instance on the API again: it manages the cluster after the move back.
+# Keep this instance admitted: the operator's change above is replaced by the same list.
 sed "s|BOOTSTRAP_SOURCE|$(bootstrap_source)|" manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 
 kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
@@ -49,6 +59,26 @@ kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core clus
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
 
-kubectl -n platform delete cluster ${cluster.name} --wait=true --timeout=30m
+# clusterctl move does not carry the ORC Image: declare it again, or CAPO waits for it and the
+# machines are never deleted.
+python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
+  | kubectl apply -f -
+
+kubectl -n platform delete cluster ${cluster.name} --wait=false
+# Wait for the Cluster to go. If the KubeadmControlPlane is deleted before its machines, the
+# pre-terminate hook it owns is never removed and the machines wait forever: remove it then.
+for _ in $(seq 1 120); do
+  kubectl -n platform get cluster ${cluster.name} >/dev/null 2>&1 || break
+  if ! kubectl -n platform get kubeadmcontrolplane -o name 2>/dev/null | grep -q .; then
+    for m in $(kubectl -n platform get machines -o name 2>/dev/null); do
+      kubectl -n platform annotate "$m" pre-terminate.delete.hook.machine.cluster.x-k8s.io/kcp-cleanup- >/dev/null 2>&1 || true
+    done
+  fi
+  sleep 15
+done
+if kubectl -n platform get cluster ${cluster.name} >/dev/null 2>&1; then
+  echo "Cluster ${cluster.name} still present after 30 minutes: check kubectl -n platform get machines,openstackmachines" >&2
+  exit 1
+fi
 kind delete cluster --name bootstrap
 echo "Cluster ${cluster.name} deleted: destroy the stack now."
