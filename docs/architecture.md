@@ -65,6 +65,125 @@ flowchart LR
 
 Backends are published on `svc_public` with addresses from that plane. Every project on `svc_public` can therefore reach them at the network level: **security groups restrict them to the edge Traefik instances** (see the reachability matrix).
 
+## Network topology of a tenant
+
+Each tenant network has **one router per network it joins**. Only one of them is the default gateway; the others are reached through routes that DHCP pushes to the instances (`advertise_routes`). A tenant reaches a plane through its router, with **source NAT**: on the plane, every instance of the tenant appears as the router's gateway address. That address, not the instance address, is what security groups of other tenants admit.
+
+```mermaid
+flowchart LR
+    subgraph T["Tenant network, e.g. platform 10.24.0.0/24 (MTU 1362)"]
+        VM["instances<br/>default route: egress router<br/>DHCP routes: one per plane"]
+        LB["Octavia VIPs<br/>(same subnet)"]
+    end
+    RE["router egress<br/>default gateway"]
+    RS["router svc_public<br/>route: svc_public range"]
+    RM["router monitoring<br/>route: monitoring range"]
+    RI["router intranet<br/>route: intranet range"]
+    VM --> RE --> PUB["egress network<br/>(Internet)"]
+    VM --> RS --> SVC["svc_public plane"]
+    VM --> RM --> MON["monitoring plane"]
+    VM --> RI --> INT["intranet plane<br/>(administration in the tests)"]
+    LB -.-> RS & RM & RI
+```
+
+| Tenant | Default gateway | Other routers | Published on |
+|---|---|---|---|
+| `edge` | public network | `svc_public`, `monitoring` | public floating IP of the load balancer |
+| `web` | egress | `svc_public`, `monitoring` | floating IPs of `svc_public` (backends), of `monitoring` (metrics) |
+| `isolated` | `monitoring` | — | floating IP of `monitoring` only |
+| `platform` | egress | `svc_public`, `monitoring`, `intranet` | ingress and Prometheus load balancers (floating IPs of `svc_public` and `monitoring`), API (floating IP of the administration network) |
+| bastions | administration network | — (second port on the tenant network, no routes) | floating IP of the administration network |
+
+Three rules follow from this design, each learned from a test failure (see [testing.md](testing.md)):
+
+- **MTU.** Tenant networks use the smallest MTU of the planes they join: OVN routers do not send "fragmentation needed", so a larger MTU drops large packets silently.
+- **Sources.** An administration source is the address *as seen on the plane*, often a router's: read it on the target (`$SSH_CLIENT`), do not guess it.
+- **Floating IPs on a non-default router.** They work because the plane's range is routed back through that router (DHCP route, also applied by Octavia amphorae).
+
+## Ingress data path
+
+The client address must reach the application; TLS is terminated by the tenant, never by the entry point. Exactly **one PROXY v2 header** travels end to end, written by the entry point.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant E as Octavia (edge)<br/>TCP, PROXY pool
+    participant T as Traefik (edge)
+    participant R as router svc_public<br/>(edge, source NAT)
+    participant O as Octavia (platform)<br/>TCP pool, no PROXY
+    participant K as Traefik (platform)<br/>externalTrafficPolicy Local
+    participant A as Application
+    C->>E: TLS ClientHello (SNI apps.example.org)
+    E->>T: PROXY v1/v2 (client) + TLS
+    Note over T: reads PROXY and SNI, does not decrypt
+    T->>R: PROXY v2 (client address) + TLS
+    R->>O: same bytes, source = edge router address (admitted)
+    O->>K: same bytes, source = amphora (trusted range)
+    Note over K: reads PROXY v2: client address<br/>terminates TLS, Gateway API routing
+    K->>A: HTTP, X-Real-Ip = client address
+```
+
+| Hop | Source seen | Admitted by |
+|---|---|---|
+| Client → edge load balancer | client | listener, public |
+| Traefik (edge) → backend floating IP | gateway address of the edge `svc_public` router | security group (`web`) or `loadBalancerSourceRanges` (`platform`) |
+| Platform load balancer → Traefik | amphora address, in the cluster network | Traefik `proxyProtocol.trustedIPs` |
+
+Two settings keep the single header intact on `platform`: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the TLS handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address with a node address, Traefik does not trust it and drops the client address).
+
+## Administration paths
+
+```mermaid
+flowchart LR
+    OPS(["Operators<br/>specific addresses"])
+    subgraph ADM["Administration network"]
+        B1["bastion edge"]
+        B2["bastion web"]
+        B3["bastion isolated"]
+        API["Kubernetes API<br/>floating IP"]
+        BS["bootstrap instance<br/>(temporary)"]
+    end
+    OPS -->|"SSH 22"| B1 & B2 & B3 & BS
+    OPS -->|"6443"| API
+    B1 -->|"second port"| E["edge instances"]
+    B2 -->|"second port"| W["web instances"]
+    B3 -->|"second port"| I["isolated instance"]
+    BS -->|"6443, until clusterctl move"| API
+    N["platform nodes<br/>(through their router)"] -->|"6443"| API
+```
+
+| Endpoint | Admitted | Not admitted |
+|---|---|---|
+| Bastions (SSH) | the operator addresses | every tenant, including `platform` (tested) |
+| Kubernetes API | the operator addresses; the cluster's own addresses (added by CAPO); the bootstrap instance while it manages the cluster | anything else |
+
+With one network for the administration and intranet roles (the test cloud), operator addresses must be single addresses, never the network range: tenants joining the intranet appear inside that range ([ADR-0002](adr/0002-platform-kubernetes.md), D6).
+
+## Lifecycle
+
+```mermaid
+flowchart TB
+    L10["Layer 10 (operator)<br/>planes, public and administration networks, DNS zone, collector"]
+    S20["Stack 20: public edge<br/>state 20"]
+    W["Stack 30 web<br/>state web"]
+    I["Stack 30 isolated<br/>state isolated"]
+    IMG["Node image<br/>(build network, state image)<br/>outlives the cluster"]
+    P["Stack 30 platform<br/>state platform: network, routers, bootstrap"]
+    CAPI["create-cluster.sh on the bootstrap<br/>kind → Cluster API → cluster → add-ons"]
+    MOVE["clusterctl move<br/>the cluster manages itself<br/>(Cluster API state inside the cluster)"]
+    R["Routes of stack 20<br/>(web backends, platform ingress)"]
+    L10 --> S20 --> W & I
+    L10 --> IMG --> P --> CAPI --> MOVE
+    W & MOVE --> R
+```
+
+| Operation | Order |
+|---|---|
+| Deploy | layer 10 → 20 → 30 (`web`, `isolated`, image then `platform`) → routes of 20 |
+| Change routes | apply 20, then replace the edge instances one at a time |
+| Upgrade Kubernetes | new node image, then `spec.topology.version` of the Cluster |
+| Tear down | `delete-cluster.sh` (Services, move back to kind, delete the Cluster), then destroy `platform`, the 30 stacks, 20; the node image is deleted separately |
+
 ## Public entry point
 
 ```mermaid
