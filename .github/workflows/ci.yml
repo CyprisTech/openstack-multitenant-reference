@@ -77,7 +77,7 @@ jobs:
           done
 
   python:
-    name: reachability script
+    name: scripts and documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,6 +85,12 @@ jobs:
         run: python3 -m py_compile tests/reachability/check.py
       - name: help runs
         run: python3 tests/reachability/check.py --help
+      - name: tour script syntax
+        run: python3 -m py_compile tests/tour/capture.py
+      - name: shell scripts syntax
+        run: bash -n scripts/publish-routes.sh images/kubernetes-node/build.sh
+      - name: documentation links
+        run: python3 tests/docs/check_links.py
 
   secrets:
     name: gitleaks (full history)
