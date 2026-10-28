@@ -121,7 +121,7 @@ One state per stack. Stacks find each other's objects by name, never through rem
 | Executable reachability matrix and test collector | delivered; 27/27 rows in v0.1.0, 42/42 with `platform` |
 | Kubernetes node image (image-builder) | on `main`, tested |
 | Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators | on `main`, tested, not yet released |
-| Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | in test ([MR in review](docs/testing.md)) |
+| Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | tested; requests lost during node drains, fix to do ([testing](docs/testing.md)) |
 | Kubernetes version upgrade, scaling, credential rotation | next |
 | GitOps, several sites, backups | the design is ready for them; not tested |
 | Layer 10 as code (`stacks/10-shared-planes`, cloud-baseline) | planned, with module `v0.2` |
