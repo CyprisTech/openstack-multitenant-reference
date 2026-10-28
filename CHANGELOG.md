@@ -6,9 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Planned
+### Added
 
-- Stack 30 `platform`: a Kubernetes cluster created with Cluster API Provider OpenStack on a project prepared by the module, its ingress published through the entry point (specified in [docs/architecture.md](docs/architecture.md), not delivered).
+- ADR-0002, the `platform` tenant: Kubernetes with Cluster API, self-managed after `clusterctl move`, Cilium, Traefik with the Gateway API, Prometheus federated by the collector, Kubernetes API on the administration network, administration and intranet as two roles.
+- Stack `30-tenants/platform`: cluster network with its routers to the planes, server groups, bootstrap instance, floating IPs of the ingress and of Prometheus with the monitoring record, Cluster API manifests (ClusterClass, `Cluster`, add-ons installed by CAAPH) and the scripts that create and delete the cluster. Every version is pinned.
+- Node image built with image-builder in the project itself (`images/kubernetes-node`), with a boot check (`tests/integration/node-image`).
+- Machine remediation (MachineHealthCheck), control-plane replacement before certificate expiry, kubelet serving certificates approved by kubelet-csr-approver, metrics-server.
+- `scripts/publish-routes.sh`: collects the `routes` output of every tenant and replaces the entry point instances one at a time, resumable after a failure.
+- Reachability matrix: 15 platform rows (ingress, federation, Kubernetes API, intranet service), with the intranet demonstration service `tests/integration/intranet-service`.
+- Documentation: technology landscape, network topology and data paths, platform tour regenerated from a test deployment (`tests/tour/capture.py`), quick start, specification of plane bindings on public clouds (later milestone).
+- CI: documentation links and anchors checked, script syntax checked.
+
+### Changed
+
+- ADR-0001: D4 refined by ADR-0002; open points resolved.
+- Test results ([docs/testing.md](docs/testing.md)): platform deployment, matrix 42/42, rolling replacement of every machine, nine defects found and fixed.
 
 ## [0.1.0] - 2026-10-27
 

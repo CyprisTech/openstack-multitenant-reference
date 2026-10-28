@@ -4,9 +4,9 @@ A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), 
 
 | Created by | What |
 |---|---|
-| this stack (Terraform) | cluster network and its routers (egress, `svc_public`, `monitoring`, `intranet`, optional administration network), server groups, bootstrap instance |
+| this stack (Terraform) | cluster network and its routers (egress, `svc_public`, `monitoring`, `intranet`, optional administration network), server groups, bootstrap instance, floating IPs of the ingress (`svc_public`) and of Prometheus (`monitoring`), DNS record of Prometheus in the monitoring zone |
 | `create-cluster.sh` on the bootstrap instance | kind, Cluster API with CAPO, ORC and CAAPH, then the cluster: 3 control-plane nodes behind the API load balancer, workers, add-ons |
-| the add-ons (CAAPH) | Cilium, OpenStack cloud controller manager, Cinder CSI, Traefik (Gateway API) behind a load balancer with a floating IP of `svc_public`, Prometheus behind a load balancer with a floating IP of `monitoring` |
+| the add-ons (CAAPH) | Cilium, OpenStack cloud controller manager, Cinder CSI, metrics-server, kubelet-csr-approver, Traefik (Gateway API) and Prometheus, each behind a load balancer that takes the floating IP created by this stack |
 
 Every version is pinned in [`cluster.tf`](cluster.tf).
 
@@ -38,7 +38,9 @@ ssh ops@$(tofu output -raw bootstrap) 'sudo install -m 600 /tmp/clouds.yaml /opt
 
 The script can be run again after a failure: each step skips what already exists. It ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance. The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
 
-Publish the ingress through the entry point: add the domains of `cluster.domains` to the routes of stack 20, with the floating IP of the Traefik service (`kubectl -n traefik get svc traefik`) as backend on port 443.
+Publish the ingress through the entry point with [`scripts/publish-routes.sh`](../../../scripts/publish-routes.sh): the `routes` output of this stack sends the domains of `cluster.domains` to the ingress floating IP, created here before the cluster exists. The collector finds Prometheus by the `prometheus` output, or by the name `<site>-platform-prometheus` in `monitoring.dns_zone`.
+
+The Services request these addresses (`loadBalancerIP`) and keep them when they are deleted (`keep-floatingip`): recreating a Service or the whole cluster changes neither the published route nor the monitoring record. If the requested address is not available, the cloud controller manager silently allocates another one; `kubectl -n traefik get svc traefik` must show the address of `tofu output routes`.
 
 ## Checks
 
@@ -60,4 +62,4 @@ ssh ops@$(tofu output -raw bootstrap) 'sudo /opt/platform/delete-cluster.sh'
 tofu destroy
 ```
 
-`delete-cluster.sh` deletes the `LoadBalancer` Services first (their load balancers belong to the cloud controller manager), moves Cluster API back to a kind cluster, deletes the `Cluster` and waits until its servers and API load balancer are gone.
+`delete-cluster.sh` deletes the `LoadBalancer` Services first (their load balancers belong to the cloud controller manager), moves Cluster API back to a kind cluster, deletes the `Cluster` and waits until its servers and API load balancer are gone. The floating IPs of the Services are kept and destroyed by `tofu destroy` with the rest of the stack.

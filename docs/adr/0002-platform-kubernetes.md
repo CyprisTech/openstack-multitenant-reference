@@ -31,7 +31,7 @@ The tests of v0.1.0 also showed two facts this design must respect: a tenant joi
 
 | Layer | Tool | Creates |
 |---|---|---|
-| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring` and `intranet` with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster) |
+| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring`, `intranet` and the administration network (when it is not the intranet) with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster), floating IPs of the ingress and of Prometheus, DNS record of Prometheus (D5) |
 | Node image | image-builder, OpenStack builder (Packer) | private image of the project, built in the project itself |
 | Cluster | Cluster API with CAPO, kubeadm | control plane and workers, API load balancer |
 | Cluster add-ons | Cluster API Add-on Provider Helm (CAAPH) | OpenStack cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus, metrics-server, kubelet-csr-approver |
@@ -45,7 +45,7 @@ CAPO uses the network prepared by Terraform and creates no network or router. It
 
 ### D2 — Cluster definition
 
-- A **ClusterClass** describes the cluster shape; a short `Cluster` object instantiates it. Upgrades change the Kubernetes version of the `Cluster`, and Cluster API rolls the machines.
+- A **ClusterClass** describes the cluster shape; a short `Cluster` object instantiates it. An upgrade is a new node image built for the new Kubernetes version and the new version in the `Cluster`, both inputs of the stack; Cluster API replaces the machines one at a time.
 - **Three control-plane nodes** behind an Octavia load balancer created by CAPO, and one machine deployment of workers, each group spread across hosts (server groups with **soft** anti-affinity: the cluster still starts when the cloud has fewer hosts than machines).
 - Versions of Cluster API, CAPO, CAAPH, Kubernetes and every add-on are pinned in the repository.
 - Cluster API templates are immutable: their names carry a revision derived from their content, so that a change creates new templates and Cluster API replaces the machines one at a time.
@@ -72,11 +72,11 @@ Day-two operations (upgrades, scaling, machine replacement) run against the work
 
 | Purpose | How | Admitted sources |
 |---|---|---|
-| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets a **floating IP of `svc_public`**. TCP listeners **without** PROXY on this load balancer: the entry point's PROXY v2 header passes through, so exactly one header reaches Traefik. `externalTrafficPolicy: Local` keeps the load balancer as the peer Traefik trusts; two Traefik replicas on two nodes | the entry point's addresses on `svc_public` only |
-| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets a **floating IP of `monitoring`**; the collector federates it. The address is read from the Service (no DNS record is written for it yet) | the collector's addresses only |
+| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets the **floating IP of `svc_public`** created by the stack. TCP listeners **without** PROXY on this load balancer: the entry point's PROXY v2 header passes through, so exactly one header reaches Traefik. `externalTrafficPolicy: Local` keeps the load balancer as the peer Traefik trusts; two Traefik replicas on two nodes | the entry point's addresses on `svc_public` only |
+| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets the **floating IP of `monitoring`** created by the stack, with an A record in the monitoring zone; the collector federates it. Without a collector, Prometheus stays inside the cluster: no load balancer, no floating IP | the collector's addresses only |
 | Kubernetes API | the CAPO load balancer with a **floating IP of the administration network**. The admitted sources are a variable of the `Cluster`, since templates are immutable and the list changes | the administration sources; the bootstrap instance while it manages the cluster; the cluster's own addresses (added by CAPO) |
 
-The entry point routes the platform's domains to the ingress floating IP by SNI, like the `web` backends: routes are generated from the stack outputs (ADR-0001, D9).
+**The floating IPs of the Services are created by Terraform, not by the cloud controller manager.** The Services request them (`loadBalancerIP`) and keep them when they are deleted (`keep-floatingip`). They are known before the cluster exists, so they are outputs of the stack like the addresses of the other tenants: the entry point routes the platform's domains to the ingress floating IP by SNI, from the `routes` output (ADR-0001, D9), and the monitoring record is written by the stack (ADR-0001, D2). Recreating a Service or the cluster changes neither. Rejected: letting the cloud controller manager allocate them, which leaves a hand-written route and a record that no stack owns.
 
 ### D6 — Administration and intranet are two roles
 
@@ -114,6 +114,7 @@ The reference test cloud has one network for both roles; the tests use restricte
 
 - One more state per stack and one more lifecycle: Terraform for the infrastructure, Cluster API objects for the cluster. The repository documents the order of operations and the teardown.
 - Two images to keep current: the node image (rebuilt with image-builder) and the add-on chart versions.
-- The test cloud needs, for the duration of a test: 3 control-plane nodes and 2 workers (2 vCPU, 4 GiB each), a bootstrap instance and a temporary Packer build instance, 3 Octavia load balancers (API, ingress, metrics) and 3 more floating IPs.
+- The test cloud needs, for the duration of a test: 3 control-plane nodes and 2 workers (2 vCPU, 4 GiB each), a bootstrap instance and a temporary Packer build instance, 3 Octavia load balancers (API, ingress, metrics) and 3 more floating IPs. Every machine boots from a root volume: the volume quota must cover the machines, one more per group during a rolling replacement, and the Packer build volume.
+- If the requested floating IP is not available, the cloud controller manager silently allocates another one; the deployment checks that each Service carries the address of the stack.
 - The administration role must be configured with specific sources in every stack; the layer 10 contract lists them.
 - The first deployment revealed nine defects, all fixed (cloud API names, private CA, MTU of kind, API sources, DNS of the cloud controller manager, timing of the move, ORC image after the move, Helm release names, double PROXY header): see [testing.md](../testing.md). They are the practical cost of this design on a private cloud.
