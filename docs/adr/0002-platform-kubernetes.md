@@ -30,12 +30,17 @@ The tests of v0.1.0 also showed two facts this design must respect: a tenant joi
 
 | Layer | Tool | Creates |
 |---|---|---|
-| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring` and `intranet` with DHCP routes, application credential scoped to the project, bootstrap instance, optional bastion |
+| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring` and `intranet` with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster) |
 | Node image | image-builder, OpenStack builder (Packer) | private image of the project, built in the project itself |
 | Cluster | Cluster API with CAPO, kubeadm | control plane and workers, API load balancer |
 | Cluster add-ons | Cluster API Add-on Provider Helm (CAAPH) | OpenStack cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus |
 
 CAPO uses the network prepared by Terraform and creates no network or router. Its security groups (control plane, workers) are managed by CAPO.
+
+**Credentials of the cluster.** CAPO, the cloud controller manager and Cinder CSI use an application credential dedicated to the cluster, restricted, with the `member` and `load-balancer_member` roles of the project only. The operator creates it and copies it to the bootstrap instance; Terraform never handles it. Creating it with Terraform was considered and rejected:
+
+- the secret would be stored in the Terraform state, whose backend this architecture leaves to the user, and in the instance metadata if passed through cloud-init;
+- Keystone forbids a restricted application credential to create another one, so Terraform would need a password or an unrestricted application credential, which can create further credentials and outlive any revocation of the operator's access.
 
 ### D2 — Cluster definition
 

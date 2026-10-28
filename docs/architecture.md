@@ -119,7 +119,8 @@ sequenceDiagram
     participant OS as OpenStack APIs
     participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
     participant W as Workload cluster
-    TF->>OS: network, routers to the planes, application credential, bootstrap instance
+    TF->>OS: network, routers to the planes, server groups, bootstrap instance
+    Note over B: the operator copies the cluster credential (clouds.yaml)
     B->>OS: image-builder (OpenStack builder): private node image
     B->>OS: CAPO: API load balancer (floating IP on the administration network)
     B->>OS: 3 control-plane servers, then workers (anti-affinity)
@@ -138,7 +139,7 @@ sequenceDiagram
 | Ingress | Traefik (Gateway API) behind a load balancer with a floating IP of `svc_public`, PROXY v2 from the load balancer |
 | Metrics | in-cluster Prometheus behind a load balancer with a floating IP of `monitoring`, federated by the collector |
 | API | floating IP on the administration network, administration sources only |
-| Credentials | application credential scoped to the `platform` project, created by Terraform |
+| Credentials | application credential dedicated to the cluster (restricted, `member` and `load-balancer_member`), created by the operator and copied to the bootstrap instance; never in the Terraform state |
 
 ## Reachability matrix
 
