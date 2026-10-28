@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a-platform"
+site  = "site-a"
+az    = "nova"
+image = "ubuntu-24.04"
+
+flavor           = "m1.medium-nodisk" # bootstrap instance: kind runs there
+boot_volume_size = 20
+
+egress_network = { network = "public", subnet = "public" }
+planes = {
+  svc_public = { network = "svc_public", subnet = "svc_public", cidr = "198.51.100.0/24" }
+  monitoring = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
+  intranet   = { network = "intranet", subnet = "intranet", cidr = "192.0.2.0/24" }
+}
+# admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the intranet
+
+network_mtu     = 1362
+dns_nameservers = ["9.9.9.9", "1.1.1.1"]
+
+# Operators as seen on the administration network (specific addresses, never a network range).
+admin = {
+  users   = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+  sources = ["192.0.2.10/32"]
+}
+
+cluster = {
+  node_image           = "ubuntu-2404-kube-v1.36.5"
+  control_plane_flavor = "m1.medium-nodisk"
+  worker_flavor        = "m1.medium-nodisk"
+  domains              = ["apps.example.org"]
+}
+
+monitoring = { collector_cidrs = ["203.0.113.10/32"] }

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Delete the platform cluster (ADR-0002, D3): move Cluster API back to a kind cluster on the
+# bootstrap instance, delete the Cluster, wait for its servers and load balancers to go, then
+# destroy the stack. Run as root with the kubeconfig of the workload cluster in place.
+set -euo pipefail
+cd /opt/platform
+
+export KUBECONFIG=/opt/platform/bootstrap.kubeconfig
+workload=/opt/platform/${cluster.name}.kubeconfig
+
+# Load balancers created by the cloud controller manager belong to Services: delete them first,
+# while the cloud controller manager still runs.
+kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
+
+kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
+kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
+export CLUSTER_TOPOLOGY=true
+clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
+
+kubectl -n platform delete cluster ${cluster.name} --wait=true --timeout=30m
+kind delete cluster --name bootstrap
+echo "Cluster ${cluster.name} deleted: destroy the stack now."

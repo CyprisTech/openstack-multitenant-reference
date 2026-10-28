@@ -1,0 +1,29 @@
+# The platform cluster, an instance of the ClusterClass. Upgrades change spec.topology.version.
+# The labels select the add-ons of addons.yaml.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ${cluster.name}
+  namespace: platform
+  labels:
+    platform.example.org/addons: "true"
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - ${cluster.pod_cidr}
+    services:
+      cidrBlocks:
+      - ${cluster.service_cidr}
+  topology:
+    classRef:
+      name: ${prefix}
+    version: ${cluster.kubernetes_version}
+    controlPlane:
+      replicas: ${cluster.control_plane_count}
+    workers:
+      machineDeployments:
+      - class: default-worker
+        name: md-0
+        failureDomain: ${az}
+        replicas: ${cluster.worker_count}
