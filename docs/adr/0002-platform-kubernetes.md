@@ -1,6 +1,6 @@
 # ADR-0002: The `platform` tenant — Kubernetes with Cluster API
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 

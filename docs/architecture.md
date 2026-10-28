@@ -5,7 +5,7 @@ This document is the living specification of the reference architecture. The dec
 All names are fictional: the organisation is `example.org`, and address ranges are left to the layer 10 contract.
 
 > [!NOTE]
-> **Delivered in v0.1.0:** layers 20 and 30 for the projects `edge`, `web` and `isolated`, with bastions, monitoring and the reachability matrix. **Planned:** the `platform` project (Kubernetes with Cluster API Provider OpenStack). This document specifies it already; the sections and rows that concern it describe the target, not delivered code.
+> **Delivered in v0.1.0:** layers 20 and 30 for the projects `edge`, `web` and `isolated`, with bastions, monitoring and the reachability matrix. **Delivered after v0.1.0, tested, not yet released:** the `platform` project (Kubernetes with Cluster API Provider OpenStack), see [testing.md](testing.md).
 
 ## Topology
 
@@ -40,7 +40,7 @@ flowchart LR
         J["workload"]
     end
 
-    subgraph PLAT["Project platform - layer 30 (planned)"]
+    subgraph PLAT["Project platform - layer 30"]
         K["Kubernetes<br/>Cluster API"]
     end
 
@@ -52,15 +52,13 @@ flowchart LR
     OPS --> ADM -.->|"bastion of each project"| EDGE & WEB & ISO
     K -.-> SVC & INT & MON
 
-    classDef planned stroke-dasharray: 5 5,color:#888
-    class PLAT,K planned
 ```
 
 | Project | Layer | Planes | Content |
 |---|---|---|---|
 | `edge` | 20 | `svc_public`, `monitoring` | Octavia load balancer with a public floating IP, two Traefik VMs (anti-affinity) |
 | `web` | 30 | `svc_public`, `monitoring` | Two VMs (anti-affinity) serving `site-a.example.org` and `site-b.example.org`, each with an address on `svc_public` |
-| `platform` (planned) | 30 | `svc_public`, `intranet`, `monitoring` | Kubernetes cluster created by CAPO; ingress load balancer with an address on `svc_public` |
+| `platform` | 30 | `svc_public`, `intranet`, `monitoring` | Kubernetes cluster created by CAPO; ingress load balancer with an address on `svc_public` |
 | `isolated` | 30 | `monitoring` | One workload, no public address, no route to other tenants |
 
 Backends are published on `svc_public` with addresses from that plane. Every project on `svc_public` can therefore reach them at the network level: **security groups restrict them to the edge Traefik instances** (see the reachability matrix).
@@ -230,7 +228,7 @@ flowchart LR
 
 ## Kubernetes cluster creation
 
-Planned: the `platform` stack is not delivered yet. The design is [ADR-0002](adr/0002-platform-kubernetes.md).
+The design is [ADR-0002](adr/0002-platform-kubernetes.md); the stack is [`stacks/30-tenants/platform`](../stacks/30-tenants/platform/README.md).
 
 ```mermaid
 sequenceDiagram
@@ -315,7 +313,7 @@ Planned for a later version: an edge per site (active/passive), a failover runbo
 
 ## Sizing
 
-Indicative minimum to run the whole scenario. Without the planned `platform` project and its bootstrap machine, v0.1.0 needs 5 instances, 9 vCPU, 9 GiB of RAM, 1 load balancer and 8 floating IPs (1 public, 2 `svc_public`, 5 `monitoring`), plus the optional bastions and, for the reachability matrix, the test collector.
+Indicative minimum to run the whole scenario. Without the `platform` project and its bootstrap machine, the scenario needs 5 instances, 9 vCPU, 9 GiB of RAM, 1 load balancer and 8 floating IPs (1 public, 2 `svc_public`, 5 `monitoring`), plus the optional bastions and, for the reachability matrix, the test collector.
 
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|

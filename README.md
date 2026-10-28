@@ -9,7 +9,7 @@
 A reference architecture for several tenants sharing one OpenStack cloud, built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, with its design choices argued, its trade-offs stated and its isolation checked by an executable test.
 
 > [!NOTE]
-> **First release, `v0.1.0`.** It delivers layers 20 and 30: the public entry point and the `web` and `isolated` tenants, with bastions and monitoring. The full scenario was tested on a private OpenStack 2025.1 cloud, and the executable reachability matrix passed **27/27** rows ([test report](docs/testing.md)). The Kubernetes `platform` tenant (Cluster API Provider OpenStack) is **planned, not delivered**: [docs/architecture.md](docs/architecture.md) specifies it, but no stack exists yet. Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
+> **First release, `v0.1.0`.** It delivers layers 20 and 30: the public entry point and the `web` and `isolated` tenants, with bastions and monitoring. The full scenario was tested on a private OpenStack 2025.1 cloud, and the executable reachability matrix passed **27/27** rows ([test report](docs/testing.md)). Since v0.1.0, the Kubernetes `platform` tenant (Cluster API Provider OpenStack) is **delivered on `main` and tested, not yet released**: the matrix passes **42/42** rows with it. Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
 
 ## Table of contents
 
@@ -48,7 +48,7 @@ flowchart TB
         direction LR
         W["web<br/>2 × backend<br/>site-a · site-b"]
         I["isolated<br/>workload<br/>no Internet"]
-        K["platform<br/>Kubernetes · CAPO<br/>(planned)"]
+        K["platform<br/>Kubernetes · CAPO"]
     end
 
     subgraph L10["Layer 10 · provided by the operator"]
@@ -63,8 +63,6 @@ flowchart TB
     MON -.->|"metrics · floating IP per instance"| T & W & I
     ADM -.->|"SSH · one bastion per stack"| EDGE & TENANTS
 
-    classDef planned stroke-dasharray: 5 5,color:#888
-    class K planned
 ```
 
 The cloud operator provides **layer 10**: the shared network planes, the public and administration networks, the monitoring DNS zone and the collector. **Layer 20** is the single public entry point. **Layer 30** holds the tenants, each in its own stack, joining only the planes it needs. Every instance is exposed to the collector through a floating IP of the monitoring plane, and administered through an optional bastion of its stack.
@@ -116,7 +114,7 @@ Each stack can add a bastion: a small instance in its own network, with a floati
 | Stacks 30 `web` and `isolated`, bastions | delivered, tested |
 | Monitoring through floating IPs and DNS discovery | delivered, tested |
 | Executable reachability matrix and test collector | delivered; 27/27 rows on the test cloud |
-| Stack 30 `platform` (Kubernetes, CAPO) | planned |
+| Stack 30 `platform` (Kubernetes, CAPO) | tested, not yet released |
 | Layer 10 as code (`stacks/10-shared-planes`, cloud-baseline) | planned, with module `v0.2` |
 | Failover between sites | later |
 
@@ -135,7 +133,7 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, Neutron with OVN,
 
 **Layer 10 contract.** The operator must provide, per site ([full list](docs/architecture.md#layer-10-contract)):
 
-- the networks `svc_public` and `monitoring` (`intranet` for the planned `platform`), visible to the tenant projects, each with a subnet usable as a router gateway, and their CIDRs;
+- the networks `svc_public` and `monitoring` (`intranet` for `platform`), visible to the tenant projects, each with a subnet usable as a router gateway, and their CIDRs;
 - a public network with floating IPs reachable from the Internet, and a default route to the Internet for package installation at first boot;
 - the **MTU** of each plane and of the tenant overlay: set `network_mtu` to the smallest value. OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets (the TLS handshake hangs);
 - the address ranges reserved by the cloud, which tenant networks must avoid;
@@ -238,6 +236,7 @@ Run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, th
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
 | [docs/testing.md](docs/testing.md) | Test environment, results and findings |
+| [docs/platform-tour.md](docs/platform-tour.md) | Guided discovery of the Kubernetes cluster, with real outputs |
 | [tests/reachability/](tests/reachability/README.md) | Executable reachability matrix |
 | [tests/integration/collector/](tests/integration/collector/README.md), [tests/integration/dual-floating-ip/](tests/integration/dual-floating-ip/README.md) | Test collector; the test behind the monitoring design |
 | Stack READMEs | [20-public-edge](stacks/20-public-edge/README.md), [30-tenants/web](stacks/30-tenants/web/README.md), [30-tenants/isolated](stacks/30-tenants/isolated/README.md): inputs, outputs, operations |
@@ -247,7 +246,7 @@ Run `tofu destroy` in the reverse order: `isolated`, `web`, `20-public-edge`, th
 | Release | Content | Status |
 |---|---|---|
 | **v0.1.0** | Layers 20 and 30 in one site (entry point, `web`, `isolated`), bastions, monitoring through floating IPs and DNS, reachability matrix; layer 10 provided by the operator; module `v0.1.2` | released |
-| next | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack, published through the entry point | planned |
+| next | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack, published through the entry point | tested, release pending |
 | next | Results on a public OpenStack cloud | planned |
 | v0.2 | Layer 10 as code (`stacks/10-shared-planes`) with cloud-baseline (terraform-openstack-tenant `v0.2`) | planned |
 | later | Failover between sites: an edge per site, runbook, failover drill | planned |

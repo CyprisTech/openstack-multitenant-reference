@@ -40,6 +40,19 @@ The script can be run again after a failure: each step skips what already exists
 
 Publish the ingress through the entry point: add the domains of `cluster.domains` to the routes of stack 20, with the floating IP of the Traefik service (`kubectl -n traefik get svc traefik`) as backend on port 443.
 
+## Checks
+
+```bash
+# Demonstration application behind the Gateway API, then the domain routed by the entry point
+kubectl apply -f demo/whoami.yaml
+curl -k --resolve apps.example.org:443:<public IP of the entry point> https://apps.example.org/
+
+# Reachability matrix with the platform rows (ADR-0002, D8); needs tests/integration/intranet-service
+tests/reachability/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
+```
+
+A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](../../../docs/platform-tour.md).
+
 ## Teardown
 
 ```bash
