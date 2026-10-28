@@ -1,6 +1,6 @@
 # ADR-0001: Scope and structure of the reference architecture
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented in v0.1.0); D4 refined by [ADR-0002](0002-platform-kubernetes.md)
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 
