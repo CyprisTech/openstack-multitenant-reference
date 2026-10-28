@@ -32,3 +32,7 @@ __pycache__/
 .*.sw*
 .idea/
 .vscode/
+
+# Node image build: local variables and work directory
+images/kubernetes-node/build.json
+images/kubernetes-node/.work/
