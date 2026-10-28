@@ -77,3 +77,19 @@ Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastion
 The matrix covers: the entry point from the outside; the web backends reachable from the entry point only; the collector reaching the metrics of every instance (node exporter, Traefik metrics); no tenant reaching the metrics of another through the monitoring plane; no route between tenants; `isolated` reaching neither the published addresses, nor the other tenants, nor the Internet.
 
 Finding: every tenant joins the monitoring plane through a router with source NAT, so seen from the plane all tenants have addresses of the plane range. Metrics ports opened to the plane range would let tenants scrape each other: they are now opened to the collector's addresses only (`monitoring.collector_cidrs`).
+
+### Kubernetes node image (2026-10-28)
+
+| Check | Result |
+|---|---|
+| Build network: apply, empty plan after apply | ✅ 13 resources |
+| Image build with image-builder v0.1.55, Ubuntu 24.04 | ✅ 25 min, private image of 2.1 GiB; the temporary instance, volume, floating IP and key pair deleted by Packer |
+| Boot from the image | ✅ kubeadm and kubelet v1.36.5, containerd 2.3.2, crictl 1.36.0, kubelet and containerd enabled, 7 images preloaded |
+| SSH restricted to two `/32` administration sources, routed through the administration router | ✅ |
+| Destroy of the check instance and of the build network | ✅ no leftover; the image is kept |
+
+Findings:
+
+- The template of image-builder has no default for `volume_type`: `build.json` must set it (empty string for the default type).
+- An administration source must be the address **as seen on the administration network**. Through source NAT it is the address of a router, and a machine may leave through a router other than the one its gateway suggests. Three attempts failed with guessed addresses before the source was read on the instance with `$SSH_CLIENT` (see `tests/integration/node-image`).
+

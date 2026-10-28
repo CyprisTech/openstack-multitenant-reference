@@ -25,4 +25,6 @@ cp build.json.example build.json               # source image, flavor, volume
 OS_CLOUD=<entry of the platform project> ./build.sh
 ```
 
+To find the address under which the machine running Packer is seen, use the boot check in [tests/integration/node-image](../../tests/integration/node-image/README.md) (`$SSH_CLIENT`): through source NAT it is a router address, which is easy to guess wrong.
+
 Then destroy the build network (`tofu destroy` in `build-network/`); the image stays.
