@@ -79,12 +79,28 @@
         websecure:
           proxyProtocol:
             trustedIPs: ["${cluster_cidr}"]
+      # Two replicas on two nodes: with externalTrafficPolicy Local, only nodes running Traefik
+      # receive traffic.
+      deployment:
+        replicas: 2
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: traefik
       service:
         annotations:
           loadbalancer.openstack.org/floating-network-id: "${svc_public_id}"
-          loadbalancer.openstack.org/proxy-protocol: "v2"
+          # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
+          # header, which the TCP listener passes through. A second header from the load
+          # balancer would break the TLS handshake.
         spec:
           type: LoadBalancer
+          # Local: the connection reaches Traefik from the load balancer address, inside the
+          # trusted range, so Traefik accepts the PROXY header of the entry point.
+          externalTrafficPolicy: Local
           # The entry point only (ADR-0002, D5).
           loadBalancerSourceRanges: ${jsonencode(edge_sources)}
     EOT
