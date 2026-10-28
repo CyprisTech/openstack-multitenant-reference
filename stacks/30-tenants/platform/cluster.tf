@@ -14,12 +14,22 @@ locals {
     traefik_chart = "42.1.3"
     prometheus    = "29.39.0"
     gateway_api   = "v1.6.3"
+    metrics       = "3.14.0" # metrics-server chart
+    csr_approver  = "1.2.15" # kubelet-csr-approver chart
   }
 
   # Pod network MTU: cluster network MTU minus the VXLAN overhead (ADR-0002, D4).
   pod_mtu = var.network_mtu == null ? 0 : var.network_mtu - 50
 
+  # Cluster API templates are immutable: their names carry a revision derived from their
+  # content, so that a change creates new templates and Cluster API rolls the machines.
+  revision = substr(sha256(join("/", [
+    file("${path.module}/manifests/cluster-class.yaml.tftpl"),
+    jsonencode([var.cluster, var.az, local.network, local.subnet, local.router, local.admin_network.network, var.admin.ssh_key_name]),
+  ])), 0, 8)
+
   manifest_vars = {
+    revision      = local.revision
     cluster       = var.cluster
     prefix        = local.prefix
     az            = var.az

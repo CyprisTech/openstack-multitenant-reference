@@ -105,6 +105,27 @@
           loadBalancerSourceRanges: ${jsonencode(edge_sources)}
     EOT
   }
+  # Kubelet serving certificates (rotate-server-certificates) are requested from the cluster CA
+  # and approved here, only for node names of this cluster and addresses of the cluster network.
+  kubelet-csr-approver = {
+    repo = "https://postfinance.github.io/kubelet-csr-approver", chart = "kubelet-csr-approver", version = versions.csr_approver, namespace = "kube-system",
+    values = <<-EOT
+      providerRegex: ^${cluster.name}-
+      providerIpPrefixes:
+      - ${cluster_cidr}
+      # Node names are not in DNS.
+      bypassDnsResolution: true
+    EOT
+  }
+  # Resource metrics for kubectl top and autoscaling; verifies the kubelets' certificates.
+  metrics-server = {
+    repo = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = versions.metrics, namespace = "kube-system",
+    values = <<-EOT
+      replicas: 2
+      args:
+      - --kubelet-preferred-address-types=InternalIP
+    EOT
+  }
   prometheus = {
     repo = "https://prometheus-community.github.io/helm-charts", chart = "prometheus", version = versions.prometheus, namespace = "monitoring",
     values = <<-EOT

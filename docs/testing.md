@@ -120,3 +120,23 @@ Findings, all fixed in the stack:
 
 Observation: the node image's virtual size is the minimum root disk of every node. The first build, on a 20 GiB volume, forced 20 GiB per node; rebuilt on 8 GiB, node disks are chosen per role by the cluster.
 
+### Platform hardening and first day-2 operation (2026-10-28)
+
+Remediation (MachineHealthCheck), certificate rotation (`rollout.before.certificatesExpiryDays`), kubelet serving certificates approved by kubelet-csr-approver, metrics-server. Applied to the running cluster: the new ClusterClass templates replaced the five machines one at a time, with an availability probe through the entry point every 5 seconds.
+
+| Check | Result |
+|---|---|
+| Server-side dry run of every object | ✅ |
+| Rolling replacement of the five machines (three control-plane nodes, two workers) | ✅ about 45 minutes, after the volume quota was raised |
+| MachineHealthCheck | ✅ the first replacement machines, stuck without a volume, were marked unhealthy after 20 minutes and recreated |
+| Kubelet serving certificates (`kubelet-serving` CSRs) approved; `kubectl top nodes` | ✅ |
+| Reachability matrix after the replacement | ✅ 42/42 |
+| Availability through the entry point during the replacement | ⚠️ 647 of 658 requests answered: 1 lost when a worker running Traefik was drained, then about 45 seconds without answer (19:01:27 to 19:02:15) |
+
+Findings:
+
+1. **Volume quota.** A rolling replacement creates one machine before deleting one (`maxSurge: 1`), for the control plane and the workers at the same time: the project needs two free volumes, and the size of two root volumes, on top of the running cluster.
+2. **Availability during a replacement.** With `externalTrafficPolicy: Local`, a node that loses its Traefik pod stays a member of the ingress load balancer until the health monitor marks it down, and a new node becomes a member only once the cloud controller manager updates the pool. Requests are lost in between. To do: a PodDisruptionBudget for Traefik, and shorter health monitor intervals on the ingress load balancer.
+
+The routes publication script (`scripts/publish-routes.sh`, replacing the entry point instances one at a time) lost 8 of 179 requests in the same way at the entry point: the load balancer keeps sending to the instance being deleted until its monitor reacts. To do: take the member out of the pools before replacing the instance.
+

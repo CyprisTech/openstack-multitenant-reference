@@ -11,30 +11,56 @@ spec:
     templateRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
       kind: OpenStackClusterTemplate
-      name: ${prefix}-cluster
+      name: ${prefix}-cluster-${revision}
   controlPlane:
     templateRef:
       apiVersion: controlplane.cluster.x-k8s.io/v1beta2
       kind: KubeadmControlPlaneTemplate
-      name: ${prefix}-control-plane
+      name: ${prefix}-control-plane-${revision}
     machineInfrastructure:
       templateRef:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: OpenStackMachineTemplate
-        name: ${prefix}-control-plane
+        name: ${prefix}-control-plane-${revision}
+    # Machine remediation: a node not Ready for 5 minutes is replaced. The control plane
+    # provider only remediates when etcd keeps its quorum.
+    healthCheck:
+      checks:
+        nodeStartupTimeoutSeconds: 1200
+        unhealthyNodeConditions:
+        - type: Ready
+          status: "False"
+          timeoutSeconds: 300
+        - type: Ready
+          status: Unknown
+          timeoutSeconds: 300
   workers:
     machineDeployments:
     - class: default-worker
+      healthCheck:
+        checks:
+          nodeStartupTimeoutSeconds: 1200
+          unhealthyNodeConditions:
+          - type: Ready
+            status: "False"
+            timeoutSeconds: 300
+          - type: Ready
+            status: Unknown
+            timeoutSeconds: 300
+        # Never replace more than one worker at a time: a wider failure is not a node problem.
+        remediation:
+          triggerIf:
+            unhealthyLessThanOrEqualTo: 1
       bootstrap:
         templateRef:
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
           kind: KubeadmConfigTemplate
-          name: ${prefix}-worker
+          name: ${prefix}-worker-${revision}
       infrastructure:
         templateRef:
           apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
           kind: OpenStackMachineTemplate
-          name: ${prefix}-worker
+          name: ${prefix}-worker-${revision}
   # Sources admitted by the API load balancer (ADR-0002, D6): a variable of the Cluster, since
   # templates are immutable and the list changes (the bootstrap instance is admitted while it
   # manages the cluster). CAPO adds the cluster's own addresses.
@@ -64,7 +90,7 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackClusterTemplate
 metadata:
-  name: ${prefix}-cluster
+  name: ${prefix}-cluster-${revision}
   namespace: platform
 spec:
   template:
@@ -100,12 +126,15 @@ spec:
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlaneTemplate
 metadata:
-  name: ${prefix}-control-plane
+  name: ${prefix}-control-plane-${revision}
   namespace: platform
 spec:
   template:
     spec:
       rollout:
+        # Replace control-plane machines before their certificates expire (one year by default).
+        before:
+          certificatesExpiryDays: 21
         strategy:
           type: RollingUpdate
           rollingUpdate:
@@ -124,6 +153,8 @@ spec:
               value: external
             - name: provider-id
               value: "openstack:///{{ v1.instance_id }}"
+            - name: rotate-server-certificates
+              value: "true"
         joinConfiguration:
           nodeRegistration:
             name: "{{ v1.local_hostname }}"
@@ -132,11 +163,13 @@ spec:
               value: external
             - name: provider-id
               value: "openstack:///{{ v1.instance_id }}"
+            - name: rotate-server-certificates
+              value: "true"
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
-  name: ${prefix}-worker
+  name: ${prefix}-worker-${revision}
   namespace: platform
 spec:
   template:
@@ -149,12 +182,14 @@ spec:
             value: external
           - name: provider-id
             value: "openstack:///{{ v1.instance_id }}"
+          - name: rotate-server-certificates
+            value: "true"
 %{ for role, m in { "control-plane" = { flavor = cluster.control_plane_flavor, size = cluster.control_plane_root_volume_size }, "worker" = { flavor = cluster.worker_flavor, size = cluster.worker_root_volume_size } } ~}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
-  name: ${prefix}-${role}
+  name: ${prefix}-${role}-${revision}
   namespace: platform
 spec:
   template:
