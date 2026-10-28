@@ -143,7 +143,7 @@ sequenceDiagram
 
 ## Reachability matrix
 
-Each row is checked by the acceptance test ([`tests/reachability`](../tests/reachability/README.md)) after deployment, except the rows that involve `platform` or the `intranet` plane, which come with the `platform` stack. *Enforced by* names the mechanism that makes the row true.
+Each row is checked by the acceptance test ([`tests/reachability`](../tests/reachability/README.md)) after deployment; the rows that involve `platform` or the `intranet` plane are checked when the test is given the platform kubeconfig. *Enforced by* names the mechanism that makes the row true.
 
 | From | To | Port | Expected | Enforced by |
 |---|---|---|---|---|

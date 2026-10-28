@@ -93,3 +93,30 @@ Findings:
 - The template of image-builder has no default for `volume_type`: `build.json` must set it (empty string for the default type).
 - An administration source must be the address **as seen on the administration network**. Through source NAT it is the address of a router, and a machine may leave through a router other than the one its gateway suggests. Three attempts failed with guessed addresses before the source was read on the instance with `$SSH_CLIENT` (see `tests/integration/node-image`).
 
+### Stack 30 `platform`: Kubernetes with Cluster API (2026-10-28)
+
+Node image `ubuntu-2404-kube-v1.36.5` (8 GiB virtual size), Cluster API v1.14.3, CAPO v0.15.1, CAAPH v0.6.4, ORC v2.6.0, Cilium 1.20.4, OpenStack cloud controller manager and Cinder CSI 2.36.5, Traefik chart 42.1.3, Prometheus chart 29.39.0. Three control-plane nodes and two workers (2 vCPU, 4 GiB, 15 GiB root volumes).
+
+| Check | Result |
+|---|---|
+| Stack apply (network, routers to the planes, server groups, bootstrap instance), empty plan | ✅ 27 resources |
+| `create-cluster.sh`: kind, Cluster API, cluster, add-ons, `clusterctl move` | ✅ after the fixes below; the cluster manages itself |
+| API: floating IP on the administration network, admitted sources | ✅ operators, plus the bootstrap instance until the move; refused from elsewhere |
+| Ingress through the entry point, SNI passthrough, TLS terminated by Traefik (Gateway API) | ✅ 12/12, both demonstration pods, client address preserved (`X-Real-Ip`) |
+| Prometheus federation from the collector | ✅ HTTP 200, 34 `up` series, all up |
+| Reachability matrix with the platform rows (ADR-0002, D8) and the intranet demonstration service | ✅ 42/42 rows |
+
+Findings, all fixed in the stack:
+
+1. **Cloud API names.** The cluster resolvers must resolve the cloud API endpoints: Cluster API calls them from kind, the cloud controller manager and Cinder CSI from the cluster. Public resolvers did not know the internal Keystone name.
+2. **Private certificate authority.** The controllers do not trust a private CA of the cloud APIs by default: `create-cluster.sh` passes it to Cluster API, ORC (key `cacert`), the cloud controller manager and Cinder CSI (`ca-file`).
+3. **MTU of kind.** kind takes the MTU of the default Docker bridge (1500), larger than the cluster network (1362): large replies of the cloud APIs were dropped silently. Docker on the bootstrap instance now uses the network MTU.
+4. **API sources.** The bootstrap instance reaches the API floating IP with its own floating IP, which the load balancer did not admit. Templates are immutable, so the admitted sources are a variable of the Cluster: the operators, plus the bootstrap instance (read from Neutron) until `clusterctl move`, and again during teardown.
+5. **Cloud controller manager and DNS.** With host networking it resolved names through CoreDNS, which waits for the nodes the controller initializes: a deadlock. It now uses the node resolver (`dnsPolicy: Default`).
+6. **`clusterctl move` too early.** The cluster is `Available` as soon as the first control-plane node is up; `clusterctl move` refuses to run while a machine is provisioning. The script now waits for every machine.
+7. **ORC Image after the move.** `clusterctl move` did not carry the ORC `Image`, and the machines waited for it. The script declares it again in the workload cluster.
+8. **Helm release names.** After the move, CAAPH reconciled the proxies with new generated release names and installed Prometheus twice. Release names are now fixed.
+9. **Two PROXY headers.** The entry point sends a PROXY v2 header; with PROXY on the cluster load balancer too, Traefik received two headers and the TLS handshake failed within milliseconds. The load balancer now passes the entry point's header through (TCP pools), with `externalTrafficPolicy: Local` so that Traefik sees the load balancer as peer and trusts the header, and two Traefik replicas on two nodes.
+
+Observation: the node image's virtual size is the minimum root disk of every node. The first build, on a 20 GiB volume, forced 20 GiB per node; rebuilt on 8 GiB, node disks are chosen per role by the cluster.
+
