@@ -15,7 +15,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
 | 10 | [Layer 10](#10-layer-10-provided-by-the-operator) | Provided by the operator until cloud-baseline |
 | 11 | [Administration and intranet](#11-one-network-for-administration-and-intranet) | Two roles; one network accepted with specific sources |
-| 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster, no GitOps yet |
+| 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready, not tested |
 | 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
 | 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
 
@@ -163,7 +163,7 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** CAAPH does not correct drift: a manual change to an add-on stays until the chart values change. Release names must be fixed, or a new reconciliation installs a chart twice.
 
-**Choose GitOps (Flux or Argo CD) when** several people change the clusters: drift becomes visible and reverted.
+**Choose GitOps (Flux or Argo CD) when** several people change the clusters: drift becomes visible and reverted. The manifests are plain YAML rendered by the stack, so a GitOps tool can reconcile them without change; this setup is not tested yet.
 
 ## 13. Kubelet serving certificates from the cluster CA
 

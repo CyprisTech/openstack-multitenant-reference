@@ -15,7 +15,7 @@ A reference architecture for several tenants sharing one OpenStack cloud, Kubern
 
 - [Who it is for](#who-it-is-for)
 - [What it demonstrates](#what-it-demonstrates)
-- [What it is not](#what-it-is-not)
+- [Ready for, not yet demonstrated](#ready-for-not-yet-demonstrated)
 - [Architecture](#architecture)
 - [Architecture overview](#architecture-overview)
 - [Status](#status)
@@ -41,12 +41,18 @@ Platform teams, integrators and cloud architects who run workloads for several t
 | **One public entry point, TLS kept by each tenant** | Octavia in TCP mode and two Traefik instances routing by SNI without decrypting; the client address carried by a single PROXY v2 header to the application, through a second load balancer for Kubernetes | [Ingress data path](docs/architecture.md#ingress-data-path); 12/12 requests with the client address |
 | **Kubernetes inside the same model** | Cluster API with CAPO: declarative cluster from a ClusterClass, self-managed after `clusterctl move`; ingress, metrics and API published on the planes like any tenant; machine remediation, certificate rotation, metrics-server | [ADR-0002](docs/adr/0002-platform-kubernetes.md), [platform tour](docs/platform-tour.md) |
 
-## What it is not
+## Ready for, not yet demonstrated
 
-- **Not a product.** It is a reference: stacks to read, run and adapt. Glue between Terraform and Cluster API is a script; there is no GitOps yet ([trade-offs](docs/trade-offs.md#12-add-ons-declared-with-cluster-api-not-gitops)).
-- **Not multi-site.** One site in this version; the code is site-ready ([sites](docs/architecture.md#sites)).
-- **No backup.** etcd and application data backups are not covered yet.
-- **Not tested on a public cloud yet.** Results come from a private OpenStack 2025.1 cloud.
+The design leaves room for the following; none of them is tested yet, so none of them is claimed.
+
+| Topic | Why it fits | What a test would add |
+|---|---|---|
+| **GitOps** | Everything Cluster API needs is plain YAML (ClusterClass, Cluster, add-on proxies), rendered by the stack: Flux or Argo CD can reconcile it as is | A reconciliation loop that reverts drift ([trade-off 12](docs/trade-offs.md#12-add-ons-declared-with-cluster-api-not-gitops)) |
+| **Several sites** | The site is an input of every stack and part of every name; routes and records come from outputs, never from hand-written addresses | An edge per site, a DNS switch, a failover drill ([sites](docs/architecture.md#sites)) |
+| **Backups** | Volumes are Cinder volumes behind the CSI driver; etcd runs on kubeadm control-plane nodes: standard tools (Velero, etcd snapshots) apply unchanged | A restore drill |
+| **Public OpenStack clouds** | Nothing in the stacks assumes admin rights or a specific cloud | Results on a public cloud |
+
+It is a reference, not a product: stacks to read, run and adapt.
 
 The technologies used at each layer, and why, are on one page: [landscape](docs/landscape.md).
 
@@ -150,7 +156,7 @@ Each stack can add a bastion: a small instance in its own network, with a floati
 | Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators | on `main`, tested, not yet released |
 | Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | in test ([MR in review](docs/testing.md)) |
 | Kubernetes version upgrade, scaling, credential rotation | next |
-| Backups (etcd, data) | not covered |
+| GitOps, several sites, backups | the design is ready for them; not tested |
 | Layer 10 as code (`stacks/10-shared-planes`, cloud-baseline) | planned, with module `v0.2` |
 | Failover between sites | later |
 
