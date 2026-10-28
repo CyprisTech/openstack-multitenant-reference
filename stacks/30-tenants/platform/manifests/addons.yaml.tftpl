@@ -93,11 +93,15 @@
       service:
         annotations:
           loadbalancer.openstack.org/floating-network-id: "${svc_public_id}"
+          # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
+          # Service is deleted.
+          loadbalancer.openstack.org/keep-floatingip: "true"
           # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
           # header, which the TCP listener passes through. A second header from the load
           # balancer would break the TLS handshake.
         spec:
           type: LoadBalancer
+          loadBalancerIP: ${ingress_ip}
           # Local: the connection reaches Traefik from the load balancer address, inside the
           # trusted range, so Traefik accepts the PROXY header of the entry point.
           externalTrafficPolicy: Local
@@ -142,6 +146,8 @@
           type: LoadBalancer
           annotations:
             loadbalancer.openstack.org/floating-network-id: "${monitoring_id}"
+            loadbalancer.openstack.org/keep-floatingip: "true"
+          loadBalancerIP: ${prometheus_ip}
           # The collector only: it federates this server (ADR-0002, D5).
           loadBalancerSourceRanges: ${jsonencode(collectors)}
 %{ else ~}

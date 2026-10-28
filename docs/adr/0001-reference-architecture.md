@@ -1,6 +1,6 @@
 # ADR-0001: Scope and structure of the reference architecture
 
-- **Status:** Accepted (implemented in v0.1.0); D4 refined by [ADR-0002](0002-platform-kubernetes.md)
+- **Status:** Accepted (implemented in v0.1.0); D4 refined by [ADR-0002](0002-platform-kubernetes.md): the cluster credential is created by the operator, not by Terraform, and the cluster security groups are managed by CAPO
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 
@@ -135,5 +135,7 @@ The first version runs in **one site**. Failover between sites comes in a later 
 
 ## Open points
 
-- Octavia flavor (amphora topology) used in the scenario.
-- CAPO and Kubernetes versions to pin.
+None. Resolved after v0.1.0:
+
+- Octavia flavor (amphora topology): a variable of the stacks (`octavia_flavor_id`), active/standby recommended for the entry point; see [trade-off 4](../trade-offs.md#4-octavia-topology).
+- CAPO and Kubernetes versions: pinned in the platform stack ([ADR-0002](0002-platform-kubernetes.md), D2).

@@ -24,9 +24,29 @@ locals {
     }
   }
 
+  expose_prometheus = length(var.monitoring.collector_cidrs) > 0
+  prometheus_record = local.expose_prometheus && var.monitoring.dns_zone != null
+
   # Addresses of the entry point on svc_public, read from its router by name (ADR-0001, D1 and
   # D9): only they may reach the ingress, and only they are trusted to send a PROXY header.
   edge_sources = [for ip in data.openstack_networking_router_v2.edge_svc_public.external_fixed_ip : "${ip.ip_address}/32"]
+}
+
+# Addresses of the cluster Services (ADR-0002, D5), created here rather than by the cloud
+# controller manager: they are known before the cluster exists, they are outputs of the stack
+# (the routes of the entry point and the monitoring record come from them, ADR-0001, D9), and
+# they survive the Services. The Services request them (spec.loadBalancerIP) and the cloud
+# controller manager never deletes them (keep-floatingip).
+resource "openstack_networking_floatingip_v2" "ingress" {
+  pool        = var.planes.svc_public.network
+  description = "${local.prefix} ingress"
+}
+
+resource "openstack_networking_floatingip_v2" "prometheus" {
+  count = local.expose_prometheus ? 1 : 0
+
+  pool        = var.planes.monitoring.network
+  description = "${local.prefix} prometheus"
 }
 
 data "openstack_networking_router_v2" "edge_svc_public" {
@@ -48,6 +68,17 @@ module "platform" {
           name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
         }
       })
+      dns_zones = local.prometheus_record ? { monitoring = { name = var.monitoring.dns_zone } } : {}
+    }
+
+    # The collector discovers the federation endpoint by DNS, like every other target (ADR-0001, D2).
+    dns = {
+      records = local.prometheus_record ? {
+        prometheus = {
+          zone    = "monitoring", name = "${local.prefix}-prometheus", type = "A"
+          records = [openstack_networking_floatingip_v2.prometheus[0].address]
+        }
+      } : {}
     }
 
     networks = {

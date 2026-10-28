@@ -48,6 +48,8 @@ locals {
     cluster_cidr  = var.cluster_cidr
     svc_public_id = data.openstack_networking_network_v2.svc_public.id
     monitoring_id = data.openstack_networking_network_v2.monitoring.id
+    ingress_ip    = openstack_networking_floatingip_v2.ingress.address
+    prometheus_ip = local.expose_prometheus ? openstack_networking_floatingip_v2.prometheus[0].address : ""
   }
 
   manifests = {

@@ -140,3 +140,25 @@ Findings:
 
 The routes publication script (`scripts/publish-routes.sh`, replacing the entry point instances one at a time) lost 8 of 179 requests in the same way at the entry point: the load balancer keeps sending to the instance being deleted until its monitor reacts. To do: take the member out of the pools before replacing the instance.
 
+
+### Service addresses created by Terraform (2026-10-28)
+
+The floating IPs of the Traefik and Prometheus Services are now created by the platform stack (ADR-0002, D5) and requested by the Services (`loadBalancerIP`, `keep-floatingip`). Applied to the running cluster.
+
+| Check | Result |
+|---|---|
+| Apply, then empty plan (platform and entry point) | ✅ 3 resources: two floating IPs and the monitoring record |
+| Traefik and Prometheus on the addresses of the stack; addresses allocated earlier by the cloud controller manager released | ✅ about 2 min 30 per Service |
+| Routes published from the `routes` output only (`publish-routes.sh`, no hand-written file) | ✅ |
+| HTTPS end to end through the entry point, client address preserved | ✅ 12/12 |
+| Reachability matrix, with the new row "platform Services on the stack addresses" | ✅ 43/43 |
+| Federation by the monitoring record (`<site>-platform-prometheus`) | ✅ the name resolves to the stack address; 36 `up` series, all up |
+| Traefik release reinstalled: Service deleted and recreated | ✅ same floating IP, route unchanged, no publication needed; about 2 min 30 without answer while the load balancer is recreated |
+
+Findings:
+
+1. **Migration of a running cluster.** Moving a Service to the stack's address deletes the address allocated before, while the entry point still routes to it: the demonstration domain was unreachable for about 17 minutes, until the routes were published again (the edge instances are replaced one at a time). A new deployment has the address before the cluster exists.
+2. **Designate.** The shared monitoring zone stayed `PENDING` for about 20 minutes: the record creation timed out, Designate created it later, and it was imported into the state (`tofu import`). A record left behind by a failed apply must be imported, or the next apply fails on a duplicate.
+3. **Release proxies created before the fixed release names.** Two Helm release proxies for one Prometheus release blocked every update of the chart proxy. Deleting them reinstalled the release under its fixed name. A cluster created with the current manifests does not have them.
+4. **Reinstalling a release while its Service is still being deleted.** CAAPH reinstalled Traefik at once; the new release adopted the Service that was being deleted, and was left without a Service when the deletion completed. A second reinstall, once nothing was being deleted, worked. Reinstall a release only after its load balancer Services are gone.
+5. **Resolver of the test collector.** The collector VM resolves with the resolver of its own network, which does not serve the monitoring zone, for any tenant. The federation check queried the cloud resolver; a real collector must use a resolver that serves the monitoring zone.
