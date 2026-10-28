@@ -137,12 +137,17 @@
         persistentVolume:
           enabled: false
         service:
-          type: LoadBalancer
           servicePort: 9090
+%{ if length(collectors) > 0 ~}
+          type: LoadBalancer
           annotations:
             loadbalancer.openstack.org/floating-network-id: "${monitoring_id}"
           # The collector only: it federates this server (ADR-0002, D5).
           loadBalancerSourceRanges: ${jsonencode(collectors)}
+%{ else ~}
+          # No collector: not exposed (an empty list of sources would admit everyone).
+          type: ClusterIP
+%{ endif ~}
     EOT
   }
 } ~}
