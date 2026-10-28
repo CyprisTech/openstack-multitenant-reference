@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Delete the platform cluster (ADR-0002, D3): move Cluster API back to a kind cluster on the
+# bootstrap instance, delete the Cluster, wait for its servers and load balancers to go, then
+# destroy the stack. Run as root with the kubeconfig of the workload cluster in place.
+set -euo pipefail
+cd /opt/platform
+
+export KUBECONFIG=/opt/platform/bootstrap.kubeconfig
+workload=/opt/platform/${cluster.name}.kubeconfig
+
+# Address under which this bootstrap instance reaches the API floating IP: its own floating IP
+# (read from Neutron with the cluster credential). Admitted on the API load balancer only while
+# the bootstrap instance manages the cluster.
+bootstrap_source() {
+  python3 - <<'PY'
+import json, os, socket, ssl, urllib.parse, urllib.request, yaml
+c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+a = c["auth"]
+ctx = ssl.create_default_context(cafile="/opt/platform/cacert.pem" if os.path.exists("/opt/platform/cacert.pem") else None)
+body = {"auth": {"identity": {"methods": ["application_credential"], "application_credential": {
+    "id": a["application_credential_id"], "secret": a["application_credential_secret"]}}}}
+def fqdn(url):  # Python checks certificates against the name without the root dot
+    u = urllib.parse.urlsplit(url)
+    return u._replace(netloc=u.netloc.replace(u.hostname, u.hostname.rstrip("."), 1)).geturl().rstrip("/")
+req = urllib.request.Request(fqdn(a["auth_url"]) + "/auth/tokens", json.dumps(body).encode(), {"Content-Type": "application/json"})
+with urllib.request.urlopen(req, context=ctx) as r:
+    token, catalog = r.headers["X-Subject-Token"], json.load(r)["token"]["catalog"]
+neutron = next(e["url"] for s in catalog if s["type"] == "network" for e in s["endpoints"]
+               if e["interface"] == c.get("interface", "public") and e.get("region_id", e.get("region")) == c.get("region_name", "RegionOne"))
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("192.0.2.1", 9)); ip = s.getsockname()[0]
+req = urllib.request.Request(fqdn(neutron) + "/v2.0/floatingips?fixed_ip_address=" + ip, headers={"X-Auth-Token": token})
+with urllib.request.urlopen(req, context=ctx) as r:
+    print(json.load(r)["floatingips"][0]["floating_ip_address"] + "/32")
+PY
+}
+
+# Load balancers created by the cloud controller manager belong to Services: delete them first,
+# while the cloud controller manager still runs.
+kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
+
+# Admit this bootstrap instance on the API again: it manages the cluster after the move back.
+sed "s|BOOTSTRAP_SOURCE|$(bootstrap_source)|" manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
+
+kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
+kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
+export CLUSTER_TOPOLOGY=true
+kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
+
+kubectl -n platform delete cluster ${cluster.name} --wait=true --timeout=30m
+kind delete cluster --name bootstrap
+echo "Cluster ${cluster.name} deleted: destroy the stack now."

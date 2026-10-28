@@ -1,0 +1,194 @@
+# ClusterClass of the platform cluster (ADR-0002, D2), rendered by Terraform.
+# The OpenStack objects it uses (network, subnet, router, server groups, node image) are found
+# by name: CAPO creates no network and no router.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: ClusterClass
+metadata:
+  name: ${prefix}
+  namespace: platform
+spec:
+  infrastructure:
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      kind: OpenStackClusterTemplate
+      name: ${prefix}-cluster
+  controlPlane:
+    templateRef:
+      apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+      kind: KubeadmControlPlaneTemplate
+      name: ${prefix}-control-plane
+    machineInfrastructure:
+      templateRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        kind: OpenStackMachineTemplate
+        name: ${prefix}-control-plane
+  workers:
+    machineDeployments:
+    - class: default-worker
+      bootstrap:
+        templateRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+          kind: KubeadmConfigTemplate
+          name: ${prefix}-worker
+      infrastructure:
+        templateRef:
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: OpenStackMachineTemplate
+          name: ${prefix}-worker
+  # Sources admitted by the API load balancer (ADR-0002, D6): a variable of the Cluster, since
+  # templates are immutable and the list changes (the bootstrap instance is admitted while it
+  # manages the cluster). CAPO adds the cluster's own addresses.
+  variables:
+  - name: apiAllowedCIDRs
+    required: true
+    schema:
+      openAPIV3Schema:
+        type: array
+        minItems: 1
+        items:
+          type: string
+  patches:
+  - name: apiAllowedCIDRs
+    definitions:
+    - selector:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        kind: OpenStackClusterTemplate
+        matchResources:
+          infrastructureCluster: true
+      jsonPatches:
+      - op: add
+        path: /spec/template/spec/apiServer/managedLoadBalancer/allowedCIDRs
+        valueFrom:
+          variable: apiAllowedCIDRs
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OpenStackClusterTemplate
+metadata:
+  name: ${prefix}-cluster
+  namespace: platform
+spec:
+  template:
+    spec:
+      identityRef:
+        name: ${prefix}-cloud-config
+        cloudName: openstack
+      network:
+        filter:
+          name: ${network}
+      subnets:
+      - filter:
+          name: ${subnet}
+      # Router to the administration network: CAPO admits its external address on the API
+      # load balancer, since the nodes reach the API floating IP through it.
+      router:
+        filter:
+          name: ${router}
+      # The floating IP of the API is taken from the administration network (ADR-0002, D5).
+      externalNetwork:
+        filter:
+          name: ${admin_network}
+      controlPlaneAvailabilityZones:
+      - ${az}
+      apiServer:
+        enableFloatingIP: true
+        managedLoadBalancer:
+          enabled: true
+      managedSecurityGroups:
+        # Node to node traffic, including the VXLAN of the pod network, stays inside the cluster.
+        allowAllInClusterTraffic: true
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlaneTemplate
+metadata:
+  name: ${prefix}-control-plane
+  namespace: platform
+spec:
+  template:
+    spec:
+      rollout:
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+      kubeadmConfigSpec:
+        clusterConfiguration:
+          controllerManager:
+            extraArgs:
+            - name: cloud-provider
+              value: external
+        initConfiguration:
+          nodeRegistration:
+            name: "{{ v1.local_hostname }}"
+            kubeletExtraArgs:
+            - name: cloud-provider
+              value: external
+            - name: provider-id
+              value: "openstack:///{{ v1.instance_id }}"
+        joinConfiguration:
+          nodeRegistration:
+            name: "{{ v1.local_hostname }}"
+            kubeletExtraArgs:
+            - name: cloud-provider
+              value: external
+            - name: provider-id
+              value: "openstack:///{{ v1.instance_id }}"
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: ${prefix}-worker
+  namespace: platform
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          name: "{{ v1.local_hostname }}"
+          kubeletExtraArgs:
+          - name: cloud-provider
+            value: external
+          - name: provider-id
+            value: "openstack:///{{ v1.instance_id }}"
+%{ for role, m in { "control-plane" = { flavor = cluster.control_plane_flavor, size = cluster.control_plane_root_volume_size }, "worker" = { flavor = cluster.worker_flavor, size = cluster.worker_root_volume_size } } ~}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OpenStackMachineTemplate
+metadata:
+  name: ${prefix}-${role}
+  namespace: platform
+spec:
+  template:
+    spec:
+      flavor:
+        filter:
+          name: ${m.flavor}
+      image:
+        imageRef:
+          name: node-image
+      rootVolume:
+        sizeGiB: ${m.size}
+        availabilityZone:
+          from: Name
+          name: ${az}
+      serverGroup:
+        filter:
+          name: ${prefix}-${role == "worker" ? "workers" : role}
+%{ if ssh_key_name != null ~}
+      sshKeyName: ${ssh_key_name}
+%{ endif ~}
+%{ endfor ~}
+---
+# The node image built by images/kubernetes-node, adopted by ORC: it is never deleted with the cluster.
+apiVersion: openstack.k-orc.cloud/v1alpha1
+kind: Image
+metadata:
+  name: node-image
+  namespace: platform
+spec:
+  managementPolicy: unmanaged
+  import:
+    filter:
+      name: ${cluster.node_image}
+  cloudCredentialsRef:
+    secretName: ${prefix}-cloud-config
+    cloudName: openstack

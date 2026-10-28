@@ -1,0 +1,53 @@
+# Demonstration application published through the Gateway API (ADR-0002, D5): the entry point
+# routes apps.platform.example.org to the ingress floating IP, Traefik terminates TLS and
+# answers with the request it received, including the client address carried by PROXY v2.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+  namespace: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: whoami}
+  template:
+    metadata:
+      labels: {app: whoami}
+    spec:
+      containers:
+      - name: whoami
+        image: docker.io/traefik/whoami:v1.12.0
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  namespace: demo
+spec:
+  selector: {app: whoami}
+  ports:
+  - port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: whoami
+  namespace: demo
+spec:
+  parentRefs:
+  - name: traefik-gateway
+    namespace: traefik
+    sectionName: websecure
+  hostnames:
+  - apps.platform.example.org
+  rules:
+  - backendRefs:
+    - name: whoami
+      port: 80

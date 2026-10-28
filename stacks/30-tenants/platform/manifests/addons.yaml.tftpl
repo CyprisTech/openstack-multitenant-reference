@@ -1,0 +1,151 @@
+# Add-ons of the platform cluster, installed by Cluster API Add-on Provider Helm (ADR-0002, D1).
+# They apply to the clusters labelled platform.example.org/addons=true. The cloud credentials
+# of the cloud controller manager and of the Cinder CSI driver are the Secret cloud-config of
+# kube-system, created in the workload cluster by create-cluster.sh.
+%{ for name, chart in {
+  cilium = {
+    repo = "https://helm.cilium.io/", chart = "cilium", version = versions.cilium, namespace = "kube-system",
+    values = <<-EOT
+      routingMode: tunnel
+      tunnelProtocol: vxlan
+%{ if pod_mtu > 0 ~}
+      MTU: ${pod_mtu}
+%{ endif ~}
+      ipam:
+        mode: kubernetes
+      operator:
+        replicas: 1
+    EOT
+  }
+  occm = {
+    repo = "https://kubernetes.github.io/cloud-provider-openstack", chart = "openstack-cloud-controller-manager", version = versions.occm, namespace = "kube-system",
+    values = <<-EOT
+      secret:
+        enabled: true
+        create: false
+        name: cloud-config
+      cluster:
+        name: ${cluster.name}
+      # The node resolver, not CoreDNS: CoreDNS waits for the nodes this controller initializes.
+      dnsPolicy: Default
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: node.cloudprovider.kubernetes.io/uninitialized
+        value: "true"
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+    EOT
+  }
+  cinder-csi = {
+    repo = "https://kubernetes.github.io/cloud-provider-openstack", chart = "openstack-cinder-csi", version = versions.cinder_csi, namespace = "kube-system",
+    values = <<-EOT
+      secret:
+        enabled: true
+        hostMount: false
+        create: false
+        name: cloud-config
+      storageClass:
+        enabled: true
+        delete:
+          isDefault: true
+    EOT
+  }
+  traefik = {
+    repo = "https://traefik.github.io/charts", chart = "traefik", version = versions.traefik_chart, namespace = "traefik",
+    values = <<-EOT
+      providers:
+        kubernetesGateway:
+          enabled: true
+      gateway:
+        listeners:
+          web:
+            port: 8000
+            protocol: HTTP
+            namespacePolicy:
+              from: All
+          websecure:
+            port: 8443
+            protocol: HTTPS
+            namespacePolicy:
+              from: All
+            certificateRefs:
+            - name: platform-tls
+      ports:
+        web:
+          proxyProtocol:
+            trustedIPs: ["${cluster_cidr}"]
+        websecure:
+          proxyProtocol:
+            trustedIPs: ["${cluster_cidr}"]
+      # Two replicas on two nodes: with externalTrafficPolicy Local, only nodes running Traefik
+      # receive traffic.
+      deployment:
+        replicas: 2
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: traefik
+      service:
+        annotations:
+          loadbalancer.openstack.org/floating-network-id: "${svc_public_id}"
+          # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
+          # header, which the TCP listener passes through. A second header from the load
+          # balancer would break the TLS handshake.
+        spec:
+          type: LoadBalancer
+          # Local: the connection reaches Traefik from the load balancer address, inside the
+          # trusted range, so Traefik accepts the PROXY header of the entry point.
+          externalTrafficPolicy: Local
+          # The entry point only (ADR-0002, D5).
+          loadBalancerSourceRanges: ${jsonencode(edge_sources)}
+    EOT
+  }
+  prometheus = {
+    repo = "https://prometheus-community.github.io/helm-charts", chart = "prometheus", version = versions.prometheus, namespace = "monitoring",
+    values = <<-EOT
+      alertmanager:
+        enabled: false
+      prometheus-pushgateway:
+        enabled: false
+      server:
+        persistentVolume:
+          enabled: false
+        service:
+          type: LoadBalancer
+          servicePort: 9090
+          annotations:
+            loadbalancer.openstack.org/floating-network-id: "${monitoring_id}"
+          # The collector only: it federates this server (ADR-0002, D5).
+          loadBalancerSourceRanges: ${jsonencode(collectors)}
+    EOT
+  }
+} ~}
+---
+apiVersion: addons.cluster.x-k8s.io/v1alpha1
+kind: HelmChartProxy
+metadata:
+  name: ${name}
+  namespace: platform
+spec:
+  clusterSelector:
+    matchLabels:
+      platform.example.org/addons: "true"
+  repoURL: ${chart.repo}
+  chartName: ${chart.chart}
+  # A fixed release name: a generated one may change when the proxies are reconciled again
+  # (after clusterctl move), and the chart is then installed twice.
+  releaseName: ${name}
+  version: ${chart.version}
+  namespace: ${chart.namespace}
+  options:
+    waitForJobs: true
+    install:
+      createNamespace: true
+  valuesTemplate: |
+    ${indent(4, chart.values)}
+%{ endfor ~}

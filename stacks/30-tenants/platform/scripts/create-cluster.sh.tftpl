@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Create the platform cluster from the bootstrap instance (ADR-0002, D3). Run as root, after
+# copying a clouds.yaml with an entry "openstack" for the platform project to
+# /opt/platform/clouds.yaml (application credential scoped to the project), and, when the
+# cloud API uses a private certificate authority, its certificates to /opt/platform/cacert.pem.
+# The script can be run again: each step skips what already exists.
+set -euo pipefail
+cd /opt/platform
+
+export KUBECONFIG=/opt/platform/bootstrap.kubeconfig
+workload=/opt/platform/${cluster.name}.kubeconfig
+
+# Address under which this bootstrap instance reaches the API floating IP: its own floating IP
+# (read from Neutron with the cluster credential). Admitted on the API load balancer only while
+# the bootstrap instance manages the cluster.
+bootstrap_source() {
+  python3 - <<'PY'
+import json, os, socket, ssl, urllib.parse, urllib.request, yaml
+c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+a = c["auth"]
+ctx = ssl.create_default_context(cafile="/opt/platform/cacert.pem" if os.path.exists("/opt/platform/cacert.pem") else None)
+body = {"auth": {"identity": {"methods": ["application_credential"], "application_credential": {
+    "id": a["application_credential_id"], "secret": a["application_credential_secret"]}}}}
+def fqdn(url):  # Python checks certificates against the name without the root dot
+    u = urllib.parse.urlsplit(url)
+    return u._replace(netloc=u.netloc.replace(u.hostname, u.hostname.rstrip("."), 1)).geturl().rstrip("/")
+req = urllib.request.Request(fqdn(a["auth_url"]) + "/auth/tokens", json.dumps(body).encode(), {"Content-Type": "application/json"})
+with urllib.request.urlopen(req, context=ctx) as r:
+    token, catalog = r.headers["X-Subject-Token"], json.load(r)["token"]["catalog"]
+neutron = next(e["url"] for s in catalog if s["type"] == "network" for e in s["endpoints"]
+               if e["interface"] == c.get("interface", "public") and e.get("region_id", e.get("region")) == c.get("region_name", "RegionOne"))
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("192.0.2.1", 9)); ip = s.getsockname()[0]
+req = urllib.request.Request(fqdn(neutron) + "/v2.0/floatingips?fixed_ip_address=" + ip, headers={"X-Auth-Token": token})
+with urllib.request.urlopen(req, context=ctx) as r:
+    print(json.load(r)["floatingips"][0]["floating_ip_address"] + "/32")
+PY
+}
+[[ -f clouds.yaml ]] || { echo "copy clouds.yaml (entry \"openstack\") to /opt/platform first" >&2; exit 1; }
+
+# 1. Management cluster in kind, with Cluster API, CAPO, ORC and CAAPH.
+kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
+kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+# ORC objects must follow the Cluster API objects on clusterctl move.
+kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
+export CLUSTER_TOPOLOGY=true
+kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+
+# 2. Credentials, cluster class, add-ons and cluster.
+kubectl create namespace platform --dry-run=client -o yaml | kubectl apply -f -
+ca_args=()
+[[ -f cacert.pem ]] && ca_args=(--from-file=cacert=cacert.pem)
+kubectl -n platform create secret generic ${prefix}-cloud-config --from-file=clouds.yaml "$${ca_args[@]}" \
+  --dry-run=client -o yaml | kubectl label --local -f - clusterctl.cluster.x-k8s.io/move= -o yaml | kubectl apply -f -
+kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
+source=$(bootstrap_source)
+sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
+kubectl -n platform wait cluster/${cluster.name} --for=condition=ControlPlaneInitialized --timeout=30m
+clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
+
+# 3. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
+#    cloud controller manager and Cinder CSI, the Gateway API CRDs, the demonstration certificate.
+cloud_conf=$(python3 - <<'EOF'
+import yaml
+c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+a = c["auth"]
+print("[Global]")
+print(f"auth-url={a['auth_url']}")
+if "application_credential_id" in a:
+    print(f"application-credential-id={a['application_credential_id']}")
+    print(f"application-credential-secret={a['application_credential_secret']}")
+print(f"region={c.get('region_name', 'RegionOne')}")
+import os
+if os.path.exists("/opt/platform/cacert.pem"):
+    print("ca-file=/etc/config/ca.crt")
+print("[LoadBalancer]")
+print("create-monitor=true")
+EOF
+)
+kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-config \
+  --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
+kubectl --kubeconfig "$workload" create namespace traefik --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+if ! kubectl --kubeconfig "$workload" -n traefik get secret platform-tls >/dev/null 2>&1; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${cluster.domains[0]}" \
+    -addext "subjectAltName=${join(",", [for d in cluster.domains : "DNS:${d}"])}" -keyout /tmp/tls.key -out /tmp/tls.crt
+  kubectl --kubeconfig "$workload" -n traefik create secret tls platform-tls --cert=/tmp/tls.crt --key=/tmp/tls.key
+  rm -f /tmp/tls.key /tmp/tls.crt
+fi
+
+kubectl -n platform wait cluster/${cluster.name} --for=condition=Available --timeout=30m
+# clusterctl move refuses to run while a machine is still provisioning.
+kubectl -n platform wait kubeadmcontrolplane -l cluster.x-k8s.io/cluster-name=${cluster.name} \
+  --for=jsonpath='{.status.readyReplicas}'=${cluster.control_plane_count} --timeout=40m
+kubectl -n platform wait machinedeployment -l cluster.x-k8s.io/cluster-name=${cluster.name} \
+  --for=jsonpath='{.status.readyReplicas}'=${cluster.worker_count} --timeout=30m
+kubectl -n platform wait machine -l cluster.x-k8s.io/cluster-name=${cluster.name} --for=jsonpath='{.status.phase}'=Running --timeout=30m
+kubectl --kubeconfig "$workload" wait nodes --all --for=condition=Ready --timeout=20m
+
+# 4. Self-management: Cluster API moves into the workload cluster.
+kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || clusterctl init --kubeconfig "$workload" --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+clusterctl move -n platform --to-kubeconfig "$workload"
+# clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
+python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
+  | kubectl --kubeconfig "$workload" apply -f -
+# The bootstrap instance no longer manages the cluster: its address leaves the API sources.
+sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
+kind delete cluster --name bootstrap
+
+echo "Cluster ${cluster.name} manages itself. Kubeconfig: $workload"
