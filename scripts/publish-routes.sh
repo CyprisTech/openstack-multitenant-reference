@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Publish the routes of the tenants on the public entry point (stack 20).
 #
-# Collects the `routes` output of every applied stack under stacks/30-tenants (or its routes.json
-# file, for routes known only after deployment, such as a Kubernetes ingress), writes them to
+# Collects the `routes` output of every applied stack under stacks/30-tenants, writes them to
 # stacks/20-public-edge/routes.auto.tfvars.json and, when they changed, replaces the entry point
 # instances one at a time: routes are written by cloud-init, and the load balancer keeps a healthy
 # member while the other instance is replaced.
@@ -26,9 +25,7 @@ pending="${edge}/.routes-publication-pending"
 routes='{}'
 for stack in "${root}"/stacks/30-tenants/*/; do
   out=""
-  if [[ -f "${stack}/routes.json" ]]; then
-    out=$(cat "${stack}/routes.json")
-  elif [[ -d "${stack}/.terraform" ]]; then
+  if [[ -d "${stack}/.terraform" ]]; then
     out=$("${tool}" -chdir="${stack}" output -json routes 2>/dev/null) || out=""
   fi
   if [[ -n "${out}" ]]; then

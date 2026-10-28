@@ -145,9 +145,13 @@ variable "monitoring" {
     Exposure of the in-cluster Prometheus to the collector (ADR-0002, D5): a load balancer whose
     VIP gets a floating IP of the monitoring plane, admitted from collector_cidrs only.
     - collector_cidrs: addresses of the collector as seen by the platform. An empty list keeps
-      Prometheus inside the cluster (no load balancer).
+      Prometheus inside the cluster (no load balancer, no floating IP).
+    - dns_zone: zone shared with the project (name with its trailing dot) where the A record
+      <site>-platform-prometheus is written for the collector's DNS service discovery; null
+      writes no record.
   EOT
   type = object({
     collector_cidrs = list(string)
+    dns_zone        = optional(string)
   })
 }

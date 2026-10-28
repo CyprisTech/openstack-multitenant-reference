@@ -36,6 +36,5 @@ __pycache__/
 # Node image build: local variables and work directory
 images/kubernetes-node/build.json
 images/kubernetes-node/.work/
-# Routes known after deployment (written by create-cluster.sh, read by publish-routes.sh)
-stacks/30-tenants/*/routes.json
+# Interrupted route publication (scripts/publish-routes.sh)
 stacks/20-public-edge/.routes-publication-pending

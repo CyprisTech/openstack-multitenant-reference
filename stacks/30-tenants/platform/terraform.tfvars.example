@@ -35,4 +35,4 @@ cluster = {
   domains              = ["apps.example.org"]
 }
 
-monitoring = { collector_cidrs = ["203.0.113.10/32"] }
+monitoring = { dns_zone = "mon.site-a.example.org.", collector_cidrs = ["203.0.113.10/32"] }
