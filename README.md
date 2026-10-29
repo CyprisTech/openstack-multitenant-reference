@@ -195,7 +195,7 @@ cd stacks/30-tenants/web      && cp terraform.tfvars.example terraform.tfvars &&
 cd stacks/30-tenants/isolated && cp terraform.tfvars.example terraform.tfvars && tofu init && tofu apply
 ```
 
-`platform`: follow [its README](stacks/30-tenants/platform/README.md) (stack, cluster credential, `create-cluster.sh`), about 45 minutes.
+`platform`: follow [its README](stacks/30-tenants/platform/README.md) (stack, cluster credential, `create-cluster.sh`): about 20 minutes, plus 25 minutes once for the node image.
 
 ### 3. Publish routes
 
@@ -223,7 +223,7 @@ python3 tests/reachability/check.py --stacks stacks --collector tests/integratio
   --platform-kubeconfig platform.kubeconfig   # with platform
 ```
 
-Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs. A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](docs/platform-tour.md).
+Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs. The full cycle, with a checkpoint after every step and measured durations, is the [test procedure](docs/test-procedure.md): about 35 minutes from an empty project to the acceptance test. A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](docs/platform-tour.md).
 
 ### Clean up
 
@@ -241,6 +241,7 @@ Suggested reading order: this README, the landscape, the architecture, the trade
 | [docs/architecture.md](docs/architecture.md) | Topology, flows, reachability matrix, layer 10 contract, sites, sizing |
 | [docs/trade-offs.md](docs/trade-offs.md) | What each choice costs and when the alternative is better |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records |
+| [docs/test-procedure.md](docs/test-procedure.md) | Full test cycle: every step, its checkpoint and measured duration |
 | [docs/testing.md](docs/testing.md) | Test environment, results and findings |
 | [docs/platform-tour.md](docs/platform-tour.md) | Guided discovery of the Kubernetes cluster, with real outputs |
 | [docs/specs/plane-bindings.md](docs/specs/plane-bindings.md) | Spec for a later milestone: planes on public clouds |

@@ -108,7 +108,10 @@ module "cloudinit" {
 
   # The certificate must exist before the nginx package starts the service with this
   # configuration: bootcmd runs before package installation (and at every boot, hence the test).
+  # apt retries: a mirror error at first boot would leave the instance without its packages,
+  # silently.
   extra_config = {
+    apt = { conf = "Acquire::Retries \"10\";\n" }
     bootcmd = [
       "mkdir -p /etc/nginx/tls",
       "test -f /etc/nginx/tls/cert.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj /CN=${var.domains[0]} -addext subjectAltName=${local.san} -keyout /etc/nginx/tls/key.pem -out /etc/nginx/tls/cert.pem",

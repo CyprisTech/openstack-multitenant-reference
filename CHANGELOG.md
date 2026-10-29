@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Test procedure (`docs/test-procedure.md`): every step of a full cycle with its checkpoint and measured duration; results of a one-shot rebuild in `docs/testing.md`.
+
+### Fixed
+
+- `publish-routes.sh` replaces unhealthy entry point instances first and never the last healthy one; it waits for each replaced instance only. It could cut the entry point when one instance was already broken.
+- cloud-init retries package downloads (entry point, `web`, platform bootstrap): a mirror error at first boot left an instance without its packages, unnoticed.
+
 ## [0.2.0] - 2026-10-28
 
 The Kubernetes `platform` tenant, built with Cluster API, and everything it needs: node image, route publication, reachability rows, hardening, teardown tested.
