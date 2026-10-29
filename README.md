@@ -37,8 +37,6 @@ Platform teams, integrators and cloud architects who run workloads for several t
 
 ## What it demonstrates
 
-![Acceptance test: HTTPS through the entry point with the client address, then the reachability matrix, 43 rows as expected](docs/assets/acceptance.svg)
-
 | Claim | How | Proof |
 |---|---|---|
 | **Isolation is tested, not asserted** | The reachability matrix of the specification is a script: it probes every flow from outside, from inside each tenant and from the Kubernetes cluster, and fails on any difference | [`tests/reachability`](tests/reachability/README.md): 43/43 rows |
@@ -225,7 +223,70 @@ python3 tests/reachability/check.py --stacks stacks --collector tests/integratio
   --platform-kubeconfig platform.kubeconfig   # with platform
 ```
 
-Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs. The full cycle, with a checkpoint after every step and measured durations, is the [test procedure](docs/test-procedure.md): about 35 minutes from an empty project to the acceptance test. A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](docs/platform-tour.md).
+Every row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs.
+
+<details>
+<summary>Output of a real run (HTTPS with the client address, then the matrix, 43/43)</summary>
+
+```console
+$ kubectl apply -f stacks/30-tenants/platform/demo/whoami.yaml && kubectl -n demo rollout status deploy/whoami
+namespace/demo unchanged
+deployment.apps/whoami unchanged
+service/whoami unchanged
+httproute.gateway.networking.k8s.io/whoami configured
+deployment "whoami" successfully rolled out
+$ LB=$(tofu -chdir=stacks/20-public-edge output -json load_balancer | jq -r .floating_ip)
+$ for i in $(seq 12); do curl -sk --resolve apps.platform.example.org:443:$LB https://apps.platform.example.org/ | grep X-Real-Ip; done | sort | uniq -c
+     12 X-Real-Ip: 198.51.100.100
+$ python3 tests/reachability/check.py --key ~/.ssh/id_ed25519 --platform-kubeconfig $KUBECONFIG
+from                   to                                                    port  expected actual
+test runner            entry point (public IP)                                443  open     open     ok
+test runner            entry point (public IP)                                 80  open     open     ok
+test runner            web, published address 192.0.2.101                     443  closed   closed   ok
+test runner            web, published address 198.51.100.3                    443  closed   closed   ok
+edge t1-edge-1         web, published address 192.0.2.101                     443  open     open     ok
+edge t1-edge-1         web, published address 198.51.100.3                    443  open     open     ok
+collector              t1-edge-1 (monitoring 198.51.100.4)                   9100  open     open     ok
+collector              t1-edge-1 (monitoring 198.51.100.4)                   8082  open     open     ok
+collector              t1-edge-2 (monitoring 198.51.100.12)                  9100  open     open     ok
+collector              t1-edge-2 (monitoring 198.51.100.12)                  8082  open     open     ok
+collector              t1-isolated-1 (monitoring 198.51.100.5)               9100  open     open     ok
+collector              t1-web-1 (monitoring 198.51.100.13)                   9100  open     open     ok
+collector              t1-web-2 (monitoring 198.51.100.14)                   9100  open     open     ok
+edge t1-edge-1         t1-isolated-1 (monitoring 198.51.100.5)               9100  closed   closed   ok
+edge t1-edge-1         t1-web-1 (monitoring 198.51.100.13)                   9100  closed   closed   ok
+edge t1-edge-1         t1-web-2 (monitoring 198.51.100.14)                   9100  closed   closed   ok
+web t1-web-1           t1-edge-1 (monitoring 198.51.100.4)                   9100  closed   closed   ok
+web t1-web-1           t1-edge-2 (monitoring 198.51.100.12)                  9100  closed   closed   ok
+web t1-web-1           t1-isolated-1 (monitoring 198.51.100.5)               9100  closed   closed   ok
+web t1-web-1           edge t1-edge-1 (private 10.20.0.108)                   443  closed   closed   ok
+isolated t1-isolated-1 web, published address 192.0.2.101                     443  closed   closed   ok
+isolated t1-isolated-1 web, published address 198.51.100.3                    443  closed   closed   ok
+isolated t1-isolated-1 t1-edge-1 (monitoring 198.51.100.4)                   9100  closed   closed   ok
+isolated t1-isolated-1 t1-edge-2 (monitoring 198.51.100.12)                  9100  closed   closed   ok
+isolated t1-isolated-1 t1-web-1 (monitoring 198.51.100.13)                   9100  closed   closed   ok
+isolated t1-isolated-1 t1-web-2 (monitoring 198.51.100.14)                   9100  closed   closed   ok
+isolated t1-isolated-1 Internet (1.1.1.1)                                     443  closed   closed   ok
+platform Services      ingress and Prometheus on the stack addresses            -  yes      yes      ok
+edge t1-edge-1         platform ingress 198.51.100.1                          443  open     open     ok
+test runner            platform ingress 198.51.100.1                          443  closed   closed   ok
+web t1-web-1           platform ingress 198.51.100.1                          443  closed   closed   ok
+isolated t1-isolated-1 platform ingress 198.51.100.1                          443  closed   closed   ok
+collector              platform Prometheus 198.51.100.11                     9090  open     open     ok
+edge t1-edge-1         platform Prometheus 198.51.100.11                     9090  closed   closed   ok
+web t1-web-1           platform Prometheus 198.51.100.11                     9090  closed   closed   ok
+isolated t1-isolated-1 platform Prometheus 198.51.100.11                     9090  closed   closed   ok
+test runner (operator) platform Kubernetes API 192.0.2.102                   6443  open     open     ok
+platform pod           edge bastion 198.51.100.2 (SSH)                         22  closed   closed   ok
+platform pod           web bastion 192.0.2.103 (SSH)                           22  closed   closed   ok
+platform pod           isolated bastion 192.0.2.104 (SSH)                      22  closed   closed   ok
+platform pod           intranet service 192.0.2.12                           8080  open     open     ok
+web t1-web-1           intranet service 192.0.2.12                           8080  closed   closed   ok
+isolated t1-isolated-1 intranet service 192.0.2.12                           8080  closed   closed   ok
+43/43 rows as expected
+```
+
+</details> The full cycle, with a checkpoint after every step and measured durations, is the [test procedure](docs/test-procedure.md): about 35 minutes from an empty project to the acceptance test. A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](docs/platform-tour.md).
 
 ### Clean up
 
