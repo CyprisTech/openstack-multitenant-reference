@@ -23,17 +23,18 @@ flowchart LR
 | Step | Measured duration |
 |---|---|
 | Node image (once, kept between cycles) | 25 min |
-| 1. Test collector | 2 min |
+| 1. Test collector | 1.5 min |
 | 2. Entry point (60 resources) | 3 min, up to 10 min when DNS is slow |
 | 3. `web`, `isolated`, platform stack, in parallel | 3 min |
 | 4. Cluster (`create-cluster.sh`, add-ons included) | 16 min |
 | 5. Intranet demonstration service | 1 min |
-| 6. Route publication (two edge instances replaced) | 5 to 8 min |
+| 4b. Bootstrap instance removed | 1 min |
+| 6. Route publication (two edge instances replaced) | 4 to 8 min |
 | 7. Acceptance | 3 min |
 | **Total, steps 1 to 7** | **about 35 minutes** without incident |
-| 8. Teardown | 25 min, of which 21 for the cluster |
+| 8. Teardown | 12 min: 5 for the cluster, 6 for the stacks |
 
-Durations come from the rebuild of 2026-10-29 ([results](testing.md#one-shot-rebuild-2026-10-29)).
+Durations come from the two cycles of 2026-10-29 ([results](testing.md#one-shot-rebuild-2026-10-29)).
 
 ## 0. Prerequisites
 
@@ -43,6 +44,7 @@ Durations come from the rebuild of 2026-10-29 ([results](testing.md#one-shot-reb
 | Node image (platform only) | [images/kubernetes-node](../images/kubernetes-node/README.md) | private image `ubuntu-2404-kube-<version>` active |
 | Cluster credential | application credential `member` + `load-balancer_member`, as a `clouds.yaml` entry renamed `openstack` | file ready, never in Terraform |
 | Your address | the address the cloud sees for you (often a router address, not your workstation's) | in `admin.sources` and `bastion.ssh_cidrs` of every stack |
+| Capacity per host | ask the operator | the two edge instances are in hard anti-affinity: replacing one needs room on **another host than the other's**, not only quota. On a cloud with few hosts, remove the bootstrap instance (step 4b) before publishing routes |
 
 ## 1. Test collector
 
@@ -67,7 +69,7 @@ cd stacks/20-public-edge && tofu init && tofu apply && tofu plan -detailed-exitc
 | Checkpoint | How | If it fails |
 |---|---|---|
 | plan after apply empty | exit code 0 | report |
-| cloud-init finished on every Traefik instance | `ssh -J ops@<bastion> ops@<instance> cloud-init status` → `done` | `error`: read `/var/log/cloud-init-output.log`; a package mirror error leaves Traefik without podman (`status=203/EXEC`); replace the instance |
+| cloud-init finished on every Traefik instance | `ssh -o ConnectionAttempts=10 -J ops@<bastion> ops@<instance> cloud-init status --wait` → `done` (right after the apply, sshd may not answer yet) | `error`: read `/var/log/cloud-init-output.log`; a package mirror error leaves Traefik without podman (`status=203/EXEC`); replace the instance |
 | every load balancer member `ONLINE` | `openstack loadbalancer member list <pool>` | an `ERROR` member serves nothing; see the cloud-init check |
 
 DNS records are the slowest resources: from 10 to 40 s normally, several minutes when Designate is congested. A record created after an apply timeout must be imported ([pitfalls](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/pitfalls.md#dns)).
@@ -106,6 +108,16 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 | 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicates after the move block later updates; see [testing](testing.md#one-shot-rebuild-2026-10-29) before deleting any (deleting one uninstalls the release) |
 | Services on the stack's addresses | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output routes` and `tofu output prometheus` | another address means the requested one was not available |
 
+### 4b. Remove the bootstrap instance
+
+The cluster manages itself: the bootstrap instance is only needed again for teardown ([ADR-0002](adr/0002-platform-kubernetes.md), D3). Removing it frees an instance on the cloud.
+
+```bash
+tofu -chdir=stacks/30-tenants/platform apply -var bootstrap=false   # or set it in terraform.tfvars
+```
+
+Checkpoint: 5 resources destroyed, the cluster unaffected (`kubectl get nodes`).
+
 ## 5. Intranet demonstration service
 
 ```bash
@@ -141,6 +153,8 @@ python3 tests/reachability/check.py --key <ssh key> --platform-kubeconfig platfo
 ## 8. Teardown
 
 ```bash
+tofu -chdir=stacks/30-tenants/platform apply -var bootstrap=true     # the bootstrap instance again
+B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap)    # then copy clouds.yaml as in step 4
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
 tofu -chdir=stacks/30-tenants/platform output -json manifests | jq -r '."cluster.yaml"' \
   | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig platform.kubeconfig apply -f -

@@ -207,3 +207,27 @@ Findings:
 3. **The test collector must exist before the tenants.** Recreated, it got a new address, and the tenants still admitted the old one: 8 matrix rows failed until the stacks and the platform add-ons were applied again. The test procedure now creates it first.
 4. **Duplicate release proxies after `clusterctl move`.** CAAPH created a second release proxy for 3 of the 7 charts (Traefik, cloud controller manager, metrics-server); the releases themselves were installed once and worked, but two proxies block every later update of a chart. Deleting one proxy, even without its finalizer, uninstalled the release; reinstalling while the old Service was still being deleted left Traefik without a Service. Recovered by reinstalling once nothing was being deleted; the floating IP created by Terraform was kept and reused. **Open:** a safe fix belongs to the day-2 work.
 5. **Designate.** Most records took 11 to 44 s; the three of the entry point took 508 to 553 s, with the shared zone in `PENDING UPDATE`. The same 9-minute delays appear in the module's integration logs of 2026-10-24 and 25: cloud-side and intermittent.
+
+### Teardown and rebuild with the fixes (2026-10-29)
+
+A second full cycle, from the branch with the fixes of the first rebuild, following the [test procedure](test-procedure.md) step by step.
+
+| Step | Wall-clock | Result |
+|---|---|---|
+| `delete-cluster.sh` (bootstrap admitted first) | 5 min 11 s | ✅ no manual step; ORC image declared again after the move back (was 21 min with three manual steps) |
+| Destroy of the six stacks | 5 min 28 s | ✅ no leftover |
+| Test collector, its address copied into the stacks | 1 min 28 s | ✅ |
+| Entry point | 10 min 39 s | ✅ cloud-init `done` on both instances, members `ONLINE`; DNS records 68 s in the project's zone, about 9 min in the shared zone |
+| `web`, `isolated`, platform stack, in parallel | 2 min 58 s | ✅ empty plans, cloud-init `done` everywhere |
+| Cluster | 16 min 14 s | ✅ one release proxy per chart this time |
+| Intranet demonstration service | 36 s | ✅ |
+| Route publication | 2 min 22 s | ⚠️ edge-1 replaced; edge-2 not placed (`No valid host was found`); the script stopped, the entry point kept serving |
+| Bootstrap instance removed, publication resumed | 4 min 29 s | ✅ the instance in error replaced first, then the other |
+| Acceptance | 2 min 37 s | ✅ HTTPS 12/12 with the client address, matrix **43/43** |
+
+Findings:
+
+1. **The fixes hold.** `delete-cluster.sh` ran without help; the publication script replaced the instance in error first and never left the entry point without a member; cloud-init retries caused no regression.
+2. **Capacity per host, not only quota.** The edge instances are in hard anti-affinity. Replacing one needs room on a host other than the other's; on the three-host test cloud, the hosts left were full and Nova answered `No valid host was found`. The earlier cycles fitted by chance. Removing the bootstrap instance, as ADR-0002 plans once the cluster manages itself, freed the room. The test procedure now removes it before publishing routes and lists capacity per host in the prerequisites.
+3. **Duplicate release proxies are intermittent:** none this time, three charts out of seven in the first rebuild.
+4. **Designate:** the slow records are in the shared zone (about 9 minutes, zone `PENDING UPDATE`), not in the project's own zone (68 s).

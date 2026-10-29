@@ -37,6 +37,8 @@ Platform teams, integrators and cloud architects who run workloads for several t
 
 ## What it demonstrates
 
+![Acceptance test: HTTPS through the entry point with the client address, then the reachability matrix, 43 rows as expected](docs/assets/acceptance.svg)
+
 | Claim | How | Proof |
 |---|---|---|
 | **Isolation is tested, not asserted** | The reachability matrix of the specification is a script: it probes every flow from outside, from inside each tenant and from the Kubernetes cluster, and fails on any difference | [`tests/reachability`](tests/reachability/README.md): 43/43 rows |
