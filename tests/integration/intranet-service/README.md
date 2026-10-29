@@ -11,3 +11,5 @@ ssh_keys  = ["ssh-ed25519 AAAA..."]
 VARS
 tofu init && tofu apply
 ```
+
+Destroy it **before** the platform stack: it reads the platform's intranet router. If the platform stack is already gone, `tofu destroy -refresh=false` skips that lookup.

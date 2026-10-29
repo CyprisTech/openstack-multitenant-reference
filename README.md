@@ -9,7 +9,7 @@
 A reference architecture for several tenants sharing one OpenStack cloud, Kubernetes included: each tenant isolated in its own project, published through a single public entry point, monitored and administered through dedicated network planes, and **every isolation claim checked by an executable test**. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, with its design choices argued in ADRs and their costs stated.
 
 > [!NOTE]
-> **First release, `v0.1.0`:** the public entry point and the `web` and `isolated` tenants, with bastions and monitoring; reachability matrix **27/27**. **Since v0.1.0, on `main`, tested, not yet released:** the Kubernetes `platform` tenant (Cluster API Provider OpenStack); the matrix passes **43/43** rows with it ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
+> **`v0.2.0`:** the public entry point, the `web` and `isolated` tenants with bastions and monitoring, and the Kubernetes `platform` tenant (Cluster API Provider OpenStack); reachability matrix **43/43**, full teardown without leftover ([test report](docs/testing.md)). Layer 10 (the shared planes) is provided by the operator through a [contract](docs/architecture.md#layer-10-contract); cloud-baseline will provide it with module `v0.2`.
 
 **Start here:** [quick start](#quick-start) to deploy it, [what it demonstrates](#what-it-demonstrates) to judge it, [landscape](docs/landscape.md) for the technologies.
 
@@ -121,8 +121,8 @@ One state per stack. Stacks find each other's objects by name, never through rem
 | Stacks 30 `web` and `isolated`, bastions | delivered, tested |
 | Monitoring through floating IPs and DNS discovery | delivered, tested |
 | Executable reachability matrix and test collector | delivered; 27/27 rows in v0.1.0, 43/43 with `platform` |
-| Kubernetes node image (image-builder) | on `main`, tested |
-| Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators | on `main`, tested, not yet released |
+| Kubernetes node image (image-builder) | delivered in v0.2.0, tested |
+| Stack 30 `platform` (Kubernetes, CAPO): ingress, federation, API restricted to operators, teardown | delivered in v0.2.0, tested |
 | Machine remediation, certificate rotation, metrics-server; rolling replacement of all machines | tested; requests lost during node drains, fix to do ([testing](docs/testing.md)) |
 | Kubernetes version upgrade, scaling, credential rotation | next |
 | GitOps, several sites, backups | the design is ready for them; not tested |
@@ -254,11 +254,12 @@ Suggested reading order: this README, the landscape, the architecture, the trade
 
 | Release | Content | Status |
 |---|---|---|
-| **v0.1.0** | Layers 20 and 30 in one site (entry point, `web`, `isolated`), bastions, monitoring through floating IPs and DNS, reachability matrix; layer 10 provided by the operator; module `v0.1.2` | released |
-| next | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack; node image; day-2 operations (upgrade, scaling, credential rotation) | tested, release pending |
+| **v0.1.0** | Layers 20 and 30 in one site (entry point, `web`, `isolated`), bastions, monitoring through floating IPs and DNS, reachability matrix; layer 10 provided by the operator; module `v0.1.2` | released 2026-10-27 |
+| **v0.2.0** | Stack 30 `platform`: Kubernetes with Cluster API Provider OpenStack, node image, route publication, hardening (remediation, certificate rotation, metrics-server), Service addresses owned by Terraform, teardown | released 2026-10-28 |
+| next | Day-2 operations: Kubernetes upgrade, scaling, credential rotation; no request lost during node drains and entry point replacement | planned |
+| later | Layer 10 as code (`stacks/10-shared-planes`) with cloud-baseline (terraform-openstack-tenant `v0.2`) | planned |
 | later | GitOps for clusters and add-ons, dedicated management cluster, backups | planned |
 | later | Public clouds: planes as shared private networks ([spec](docs/specs/plane-bindings.md)) | specified, not started |
-| v0.2 | Layer 10 as code (`stacks/10-shared-planes`) with cloud-baseline (terraform-openstack-tenant `v0.2`) | planned |
 | later | Failover between sites: an edge per site, runbook, failover drill | planned |
 
 ## Related project
