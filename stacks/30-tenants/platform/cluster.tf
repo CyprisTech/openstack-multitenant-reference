@@ -82,6 +82,8 @@ module "cloudinit" {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
   packages = ["docker.io", "jq"]
+  # A mirror error at first boot would leave the instance without its packages, silently.
+  extra_config = { apt = { conf = "Acquire::Retries \"10\";\n" } }
 
   write_files = merge(
     # kind takes the MTU of the default Docker bridge: it must not exceed the MTU of the cluster

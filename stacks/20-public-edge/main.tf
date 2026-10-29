@@ -64,6 +64,8 @@ module "cloudinit" {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
   packages = ["podman", "prometheus-node-exporter"]
+  # A mirror error at first boot would leave the instance without its packages, silently.
+  extra_config = { apt = { conf = "Acquire::Retries \"10\";\n" } }
 
   write_files = {
     "/etc/traefik/traefik.yml" = {
