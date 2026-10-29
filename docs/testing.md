@@ -183,3 +183,27 @@ Findings, fixed in `delete-cluster.sh` and the READMEs (the scripted fixes run f
 1. **The bootstrap instance is no longer admitted on the API.** `create-cluster.sh` removes its address after the move, so the instance cannot reach the API to admit itself again. An operator admits it from an administration source first; the script now checks the API and prints the command to run.
 2. **Cluster deletion blocked twice.** The ORC `Image` was not carried back by `clusterctl move` (as on the way in), so CAPO waited for it; and the `KubeadmControlPlane` was gone before its machines, leaving its `kcp-cleanup` pre-terminate hook on them. The script now declares the image again after the move and removes the hook when the control plane object no longer exists.
 3. **Destroy order.** The test intranet service reads the platform's intranet router: destroy it before the platform stack, or with `-refresh=false`.
+
+### One-shot rebuild (2026-10-29)
+
+The whole environment rebuilt from an empty project, as a user would: published module (`v0.1.2` from GitHub), fresh `tofu init` in every stack, node image kept from the previous cycle. Steps and checkpoints: [test procedure](test-procedure.md).
+
+| Step | Wall-clock | Result |
+|---|---|---|
+| Entry point (60 resources) | 10 min 02 s | ✅ empty plan; 9 minutes were three DNS records (508 to 553 s each), the load balancer took 120 s |
+| `web` (48), `isolated` (28), test collector (17), platform stack (30), in parallel | 2 min 54 s | ✅ empty plans; root volumes from the image about 80 s each |
+| Cluster, add-ons included (`create-cluster.sh`) | 16 min 02 s | ✅ no manual step |
+| Intranet demonstration service | 46 s | ✅ |
+| Route publication | 13 min 20 s | ⚠️ stopped: one edge instance unhealthy (finding 1) |
+| Collector address in the stacks | 40 s | (finding 3) |
+| Edge instance replaced, members `ONLINE` | 74 s + 3 min | ✅ |
+| Acceptance | 2 min 40 s | ✅ HTTPS 12/12 with the client address, matrix **43/43** |
+| **Total** | 1 h 24 min | about 35 minutes without the incidents |
+
+Findings:
+
+1. **A package mirror error at first boot goes unnoticed.** One edge instance got mirror errors during `apt-get install`: no podman, Traefik restarted in a loop for an hour (`status=203/EXEC`). OpenStack showed the instance `ACTIVE`; only the load balancer monitor saw it. Fixed: apt retries in every cloud-init that installs packages; the test procedure checks `cloud-init status` on every instance.
+2. **The publication script cut the entry point.** It replaced instances in a fixed order and waited for every member: with one broken instance, it replaced the healthy one and the entry point had no member for about 7 minutes. Fixed: unhealthy instances first, never the last healthy one, wait per instance.
+3. **The test collector must exist before the tenants.** Recreated, it got a new address, and the tenants still admitted the old one: 8 matrix rows failed until the stacks and the platform add-ons were applied again. The test procedure now creates it first.
+4. **Duplicate release proxies after `clusterctl move`.** CAAPH created a second release proxy for 3 of the 7 charts (Traefik, cloud controller manager, metrics-server); the releases themselves were installed once and worked, but two proxies block every later update of a chart. Deleting one proxy, even without its finalizer, uninstalled the release; reinstalling while the old Service was still being deleted left Traefik without a Service. Recovered by reinstalling once nothing was being deleted; the floating IP created by Terraform was kept and reused. **Open:** a safe fix belongs to the day-2 work.
+5. **Designate.** Most records took 11 to 44 s; the three of the entry point took 508 to 553 s, with the shared zone in `PENDING UPDATE`. The same 9-minute delays appear in the module's integration logs of 2026-10-24 and 25: cloud-side and intermittent.
