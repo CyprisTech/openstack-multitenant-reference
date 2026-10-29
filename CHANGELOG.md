@@ -6,9 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
+Fixes from two full test cycles (teardown and rebuild), and the test procedure. No change of interface.
+
 ### Added
 
-- Test procedure (`docs/test-procedure.md`): every step of a full cycle with its checkpoint and measured duration; results of a one-shot rebuild in `docs/testing.md`.
+- Test procedure (`docs/test-procedure.md`): every step of a full cycle with its checkpoint, measured duration and the folded output of a real run; step 4b removes the bootstrap instance once the cluster manages itself.
+- Results of the two cycles of 2026-10-29 in `docs/testing.md`: `delete-cluster.sh` without manual step, capacity per host for the hard anti-affinity of the entry point, Designate delays on shared zones.
 
 ### Fixed
 
@@ -55,6 +60,7 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 
-[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CyprisTech/openstack-multitenant-reference/releases/tag/v0.1.0
