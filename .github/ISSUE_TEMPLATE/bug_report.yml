@@ -21,10 +21,10 @@ body:
     attributes:
       label: Component
       options:
-        - stacks/20-public-edge
-        - stacks/30-tenants/web
-        - stacks/30-tenants/isolated
-        - tests/reachability (matrix)
+        - stacks/shared/entry-point
+        - stacks/tenants/vm
+        - stacks/tenants/isolated
+        - tests/isolation (matrix)
         - tests/integration
         - documentation
     validations:

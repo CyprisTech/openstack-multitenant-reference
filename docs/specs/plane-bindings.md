@@ -1,11 +1,10 @@
 # Spec: plane bindings for public clouds
 
-- **Status:** draft, not started
-- **Milestone:** after v0.2 (cloud-baseline); to be decided by an ADR once the spike below is done
+- **Status:** superseded by [ADR-0003](../adr/0003-scope-and-plane-provisioning.md) (shared private planes); kept for its questions, which the level 2 tests answer
 
 ## Problem
 
-The [layer 10 contract](../architecture.md#layer-10-contract) asks for planes (`svc_public`, `monitoring`, `intranet`) that are **external networks**: tenants join them through a router with source NAT and publish on them with a **floating IP of the plane** (ADR-0001, D2). Creating an external network needs the Neutron admin role. That fits a private or sovereign cloud run by its operator, not a public cloud: on OVHcloud Public Cloud, for example, the only external network is the Internet one (`Ext-Net`).
+The [layer 10 contract](../reference/planes-contract.md) asks for planes (`svc_public`, `monitoring`, `intranet`) that are **external networks**: tenants join them through a router with source NAT and publish on them with a **floating IP of the plane** (ADR-0001, D2). Creating an external network needs the Neutron admin role. That fits a private or sovereign cloud run by its operator, not a public cloud: on OVHcloud Public Cloud, for example, the only external network is the Internet one (`Ext-Net`).
 
 ## Direction
 

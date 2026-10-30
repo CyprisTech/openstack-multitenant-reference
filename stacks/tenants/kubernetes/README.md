@@ -1,4 +1,4 @@
-# Stack 30 — tenant `platform`
+# Tenant type `kubernetes`
 
 A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on `svc_public` behind the entry point, federated by the monitoring collector, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
 
@@ -12,7 +12,7 @@ Every version is pinned in [`cluster.tf`](cluster.tf).
 
 ## Prerequisites
 
-- Stack 20 applied for the same site: the ingress admits the entry point's addresses only, read from its router.
+- The shared entry point (`stacks/shared/entry-point`) applied for the same site: the ingress admits the entry point's addresses only, read from its router.
 - The node image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md).
 - An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project. Created by the operator, never by Terraform (ADR-0002, D1):
 
@@ -49,11 +49,11 @@ The Services request these addresses (`loadBalancerIP`) and keep them when they 
 kubectl apply -f demo/whoami.yaml
 curl -k --resolve apps.example.org:443:<public IP of the entry point> https://apps.example.org/
 
-# Reachability matrix with the platform rows (ADR-0002, D8); needs tests/integration/intranet-service
-tests/reachability/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
+# Reachability matrix with the platform rows (ADR-0002, D8); needs tests/fixtures/intranet-service
+tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
 ```
 
-A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](../../../docs/platform-tour.md).
+A guided discovery of the cluster, with real outputs, is in [docs/platform-tour.md](../../../docs/guides/kubernetes-tour.md).
 
 ## Teardown
 

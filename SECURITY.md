@@ -36,7 +36,7 @@ Out of scope: vulnerabilities of the [terraform-openstack-tenant](https://github
 
 ## Security-relevant behaviour of the architecture
 
-- **Isolation on `svc_public` rests on security groups alone.** Every project attached to the plane can reach every published backend at the network level; a wrong rule exposes a backend to every tenant on the plane ([trade-offs, 7](docs/trade-offs.md#7-isolation-on-the-svc_public-plane)).
+- **Isolation on `svc_public` rests on security groups alone.** Every project attached to the plane can reach every published backend at the network level; a wrong rule exposes a backend to every tenant on the plane ([trade-offs, 7](docs/concepts/trade-offs.md#7-isolation-on-the-svc_public-plane)).
 - **Metrics ports are open to the collector's addresses only** (`monitoring.collector_cidrs`). With `null`, the whole monitoring plane range is admitted, and since tenants join the plane through source NAT, any tenant can then scrape any other.
 - **The edge does not terminate TLS.** It holds no tenant certificate; it can only limit connections, not filter HTTP.
 - **The demonstration backends are not production services**: the `web` stack serves a self-signed certificate.

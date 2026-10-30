@@ -1,4 +1,4 @@
-# Stack 30 — tenant `web`
+# Tenant type `vm`
 
 Two web instances serving several domains, published on the `svc_public` plane and reachable only from the public entry point ([ADR-0001](../../../docs/adr/0001-reference-architecture.md), D5 and D7):
 
@@ -22,19 +22,19 @@ The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. M
 
 ## Publishing the domains on the entry point
 
-The `routes` output has the shape of the `routes` variable of stack 20. Generate it, then roll the entry point instances one at a time (see the [stack 20 README](../../20-public-edge/README.md#changing-the-routes)):
+The `routes` output has the shape of the `routes` variable of the entry point. Generate it, then roll the entry point instances one at a time (see the [stack 20 README](../../shared/entry-point/README.md#changing-the-routes)):
 
 ```bash
 tofu output -json routes \
-  | jq '{routes: .}' > ../../20-public-edge/routes.auto.tfvars.json   # git-ignored
+  | jq '{routes: .}' > ../../shared/entry-point/routes.auto.tfvars.json   # git-ignored
 ```
 
 No address is written by hand (ADR-0001, D9).
 
 ## Requirements
 
-- **MTU.** Set `network_mtu` to the smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract). A larger value lets TCP connections open but drops large packets: the TLS handshake then hangs.
-- **Range.** `web_cidr` must avoid the ranges reserved by the cloud (layer 10 contract).
+- **MTU.** Set `network_mtu` to the smallest of the tenant overlay MTU and the plane MTUs (planes contract). A larger value lets TCP connections open but drops large packets: the TLS handshake then hangs.
+- **Range.** `web_cidr` must avoid the ranges reserved by the cloud (planes contract).
 - **Internet access at first boot.** The egress network must route to the Internet and the resolvers must be reachable through it (package installation).
 
 ## Bastion
@@ -49,7 +49,7 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 
 | Name | Description |
 |---|---|
-| `routes` | Routes for the entry point (stack 20, variable `routes`) |
+| `routes` | Routes for the entry point (variable `routes` of the entry point) |
 | `backends` | Published backends, `address:443` on `svc_public` |
 | `edge_sources` | Addresses of the entry point admitted on port 443 |
 | `instances` | Web instances and their private addresses |

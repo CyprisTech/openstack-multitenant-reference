@@ -37,4 +37,4 @@ __pycache__/
 images/kubernetes-node/build.json
 images/kubernetes-node/.work/
 # Interrupted route publication (scripts/publish-routes.sh)
-stacks/20-public-edge/.routes-publication-pending
+stacks/shared/entry-point/.routes-publication-pending

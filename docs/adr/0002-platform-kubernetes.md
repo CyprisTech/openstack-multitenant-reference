@@ -1,6 +1,6 @@
 # ADR-0002: The `platform` tenant — Kubernetes with Cluster API
 
-- **Status:** Accepted
+- **Status:** Accepted; refined by [ADR-0003](0003-scope-and-plane-provisioning.md), D5 (Kubernetes as a tenant type, day-to-day operations in scope)
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 - **Refines:** ADR-0001, D4 (the management cluster becomes the workload cluster itself; Terraform no longer handles the cluster credential)
@@ -117,4 +117,4 @@ The reference test cloud has one network for both roles; the tests use restricte
 - The test cloud needs, for the duration of a test: 3 control-plane nodes and 2 workers (2 vCPU, 4 GiB each), a bootstrap instance and a temporary Packer build instance, 3 Octavia load balancers (API, ingress, metrics) and 3 more floating IPs. Every machine boots from a root volume: the volume quota must cover the machines, one more per group during a rolling replacement, and the Packer build volume.
 - If the requested floating IP is not available, the cloud controller manager silently allocates another one; the deployment checks that each Service carries the address of the stack.
 - The administration role must be configured with specific sources in every stack; the layer 10 contract lists them.
-- The first deployment revealed nine defects, all fixed (cloud API names, private CA, MTU of kind, API sources, DNS of the cloud controller manager, timing of the move, ORC image after the move, Helm release names, double PROXY header): see [testing.md](../testing.md). They are the practical cost of this design on a private cloud.
+- The first deployment revealed nine defects, all fixed (cloud API names, private CA, MTU of kind, API sources, DNS of the cloud controller manager, timing of the move, ORC image after the move, Helm release names, double PROXY header): see [testing.md](../concepts/test-results.md). They are the practical cost of this design on a private cloud.

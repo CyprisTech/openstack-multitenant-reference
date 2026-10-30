@@ -1,6 +1,6 @@
 # Test collector
 
-A small instance standing for the monitoring collector, used by the [reachability matrix](../../reachability/README.md). It reaches the monitoring plane through its own router with source NAT, so the tenants see one known source address: the router's gateway address on the plane, exported as `collector_cidrs` and given to the tenant stacks as `monitoring.collector_cidrs`. It is administered through a floating IP on an administration network, whose router is its default gateway.
+A small instance standing for the monitoring collector, used by the [reachability matrix](../../isolation/README.md). It reaches the monitoring plane through its own router with source NAT, so the tenants see one known source address: the router's gateway address on the plane, exported as `collector_cidrs` and given to the tenant stacks as `monitoring.collector_cidrs`. It is administered through a floating IP on an administration network, whose router is its default gateway.
 
 ```bash
 cat > terraform.tfvars <<'VARS'   # git-ignored

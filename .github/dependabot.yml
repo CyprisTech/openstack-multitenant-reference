@@ -7,10 +7,10 @@ updates:
   # Module tags and provider constraints of every root configuration.
   - package-ecosystem: terraform
     directories:
-      - /stacks/20-public-edge
-      - /stacks/30-tenants/web
-      - /stacks/30-tenants/isolated
-      - /tests/integration/collector
+      - /stacks/shared/entry-point
+      - /stacks/tenants/vm
+      - /stacks/tenants/isolated
+      - /tests/fixtures/collector
       - /tests/integration/dual-floating-ip
     schedule:
       interval: weekly

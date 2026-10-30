@@ -1,6 +1,6 @@
-# Stack 20 — public entry point
+# Shared public entry point
 
-One entry point for every public domain of the site ([ADR-0001](../../docs/adr/0001-reference-architecture.md), D3 and D8):
+One entry point for every public domain of the site ([ADR-0001](../../../docs/adr/0001-reference-architecture.md), D3 and D8):
 
 - an Octavia load balancer with a public floating IP; listeners in **TCP** on 80 and 443, pools in **PROXY** protocol, **TCP** health monitors;
 - two Traefik instances on plain VMs, in a server group (anti-affinity), Traefik running as a Podman container started by systemd;
@@ -36,7 +36,7 @@ Connections open on the replaced instance are cut.
 
 - `routes.<domain>.backends` take `host:port`. Names must resolve with the `dns_nameservers` of the edge network.
 - Backends admit the addresses of the `svc_public_source_ips` output on their published ports. With `proxy_protocol = true` (default), they must expect a PROXY protocol v2 header, from those addresses only.
-- Backends terminate TLS and manage their certificates: use DNS-01 or TLS-ALPN-01 challenges ([trade-offs](../../docs/trade-offs.md#1-tls-passthrough-at-the-public-entry-point)).
+- Backends terminate TLS and manage their certificates: use DNS-01 or TLS-ALPN-01 challenges ([trade-offs](../../../docs/concepts/trade-offs.md#1-tls-passthrough-at-the-public-entry-point)).
 
 ## Inputs
 
@@ -48,9 +48,9 @@ Connections open on the replaced instance are cut.
 | `boot_volume_size` | Root volume size in GiB; `null` uses the flavor's disk | `null` |
 | `edge_cidr` | Range of the edge network | `10.20.0.0/24` |
 | `dns_nameservers` | Resolvers of the edge network | `[]` |
-| `network_mtu` | MTU of the stack's networks: smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract) | cloud default |
+| `network_mtu` | MTU of the stack's networks: smallest of the tenant overlay MTU and the plane MTUs (planes contract) | cloud default |
 | `public_network` | External network of the floating IP and default route | required |
-| `planes` | `svc_public` and `monitoring`: network, subnet, CIDR (layer 10 contract) | required |
+| `planes` | `svc_public` and `monitoring`: network, subnet, CIDR (planes contract) | required |
 | `octavia_flavor_id` | Octavia flavor (active/standby recommended) | cloud default |
 | `server_group_policy` | `anti-affinity` or `soft-anti-affinity` | `anti-affinity` |
 | `traefik_image` | Pinned Traefik image | `docker.io/library/traefik:v3.7.16` |

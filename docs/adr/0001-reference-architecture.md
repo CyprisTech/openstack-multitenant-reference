@@ -1,6 +1,6 @@
 # ADR-0001: Scope and structure of the reference architecture
 
-- **Status:** Accepted (implemented in v0.1.0); D4 refined by [ADR-0002](0002-platform-kubernetes.md): the cluster credential is created by the operator, not by Terraform, and the cluster security groups are managed by CAPO
+- **Status:** Accepted (implemented in v0.1.0); D1 and D2 refined by [ADR-0003](0003-scope-and-plane-provisioning.md) (scope, planes provided without the operator, layout); D4 refined by [ADR-0002](0002-platform-kubernetes.md): the cluster credential is created by the operator, not by Terraform, and the cluster security groups are managed by CAPO
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 
@@ -19,7 +19,7 @@ Constraints:
 - No real identifiers: domains are `example.org`, addresses are documentation ranges, names are generic.
 - The admin-level module (`cloud-baseline`) ships only in v0.2 of terraform-openstack-tenant.
 
-The specification that goes with this ADR (diagrams, reachability matrix, layer 10 contract, sizing) is [docs/architecture.md](../architecture.md).
+The specification that goes with this ADR (diagrams, reachability matrix, layer 10 contract, sizing) is [docs/architecture.md](../concepts/architecture.md).
 
 ## Options considered
 
@@ -45,7 +45,7 @@ stacks/
     isolated/
 ```
 
-- Until cloud-baseline v0.2, layer 10 is **provided by the operator**. [The layer 10 contract](../architecture.md#layer-10-contract) lists exactly what layers 20 and 30 expect.
+- Until cloud-baseline v0.2, layer 10 is **provided by the operator**. [The layer 10 contract](../reference/planes-contract.md) lists exactly what layers 20 and 30 expect.
 - Stacks reference each other **by name through `existing`**, never through remote state. Each stack keeps its own state and stays independent of the state backend, as in the module.
 - **Each stack takes its own cloud connection** (a `clouds.yaml` entry). Stacks never assume they share a project: deploying the four tenants in one project or in four projects is a change of configuration, not of code.
 
@@ -91,7 +91,7 @@ A fictional organisation, `example.org`:
 
 ### D6 — Executable reachability matrix
 
-The expected flows between the internet, the planes and the tenants are written as a matrix ([docs/architecture.md](../architecture.md#reachability-matrix)) and checked by a test script after each deployment. The matrix is both the isolation documentation and the acceptance test.
+The expected flows between the internet, the planes and the tenants are written as a matrix ([docs/architecture.md](../reference/isolation-matrix.md)) and checked by a test script after each deployment. The matrix is both the isolation documentation and the acceptance test.
 
 ### D7 — Security groups and DNS
 
@@ -137,5 +137,5 @@ The first version runs in **one site**. Failover between sites comes in a later 
 
 None. Resolved after v0.1.0:
 
-- Octavia flavor (amphora topology): a variable of the stacks (`octavia_flavor_id`), active/standby recommended for the entry point; see [trade-off 4](../trade-offs.md#4-octavia-topology).
+- Octavia flavor (amphora topology): a variable of the stacks (`octavia_flavor_id`), active/standby recommended for the entry point; see [trade-off 4](../concepts/trade-offs.md#4-octavia-topology).
 - CAPO and Kubernetes versions: pinned in the platform stack ([ADR-0002](0002-platform-kubernetes.md), D2).

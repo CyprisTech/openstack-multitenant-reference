@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publish the routes of the tenants on the public entry point (stack 20).
 #
-# Collects the `routes` output of every applied stack under stacks/30-tenants, writes them to
-# stacks/20-public-edge/routes.auto.tfvars.json and, when they changed, replaces the entry point
+# Collects the `routes` output of every applied stack under stacks/tenants, writes them to
+# stacks/shared/entry-point/routes.auto.tfvars.json and, when they changed, replaces the entry point
 # instances one at a time: routes are written by cloud-init, and the load balancer keeps a healthy
 # member while the other instance is replaced.
 #
@@ -17,13 +17,13 @@ tool=tofu
 : "${OS_CLOUD:?set OS_CLOUD to the clouds.yaml entry of stack 20}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-edge="${root}/stacks/20-public-edge"
+edge="${root}/stacks/shared/entry-point"
 routes_file="${edge}/routes.auto.tfvars.json"
 pending="${edge}/.routes-publication-pending"
 
 # 1. Routes of the applied tenant stacks (a stack without a `routes` output is skipped).
 routes='{}'
-for stack in "${root}"/stacks/30-tenants/*/; do
+for stack in "${root}"/stacks/tenants/*/; do
   out=""
   if [[ -d "${stack}/.terraform" ]]; then
     out=$("${tool}" -chdir="${stack}" output -json routes 2>/dev/null) || out=""

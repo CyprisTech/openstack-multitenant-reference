@@ -41,7 +41,7 @@ One row per layer of the architecture: what is used, what was considered instead
 
 | Layer | Used | Alternatives considered | Why this one | Decision |
 |---|---|---|---|---|
-| Cloud (IaaS) | OpenStack: Nova, Neutron with OVN, Cinder, Octavia (amphora), Designate | — | The target: private and sovereign OpenStack clouds | [ADR-0001](adr/0001-reference-architecture.md) |
+| Cloud (IaaS) | OpenStack: Nova, Neutron with OVN, Cinder, Octavia (amphora), Designate | — | The target: private and sovereign OpenStack clouds | [ADR-0001](../adr/0001-reference-architecture.md) |
 | Infrastructure as code | OpenTofu or Terraform, module [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), one state per stack | Heat, Ansible, Pulumi | Declarative, plan before apply, one module for every tenant; works without admin rights | ADR-0001, D1 |
 | Network isolation | One project per tenant, shared planes (`svc_public`, `monitoring`, `intranet`), one router per plane, floating IP of the plane to publish, security groups by source | One flat shared network; Neutron RBAC between projects | Every flow is explicit, and each one is a row of the reachability matrix | ADR-0001, D2 and D6 |
 | Public entry point | Octavia (TCP, PROXY) in front of two Traefik VMs, SNI passthrough, PROXY v2 to backends | Octavia only; Traefik in Kubernetes; HAProxy | TLS stays with each tenant; no orchestrator in front of the tenants; one proxy technology across the architecture | ADR-0001, D8 |

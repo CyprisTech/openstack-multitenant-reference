@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Executable reachability matrix (ADR-0001, D6).
+"""Isolation test: the executable reachability matrix (ADR-0001, D6).
 
 Reads the outputs of the deployed stacks, runs TCP probes from inside the tenants (through
 their bastions) and from the machine running the test, and compares every result with the
 matrix of docs/architecture.md. Exits with status 1 if any row differs.
 
-    tests/reachability/check.py --stacks stacks --collector tests/integration/collector \
+    tests/isolation/check.py --stacks stacks --collector tests/fixtures/collector \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
-        [--platform-kubeconfig platform.kubeconfig --intranet-service tests/integration/intranet-service]
+        [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service]
 
-Requirements: the stacks 20-public-edge, 30-tenants/web and 30-tenants/isolated applied with
+Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions, the test collector applied, and the public domains routed by the entry point. With
 --platform-kubeconfig, the rows of the platform tenant (ADR-0002, D8) are added: probes from
 the cluster run in a short-lived pod, and the intranet demonstration service must be applied.
@@ -72,19 +72,19 @@ class Prober:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stacks", default="stacks")
-    ap.add_argument("--collector", default="tests/integration/collector")
+    ap.add_argument("--collector", default="tests/fixtures/collector")
     ap.add_argument("--user", default="ops")
     ap.add_argument("--collector-user", default="debug")
     ap.add_argument("--platform-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
-    ap.add_argument("--intranet-service", default="tests/integration/intranet-service")
+    ap.add_argument("--intranet-service", default="tests/fixtures/intranet-service")
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
     args = ap.parse_args()
 
-    edge = outputs(args.tool, os.path.join(args.stacks, "20-public-edge"))
-    web = outputs(args.tool, os.path.join(args.stacks, "30-tenants", "web"))
-    iso = outputs(args.tool, os.path.join(args.stacks, "30-tenants", "isolated"))
+    edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
+    web = outputs(args.tool, os.path.join(args.stacks, "tenants", "vm"))
+    iso = outputs(args.tool, os.path.join(args.stacks, "tenants", "isolated"))
     col = outputs(args.tool, args.collector)
     p = Prober(args.user, args.key)
     pc = Prober(args.collector_user, args.key)
@@ -136,7 +136,7 @@ def main():
         # Addresses created by the platform stack (ADR-0002, D5), and the ones the Services carry:
         # the cloud controller manager silently allocates another address when the requested
         # one is unavailable.
-        plat = outputs(args.tool, os.path.join(args.stacks, "30-tenants", "platform"))
+        plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
         ingress = next(iter(plat["routes"].values()))["backends"][0].split(":")[0]
         metrics = plat["prometheus"]["address"]
         svc_ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",

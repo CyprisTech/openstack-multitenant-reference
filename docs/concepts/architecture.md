@@ -1,11 +1,11 @@
 # Architecture
 
-This document is the living specification of the reference architecture. The decisions behind it are recorded in [ADR-0001](adr/0001-reference-architecture.md); when the two disagree, the ADR states the intent and this document must be fixed.
+This document is the living specification of the reference architecture. The decisions behind it are recorded in [ADR-0001](../adr/0001-reference-architecture.md); when the two disagree, the ADR states the intent and this document must be fixed.
 
 All names are fictional: the organisation is `example.org`, and address ranges are left to the layer 10 contract.
 
 > [!NOTE]
-> **Delivered in v0.1.0:** layers 20 and 30 for the projects `edge`, `web` and `isolated`, with bastions, monitoring and the reachability matrix. **Delivered after v0.1.0, tested, not yet released:** the `platform` project (Kubernetes with Cluster API Provider OpenStack), see [testing.md](testing.md).
+> **Delivered in v0.1.0:** layers 20 and 30 for the projects `edge`, `web` and `isolated`, with bastions, monitoring and the reachability matrix. **Delivered after v0.1.0, tested, not yet released:** the `platform` project (Kubernetes with Cluster API Provider OpenStack), see [testing.md](test-results.md).
 
 ## Topology
 
@@ -92,7 +92,7 @@ flowchart LR
 | `platform` | egress | `svc_public`, `monitoring`, `intranet` | ingress and Prometheus load balancers (floating IPs of `svc_public` and `monitoring`), API (floating IP of the administration network) |
 | bastions | administration network | — (second port on the tenant network, no routes) | floating IP of the administration network |
 
-Three rules follow from this design, each learned from a test failure (see [testing.md](testing.md)):
+Three rules follow from this design, each learned from a test failure (see [testing.md](test-results.md)):
 
 - **MTU.** Tenant networks use the smallest MTU of the planes they join: OVN routers do not send "fragmentation needed", so a larger MTU drops large packets silently.
 - **Sources.** An administration source is the address *as seen on the plane*, often a router's: read it on the target (`$SSH_CLIENT`), do not guess it.
@@ -155,7 +155,7 @@ flowchart LR
 | Bastions (SSH) | the operator addresses | every tenant, including `platform` (tested) |
 | Kubernetes API | the operator addresses; the cluster's own addresses (added by CAPO); the bootstrap instance while it manages the cluster | anything else |
 
-With one network for the administration and intranet roles (the test cloud), operator addresses must be single addresses, never the network range: tenants joining the intranet appear inside that range ([ADR-0002](adr/0002-platform-kubernetes.md), D6).
+With one network for the administration and intranet roles (the test cloud), operator addresses must be single addresses, never the network range: tenants joining the intranet appear inside that range ([ADR-0002](../adr/0002-platform-kubernetes.md), D6).
 
 ## Lifecycle
 
@@ -228,7 +228,7 @@ flowchart LR
 
 ## Kubernetes cluster creation
 
-The design is [ADR-0002](adr/0002-platform-kubernetes.md); the stack is [`stacks/30-tenants/platform`](../stacks/30-tenants/platform/README.md).
+The design is [ADR-0002](../adr/0002-platform-kubernetes.md); the stack is [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md).
 
 ```mermaid
 sequenceDiagram
@@ -258,45 +258,13 @@ sequenceDiagram
 | API | floating IP on the administration network, administration sources only |
 | Credentials | application credential dedicated to the cluster (restricted, `member` and `load-balancer_member`), created by the operator and copied to the bootstrap instance; never in the Terraform state |
 
-## Reachability matrix
+## Isolation matrix
 
-Each row is checked by the acceptance test ([`tests/reachability`](../tests/reachability/README.md)) after deployment; the rows that involve `platform` or the `intranet` plane are checked when the test is given the platform kubeconfig. *Enforced by* names the mechanism that makes the row true.
+The expected flows between the Internet, the planes and the tenants are listed, row by row, in the [isolation matrix](../reference/isolation-matrix.md); the [isolation test](../guides/check-isolation.md) checks them on a deployment.
 
-| From | To | Port | Expected | Enforced by |
-|---|---|---|---|---|
-| Internet | edge load balancer | 80, 443 | allowed | public floating IP, security group |
-| Internet | `web`, `platform`, `isolated` | any | denied | no public address |
-| edge Traefik | `web` VMs | 443 | allowed | `svc_public` route, security group |
-| edge Traefik | `platform` ingress | 443 | allowed | `svc_public` route, security group |
-| `web` | `platform` ingress | 443 | denied | security group (source = edge only) |
-| `platform` | `intranet` | any | allowed | router to `intranet` |
-| `web` | `intranet` | any | denied | no router to `intranet` |
-| `isolated` | `web`, `platform`, `edge` | any | denied | no route |
-| Collector | every instance, through its `monitoring` floating IP | metrics ports | allowed | floating IP of `monitoring`, route to the plane range, security group (source = `collector_cidrs`) |
-| Any tenant | another tenant, through `monitoring` floating IPs | metrics ports | denied | security group (source = `collector_cidrs` only: every tenant reaches the plane with an address of its range, through source NAT) |
-| `isolated` | the Internet | any | denied | no egress router |
+## Planes contract
 
-## Layer 10 contract
-
-Until cloud-baseline (module v0.2) provides layer 10, the operator must supply the following objects. Layers 20 and 30 find them by name.
-
-| Object | Requirement |
-|---|---|
-| Networks `svc_public`, `intranet`, `monitoring` | Visible to the tenant projects (shared or external), each with one subnet usable as a router gateway |
-| Plane routes | The CIDR of each plane, to be advertised by DHCP in the tenant subnets |
-| MTU | The MTU of each plane, and the largest MTU the cloud carries for tenant networks (lower when the tenant overlay itself runs over a tunnel). Tenant networks that join a plane use the smallest of these values (`network_mtu`): OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets |
-| Monitoring zone | A DNS zone shared with the tenant projects, where each stack writes the A records of its instances (collector service discovery) |
-| Collector | A collector with an address in the `monitoring` range, outgoing TCP to the metrics ports, and its addresses published (`monitoring.collector_cidrs` of the stacks) |
-| Reserved ranges | The ranges tenants must not use for their networks (ranges used by the cloud infrastructure) |
-| Public network | A network providing floating IPs reachable from the internet, for the edge load balancer |
-| Administration network and sources | An external network for the bastions and the Kubernetes API floating IPs, and the **operator addresses** allowed on them. Recommended: a network distinct from the intranet. With one network for both roles, the administration sources must be specific addresses, never the network range: tenants joining the intranet reach it with addresses of its range ([ADR-0002](adr/0002-platform-kubernetes.md), D6) |
-| Octavia | Available to the projects, with a load balancer flavor (amphora topology) |
-| Image | An Ubuntu LTS cloud image visible to the projects |
-| Flavors | Sizes listed in the sizing table below |
-| DNS | A zone per project, or a shared zone where projects may write records (optional, Designate) |
-| Quotas | At least the sizing table below, per project |
-
-Security groups are declared by each tenant. A central catalogue shared by RBAC is an operator option that comes with cloud-baseline.
+What the stacks expect from the shared planes (names, ranges, MTUs, reserved ranges, DNS zones) is the [planes contract](../reference/planes-contract.md). How a tenant joins a plane — gateway with source NAT on operator planes, interface without translation on shared private planes — is explained in [How a tenant joins a plane](plane-attachment.md).
 
 ## Sites
 

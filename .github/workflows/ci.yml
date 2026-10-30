@@ -12,10 +12,10 @@ env:
   # Every root configuration of the repository. The stacks and the test configurations call the
   # published module by tag: init downloads it from GitHub.
   CONFIGURATIONS: >-
-    stacks/20-public-edge
-    stacks/30-tenants/web
-    stacks/30-tenants/isolated
-    tests/integration/collector
+    stacks/shared/entry-point
+    stacks/tenants/vm
+    stacks/tenants/isolated
+    tests/fixtures/collector
     tests/integration/dual-floating-ip
 
 jobs:
@@ -67,7 +67,7 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in stacks/20-public-edge stacks/30-tenants/web stacks/30-tenants/isolated; do
+          for d in stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations
@@ -82,9 +82,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: syntax check
-        run: python3 -m py_compile tests/reachability/check.py
+        run: python3 -m py_compile tests/isolation/check.py
       - name: help runs
-        run: python3 tests/reachability/check.py --help
+        run: python3 tests/isolation/check.py --help
       - name: tour script syntax
         run: python3 -m py_compile tests/tour/capture.py
       - name: shell scripts syntax

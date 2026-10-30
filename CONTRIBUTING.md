@@ -7,18 +7,18 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 ## Ways to contribute
 
 - **Report a bug** or **request a feature** with the [issue templates](https://github.com/CyprisTech/openstack-multitenant-reference/issues/new/choose). Problems of the module itself belong to [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant/issues).
-- **Report test results** on another OpenStack cloud or distribution: what passed, what failed, which part of the [layer 10 contract](docs/architecture.md#layer-10-contract) was hard to meet.
+- **Report test results** on another OpenStack cloud or distribution: what passed, what failed, which part of the [planes contract](docs/reference/planes-contract.md) was hard to meet.
 - **Improve the documentation**: unclear explanations, missing trade-offs, wrong statements.
-- **Submit code**: open an issue first for anything larger than a small fix, so the design can be agreed before you invest time. A change to the architecture (layers, planes, flows, matrix) needs an [ADR](docs/adr/README.md) and an entry in [docs/trade-offs.md](docs/trade-offs.md).
+- **Submit code**: open an issue first for anything larger than a small fix, so the design can be agreed before you invest time. A change to the architecture (layers, planes, flows, matrix) needs an [ADR](docs/adr/README.md) and an entry in [docs/trade-offs.md](docs/concepts/trade-offs.md).
 
 ## Repository layout
 
 | Path | Content |
 |---|---|
-| `stacks/20-public-edge` | Layer 20: the public entry point |
-| `stacks/30-tenants/web`, `stacks/30-tenants/isolated` | Layer 30: the tenants |
-| `tests/reachability` | Executable reachability matrix |
-| `tests/integration/collector` | Test collector used by the matrix |
+| `stacks/shared/entry-point` | The shared public entry point |
+| `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
+| `tests/isolation` | Executable reachability matrix |
+| `tests/fixtures/collector` | Test collector used by the matrix |
 | `tests/integration/dual-floating-ip` | One-off test behind the monitoring design (two floating IPs on one port) |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
@@ -40,33 +40,33 @@ Run the same checks as CI before pushing. They need no cloud and no credentials:
 
 ```bash
 tofu fmt -check -recursive                     # or: terraform fmt -check -recursive
-for d in stacks/20-public-edge stacks/30-tenants/web stacks/30-tenants/isolated \
-         tests/integration/collector tests/integration/dual-floating-ip; do
+for d in stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated \
+         tests/fixtures/collector tests/integration/dual-floating-ip; do
   tofu -chdir="$d" init -backend=false -input=false && tofu -chdir="$d" validate
 done
 tflint --init
-for d in stacks/20-public-edge stacks/30-tenants/web stacks/30-tenants/isolated; do
+for d in stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated; do
   tflint --chdir="$d" --config="$PWD/.tflint.hcl"
 done
 for d in tests/integration/*/; do
   tflint --chdir="$d" --config="$PWD/tests/integration/.tflint.hcl"
 done
-python3 -m py_compile tests/reachability/check.py
+python3 -m py_compile tests/isolation/check.py
 gitleaks git --no-banner --redact
 ```
 
 ## Testing on a real cloud
 
-CI only validates the code. Every change to a stack is also tested by the maintainers on a real OpenStack cloud before it is merged, and the results are recorded in [docs/testing.md](docs/testing.md):
+CI only validates the code. Every change to a stack is also tested by the maintainers on a real OpenStack cloud before it is merged, and the results are recorded in [docs/testing.md](docs/concepts/test-results.md):
 
 1. **Apply**, then **plan again: the plan after apply must be empty.**
 2. Functional checks of the change (for example HTTPS through the entry point, the rolling replacement of the edge instances).
-3. **The reachability matrix.** [`tests/reachability/check.py`](tests/reachability/README.md) reads the outputs of the deployed stacks and of the [test collector](tests/integration/collector/README.md), opens TCP connections from inside each tenant (through its bastion), from the collector and from the machine running the test, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the `web` routes rolled onto the entry point, and the collector's `collector_cidrs` given to the stacks as `monitoring.collector_cidrs`.
+3. **The reachability matrix.** [`tests/isolation/check.py`](tests/isolation/README.md) reads the outputs of the deployed stacks and of the [test collector](tests/fixtures/collector/README.md), opens TCP connections from inside each tenant (through its bastion), from the collector and from the machine running the test, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the `web` routes rolled onto the entry point, and the collector's `collector_cidrs` given to the stacks as `monitoring.collector_cidrs`.
 4. **Destroy**, and check that nothing is left (instances, load balancers, floating IPs, DNS records).
 
 Use a dedicated, disposable project and project-scoped credentials (an application credential with the `member` role, plus `load-balancer_member` if your Octavia policy requires it). These tests create real resources and may cost money on a public cloud. Contributors are not required to run them; if you do, attach a summary without addresses or names to the pull request.
 
-A change that adds or removes a flow must update the matrix in both places: the table of [docs/architecture.md](docs/architecture.md#reachability-matrix) and the rows of `check.py`.
+A change that adds or removes a flow must update the matrix in both places: the table of [docs/architecture.md](docs/reference/isolation-matrix.md) and the rows of `check.py`.
 
 ## Conventions
 
@@ -74,7 +74,7 @@ These rules come from [ADR-0001](docs/adr/0001-reference-architecture.md):
 
 - **One state per stack; no remote state.** Stacks find each other's objects by name through `existing`, and each takes its own `clouds.yaml` entry.
 - **The site is an input** of every stack and part of every name. **No address is written by hand**: routes and DNS records are generated from stack outputs.
-- **Layers 20 and 30 depend only on the [layer 10 contract](docs/architecture.md#layer-10-contract).** A new requirement on the operator is added to the contract.
+- **The stacks depend only on the [planes contract](docs/reference/planes-contract.md).** A new requirement on whoever provides the planes is added to the contract.
 - **No real identifiers.** Domains are `example.org`, addresses are documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), names are generic. This applies to code, examples, tests, documentation and commit messages.
 - **Pinned versions.** The module by tag (`?ref=vX.Y.Z`), container images by version.
 - **Documented code.** Every variable and output of a stack has a `description` (TFLint enforces it). Comments explain **why**, only where the code would surprise a reader.

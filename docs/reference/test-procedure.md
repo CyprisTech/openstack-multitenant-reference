@@ -1,6 +1,6 @@
 # Test procedure
 
-Every step of a full test cycle, with the checkpoint that must pass before the next step, the duration measured on the reference test cloud, and what to do when a checkpoint fails. The results of each cycle are in [testing.md](testing.md); the [quick start](../README.md#quick-start) is the short version of steps 1 to 6.
+Every step of a full test cycle, with the checkpoint that must pass before the next step, the duration measured on the reference test cloud, and what to do when a checkpoint fails. The results of each cycle are in [testing.md](../concepts/test-results.md); the [getting started](../getting-started/private-cloud.md) is the short version of steps 1 to 6.
 
 Run everything from a machine that is an administration source of the stacks (`admin.sources`, `bastion.ssh_cidrs`), with a `clouds.yaml` entry per stack and **no `OS_*` variable in the shell**.
 
@@ -34,14 +34,14 @@ flowchart LR
 | **Total, steps 1 to 7** | **about 35 minutes** without incident |
 | 8. Teardown | 12 min: 5 for the cluster, 6 for the stacks |
 
-Each step ends with the output of a real run, folded (anonymised and condensed: commands, planned resources one line each, summaries and checkpoints). Durations come from the two cycles of 2026-10-29 ([results](testing.md#one-shot-rebuild-2026-10-29)).
+Each step ends with the output of a real run, folded (anonymised and condensed: commands, planned resources one line each, summaries and checkpoints). Durations come from the two cycles of 2026-10-29 ([results](../concepts/test-results.md#one-shot-rebuild-2026-10-29)).
 
 ## 0. Prerequisites
 
 | Check | How | Expected |
 |---|---|---|
 | Quotas | `openstack quota show --usage` | room for 16 instances, 3 load balancers plus the entry point's, one root volume per instance **plus one per group** for rolling replacements |
-| Node image (platform only) | [images/kubernetes-node](../images/kubernetes-node/README.md) | private image `ubuntu-2404-kube-<version>` active |
+| Node image (platform only) | [images/kubernetes-node](../../images/kubernetes-node/README.md) | private image `ubuntu-2404-kube-<version>` active |
 | Cluster credential | application credential `member` + `load-balancer_member`, as a `clouds.yaml` entry renamed `openstack` | file ready, never in Terraform |
 | Your address | the address the cloud sees for you (often a router address, not your workstation's) | in `admin.sources` and `bastion.ssh_cidrs` of every stack |
 | Capacity per host | ask the operator | the two edge instances are in hard anti-affinity: replacing one needs room on **another host than the other's**, not only quota. On a cloud with few hosts, remove the bootstrap instance (step 4b) before publishing routes |
@@ -51,7 +51,7 @@ Each step ends with the output of a real run, folded (anonymised and condensed: 
 Create it **first**: the tenants admit its address on their metrics ports, and a recreated collector gets a new address.
 
 ```bash
-cd tests/integration/collector && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd tests/fixtures/collector && tofu init && tofu apply && tofu plan -detailed-exitcode
 tofu output -json collector_cidrs    # into monitoring.collector_cidrs of every stack
 ```
 
@@ -64,7 +64,7 @@ tofu output -json collector_cidrs    # into monitoring.collector_cidrs of every 
 <summary>Output: test collector, then its address copied into the stacks</summary>
 
 ```console
-$ cd tests/integration/collector && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd tests/fixtures/collector && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   <= data.openstack_networking_router_v2.monitoring
   + module.collector.module.instance["t1-collector"].openstack_blockstorage_volume_v3.boot[0]
   + module.collector.module.instance["t1-collector"].openstack_compute_instance_v2.this
@@ -86,10 +86,10 @@ $ cd tests/integration/collector && tofu init -upgrade >/dev/null && tofu apply 
 Plan: 17 to add, 0 to change, 0 to destroy.
 Apply complete! Resources: 17 added, 0 changed, 0 destroyed.
 No changes. Your infrastructure matches the configuration.
-$ CIDRS=$(tofu -chdir=tests/integration/collector output -json collector_cidrs); echo $CIDRS
+$ CIDRS=$(tofu -chdir=tests/fixtures/collector output -json collector_cidrs); echo $CIDRS
 ["198.51.100.10/32"]
-$ sed -i "s|collector_cidrs = \[[^]]*\]|collector_cidrs = $CIDRS|" stacks/20-public-edge/terraform.tfvars stacks/30-tenants/*/terraform.tfvars
-$ grep -h collector_cidrs stacks/20-public-edge/terraform.tfvars stacks/30-tenants/*/terraform.tfvars
+$ sed -i "s|collector_cidrs = \[[^]]*\]|collector_cidrs = $CIDRS|" stacks/shared/entry-point/terraform.tfvars stacks/tenants/*/terraform.tfvars
+$ grep -h collector_cidrs stacks/shared/entry-point/terraform.tfvars stacks/tenants/*/terraform.tfvars
 monitoring = { dns_zone = "mon.example.org.", collector_cidrs = ["198.51.100.10/32"] }
 monitoring = { dns_zone = "mon.example.org.", collector_cidrs = ["198.51.100.10/32"] }
 monitoring = { dns_zone = "mon.example.org.", collector_cidrs = ["198.51.100.10/32"] }
@@ -101,7 +101,7 @@ monitoring = { dns_zone = "mon.example.org.", collector_cidrs = ["198.51.100.10/
 ## 2. Public entry point
 
 ```bash
-cd stacks/20-public-edge && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd stacks/shared/entry-point && tofu init && tofu apply && tofu plan -detailed-exitcode
 ```
 
 | Checkpoint | How | If it fails |
@@ -116,7 +116,7 @@ DNS records are the slowest resources: from 10 to 40 s normally, several minutes
 <summary>Output: entry point: plan, apply, empty plan, cloud-init on both instances</summary>
 
 ```console
-$ cd stacks/20-public-edge && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd stacks/shared/entry-point && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   <= data.openstack_networking_router_v2.svc_public
   + module.edge.openstack_compute_servergroup_v2.this["t1-edge"]
   + module.edge.openstack_networking_secgroup_rule_v2.cross_group["t1-edge-proxy/ssh-from-bastion"]
@@ -181,8 +181,8 @@ $ cd stacks/20-public-edge && tofu init -upgrade >/dev/null && tofu apply -auto-
 Plan: 60 to add, 0 to change, 0 to destroy.
 Apply complete! Resources: 60 added, 0 changed, 0 destroyed.
 No changes. Your infrastructure matches the configuration.
-$ BASTION=$(tofu -chdir=stacks/20-public-edge output -raw bastion)
-$ for ip in $(tofu -chdir=stacks/20-public-edge output -json instances | jq -r ".[]"); do ssh -F ssh.cfg -J $BASTION $ip "hostname; cloud-init status --wait"; done
+$ BASTION=$(tofu -chdir=stacks/shared/entry-point output -raw bastion)
+$ for ip in $(tofu -chdir=stacks/shared/entry-point output -json instances | jq -r ".[]"); do ssh -F ssh.cfg -J $BASTION $ip "hostname; cloud-init status --wait"; done
 t1-edge-1
 status: done
 t1-edge-2
@@ -196,7 +196,7 @@ status: done
 Independent of each other; run them in parallel.
 
 ```bash
-for s in stacks/30-tenants/web stacks/30-tenants/isolated stacks/30-tenants/platform; do
+for s in stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
   (cd $s && tofu init && tofu apply -auto-approve && tofu plan -detailed-exitcode) &
 done; wait
 ```
@@ -212,7 +212,7 @@ Root volumes created from the image take most of the time (about 80 s each on a 
 <summary>Output: stack web</summary>
 
 ```console
-$ cd stacks/30-tenants/web && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd stacks/tenants/vm && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   + module.web.openstack_compute_servergroup_v2.this["t1-web"]
   + module.web.openstack_networking_secgroup_rule_v2.cross_group["t1-web-https/ssh-from-bastion"]
   + module.web.module.instance["t1-web-1"].openstack_blockstorage_volume_v3.boot[0]
@@ -264,7 +264,7 @@ $ cd stacks/30-tenants/web && tofu init -upgrade >/dev/null && tofu apply -auto-
 Plan: 48 to add, 0 to change, 0 to destroy.
 Apply complete! Resources: 48 added, 0 changed, 0 destroyed.
 No changes. Your infrastructure matches the configuration.
-$ BASTION=$(tofu -chdir=stacks/30-tenants/web output -raw bastion)
+$ BASTION=$(tofu -chdir=stacks/tenants/vm output -raw bastion)
 ```
 
 </details>
@@ -273,7 +273,7 @@ $ BASTION=$(tofu -chdir=stacks/30-tenants/web output -raw bastion)
 <summary>Output: stack isolated</summary>
 
 ```console
-$ cd stacks/30-tenants/isolated && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd stacks/tenants/isolated && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   + module.isolated.openstack_networking_secgroup_rule_v2.cross_group["t1-isolated-workload/ssh-from-bastion"]
   + module.isolated.module.instance["t1-isolated-1"].openstack_blockstorage_volume_v3.boot[0]
   + module.isolated.module.instance["t1-isolated-1"].openstack_compute_instance_v2.this
@@ -305,7 +305,7 @@ $ cd stacks/30-tenants/isolated && tofu init -upgrade >/dev/null && tofu apply -
 Plan: 28 to add, 0 to change, 0 to destroy.
 Apply complete! Resources: 28 added, 0 changed, 0 destroyed.
 No changes. Your infrastructure matches the configuration.
-$ BASTION=$(tofu -chdir=stacks/30-tenants/isolated output -raw bastion)
+$ BASTION=$(tofu -chdir=stacks/tenants/isolated output -raw bastion)
 ```
 
 </details>
@@ -314,7 +314,7 @@ $ BASTION=$(tofu -chdir=stacks/30-tenants/isolated output -raw bastion)
 <summary>Output: platform stack</summary>
 
 ```console
-$ cd stacks/30-tenants/platform && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd stacks/tenants/kubernetes && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   + openstack_networking_floatingip_v2.ingress
   + openstack_networking_floatingip_v2.prometheus[0]
   + module.platform.openstack_compute_servergroup_v2.this["t1-platform-control-plane"]
@@ -356,17 +356,17 @@ No changes. Your infrastructure matches the configuration.
 <summary>Output: checkpoints: cloud-init on every instance, load balancer members</summary>
 
 ```console
-$ BASTION=$(tofu -chdir=stacks/30-tenants/web output -raw bastion)
-$ for ip in $(tofu -chdir=stacks/30-tenants/web output -json instances | jq -r '.[]'); do ssh -F ssh.cfg -o ConnectionAttempts=10 -J $BASTION $ip 'hostname; cloud-init status --wait'; done
+$ BASTION=$(tofu -chdir=stacks/tenants/vm output -raw bastion)
+$ for ip in $(tofu -chdir=stacks/tenants/vm output -json instances | jq -r '.[]'); do ssh -F ssh.cfg -o ConnectionAttempts=10 -J $BASTION $ip 'hostname; cloud-init status --wait'; done
 t1-web-1
 ......................................................................status: done
 t1-web-2
 status: done
-$ BASTION=$(tofu -chdir=stacks/30-tenants/isolated output -raw bastion)
-$ for ip in $(tofu -chdir=stacks/30-tenants/isolated output -json instances | jq -r '.[]'); do ssh -F ssh.cfg -o ConnectionAttempts=10 -J $BASTION $ip 'hostname; cloud-init status --wait'; done
+$ BASTION=$(tofu -chdir=stacks/tenants/isolated output -raw bastion)
+$ for ip in $(tofu -chdir=stacks/tenants/isolated output -json instances | jq -r '.[]'); do ssh -F ssh.cfg -o ConnectionAttempts=10 -J $BASTION $ip 'hostname; cloud-init status --wait'; done
 t1-isolated-1
 status: done
-$ B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap); ssh -F ssh.cfg -o ConnectionAttempts=10 $B "hostname; cloud-init status --wait"
+$ B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap); ssh -F ssh.cfg -o ConnectionAttempts=10 $B "hostname; cloud-init status --wait"
 t1-platform-bootstrap
 status: done
 $ OS_CLOUD=demo python3 -c "import openstack; c=openstack.connect(); lb=c.load_balancer.find_load_balancer(\"t1-edge\"); [print(p.name, m.address, m.operating_status) for p in c.load_balancer.pools(loadbalancer_id=lb.id) for m in c.load_balancer.members(p)]"
@@ -381,7 +381,7 @@ t1-edge-https 10.20.0.108 ONLINE
 ## 4. Cluster
 
 ```bash
-B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap)
+B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
 scp clouds.yaml ops@$B:/tmp/clouds.yaml; scp cacert.pem ops@$B:/tmp/cacert.pem   # private CA only
 ssh ops@$B 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem'
 ssh -t ops@$B 'cloud-init status --wait; sudo /opt/platform/create-cluster.sh'
@@ -392,14 +392,14 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 |---|---|---|
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
-| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicates after the move block later updates; see [testing](testing.md#one-shot-rebuild-2026-10-29) before deleting any (deleting one uninstalls the release) |
+| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicates after the move block later updates; see [testing](../concepts/test-results.md#one-shot-rebuild-2026-10-29) before deleting any (deleting one uninstalls the release) |
 | Services on the stack's addresses | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output routes` and `tofu output prometheus` | another address means the requested one was not available |
 
 <details>
 <summary>Output: create-cluster.sh, then nodes, chart and release proxies, Services</summary>
 
 ```console
-$ B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap)
+$ B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
 $ scp -F ssh.cfg -q cluster-clouds.yaml $B:/tmp/clouds.yaml && scp -F ssh.cfg -q cacert.pem $B:/tmp/cacert.pem
 $ ssh -F ssh.cfg $B "sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem"
 $ ssh -F ssh.cfg -t $B sudo /opt/platform/create-cluster.sh
@@ -632,10 +632,10 @@ traefik      traefik             LoadBalancer   10.102.158.110   198.51.100.1   
 
 ### 4b. Remove the bootstrap instance
 
-The cluster manages itself: the bootstrap instance is only needed again for teardown ([ADR-0002](adr/0002-platform-kubernetes.md), D3). Removing it frees an instance on the cloud.
+The cluster manages itself: the bootstrap instance is only needed again for teardown ([ADR-0002](../adr/0002-platform-kubernetes.md), D3). Removing it frees an instance on the cloud.
 
 ```bash
-tofu -chdir=stacks/30-tenants/platform apply -var bootstrap=false   # or set it in terraform.tfvars
+tofu -chdir=stacks/tenants/kubernetes apply -var bootstrap=false   # or set it in terraform.tfvars
 ```
 
 Checkpoint: 5 resources destroyed, the cluster unaffected (`kubectl get nodes`).
@@ -644,7 +644,7 @@ Checkpoint: 5 resources destroyed, the cluster unaffected (`kubectl get nodes`).
 <summary>Output: bootstrap instance removed, then route publication (steps 4b and 6)</summary>
 
 ```console
-$ tofu -chdir=stacks/30-tenants/platform apply -auto-approve -var bootstrap=false
+$ tofu -chdir=stacks/tenants/kubernetes apply -auto-approve -var bootstrap=false
   - module.platform.module.instance["t1-platform-bootstrap"].openstack_blockstorage_volume_v3.boot[0]
   - module.platform.module.instance["t1-platform-bootstrap"].openstack_compute_instance_v2.this
   - module.platform.module.instance["t1-platform-bootstrap"].openstack_networking_floatingip_associate_v2.this["main"]
@@ -694,7 +694,7 @@ routes published: apps.platform.example.org, site-a.example.org, site-b.example.
 ## 5. Intranet demonstration service
 
 ```bash
-cd tests/integration/intranet-service && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd tests/fixtures/intranet-service && tofu init && tofu apply && tofu plan -detailed-exitcode
 ```
 
 Checkpoint: empty plan. Apply it after the platform stack: it reads the platform's intranet router.
@@ -703,7 +703,7 @@ Checkpoint: empty plan. Apply it after the platform stack: it reads the platform
 <summary>Output: intranet demonstration service</summary>
 
 ```console
-$ cd tests/integration/intranet-service && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
+$ cd tests/fixtures/intranet-service && tofu init -upgrade >/dev/null && tofu apply -auto-approve && tofu plan -detailed-exitcode; cd $R
   + module.service.module.instance["t1-intranet-service"].openstack_compute_instance_v2.this
   + module.service.module.instance["t1-intranet-service"].openstack_networking_floatingip_associate_v2.this["main"]
   + module.service.module.instance["t1-intranet-service"].openstack_networking_floatingip_v2.this["main"]
@@ -727,7 +727,7 @@ No changes. Your infrastructure matches the configuration.
 ## 6. Route publication
 
 ```bash
-OS_CLOUD=<entry of stack 20> scripts/publish-routes.sh
+OS_CLOUD=<entry of the entry point's project> scripts/publish-routes.sh
 ```
 
 | Checkpoint | If it fails |
@@ -737,31 +737,31 @@ OS_CLOUD=<entry of stack 20> scripts/publish-routes.sh
 ## 7. Acceptance
 
 ```bash
-kubectl --kubeconfig platform.kubeconfig apply -f stacks/30-tenants/platform/demo/whoami.yaml
-LB=$(tofu -chdir=stacks/20-public-edge output -json load_balancer | jq -r .floating_ip)
+kubectl --kubeconfig platform.kubeconfig apply -f stacks/tenants/kubernetes/demo/whoami.yaml
+LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .floating_ip)
 for i in $(seq 12); do curl -sk --resolve apps.example.org:443:$LB https://apps.example.org/ | grep X-Real-Ip; done | sort | uniq -c
-python3 tests/reachability/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
+python3 tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
 ```
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
-| HTTPS through the entry point | 12 answers, all with the client's address | no answer: members (step 6), routes (`stacks/20-public-edge/routes.auto.tfvars.json`), Traefik Service (step 4) |
+| HTTPS through the entry point | 12 answers, all with the client's address | no answer: members (step 6), routes (`stacks/shared/entry-point/routes.auto.tfvars.json`), Traefik Service (step 4) |
 | reachability matrix | every row as expected (43 with `platform`) | collector rows: step 1; one instance only: its cloud-init (step 2) |
 
 <details>
 <summary>Output: acceptance: HTTPS with the client address, matrix 43/43</summary>
 
 ```console
-$ kubectl apply -f stacks/30-tenants/platform/demo/whoami.yaml && kubectl -n demo rollout status deploy/whoami
+$ kubectl apply -f stacks/tenants/kubernetes/demo/whoami.yaml && kubectl -n demo rollout status deploy/whoami
 namespace/demo unchanged
 deployment.apps/whoami unchanged
 service/whoami unchanged
 httproute.gateway.networking.k8s.io/whoami configured
 deployment "whoami" successfully rolled out
-$ LB=$(tofu -chdir=stacks/20-public-edge output -json load_balancer | jq -r .floating_ip)
+$ LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .floating_ip)
 $ for i in $(seq 12); do curl -sk --resolve apps.platform.example.org:443:$LB https://apps.platform.example.org/ | grep X-Real-Ip; done | sort | uniq -c
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/reachability/check.py --key ~/.ssh/id_ed25519 --platform-kubeconfig $KUBECONFIG
+$ python3 tests/isolation/check.py --key ~/.ssh/id_ed25519 --platform-kubeconfig $KUBECONFIG
 from                   to                                                    port  expected actual
 test runner            entry point (public IP)                                443  open     open     ok
 test runner            entry point (public IP)                                 80  open     open     ok
@@ -814,14 +814,14 @@ isolated t1-isolated-1 intranet service 192.0.2.12                           808
 ## 8. Teardown
 
 ```bash
-tofu -chdir=stacks/30-tenants/platform apply -var bootstrap=true     # the bootstrap instance again
-B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap)    # then copy clouds.yaml as in step 4
+tofu -chdir=stacks/tenants/kubernetes apply -var bootstrap=true     # the bootstrap instance again
+B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # then copy clouds.yaml as in step 4
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
-tofu -chdir=stacks/30-tenants/platform output -json manifests | jq -r '."cluster.yaml"' \
+tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.yaml"' \
   | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig platform.kubeconfig apply -f -
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
-for s in tests/integration/intranet-service stacks/30-tenants/platform tests/integration/collector \
-         stacks/30-tenants/isolated stacks/30-tenants/web stacks/20-public-edge; do
+for s in tests/fixtures/intranet-service stacks/tenants/kubernetes tests/fixtures/collector \
+         stacks/tenants/isolated stacks/tenants/vm stacks/shared/entry-point; do
   tofu -chdir=$s destroy -auto-approve
 done
 ```
@@ -834,8 +834,8 @@ done
 <summary>Output: bootstrap admitted on the API, then delete-cluster.sh</summary>
 
 ```console
-$ B=$(tofu -chdir=stacks/30-tenants/platform output -raw bootstrap)
-$ tofu -chdir=stacks/30-tenants/platform output -json manifests | jq -r ".\"cluster.yaml\"" | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl apply -f -
+$ B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
+$ tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r ".\"cluster.yaml\"" | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl apply -f -
 cluster.cluster.x-k8s.io/platform configured
 $ sleep 60   # the API load balancer takes the new sources
 $ ssh -F ssh.cfg -t $B sudo /opt/platform/delete-cluster.sh
@@ -949,22 +949,22 @@ Cluster platform deleted: destroy the stack now.
 <summary>Output: destroy of the stacks, in order</summary>
 
 ```console
-$ tofu -chdir=tests/integration/intranet-service destroy -auto-approve
+$ tofu -chdir=tests/fixtures/intranet-service destroy -auto-approve
 Plan: 0 to add, 0 to change, 13 to destroy.
 Destroy complete! Resources: 13 destroyed.
-$ tofu -chdir=stacks/30-tenants/platform destroy -auto-approve
+$ tofu -chdir=stacks/tenants/kubernetes destroy -auto-approve
 Plan: 0 to add, 0 to change, 30 to destroy.
 Destroy complete! Resources: 30 destroyed.
-$ tofu -chdir=stacks/30-tenants/isolated destroy -auto-approve
+$ tofu -chdir=stacks/tenants/isolated destroy -auto-approve
 Plan: 0 to add, 0 to change, 28 to destroy.
 Destroy complete! Resources: 28 destroyed.
-$ tofu -chdir=stacks/30-tenants/web destroy -auto-approve
+$ tofu -chdir=stacks/tenants/vm destroy -auto-approve
 Plan: 0 to add, 0 to change, 48 to destroy.
 Destroy complete! Resources: 48 destroyed.
-$ tofu -chdir=tests/integration/collector destroy -auto-approve
+$ tofu -chdir=tests/fixtures/collector destroy -auto-approve
 Plan: 0 to add, 0 to change, 17 to destroy.
 Destroy complete! Resources: 17 destroyed.
-$ tofu -chdir=stacks/20-public-edge destroy -auto-approve
+$ tofu -chdir=stacks/shared/entry-point destroy -auto-approve
 Plan: 0 to add, 0 to change, 60 to destroy.
 Destroy complete! Resources: 60 destroyed.
 ```

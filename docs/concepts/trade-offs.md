@@ -1,6 +1,6 @@
 # Trade-offs
 
-Every choice of this architecture has a cost. This document states each one: what was chosen, why, what it costs, and when the alternative is the better choice. The decisions themselves are recorded in [ADR-0001](adr/0001-reference-architecture.md).
+Every choice of this architecture has a cost. This document states each one: what was chosen, why, what it costs, and when the alternative is the better choice. The decisions themselves are recorded in [ADR-0001](../adr/0001-reference-architecture.md).
 
 | # | Topic | Choice |
 |---|---|---|
@@ -141,7 +141,7 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** It matches the primary audience, who consume a cloud they do not administer, and it lets layers 20 and 30 exist before cloud-baseline.
 
-**Cost.** The repository cannot build its own prerequisites: the [layer 10 contract](architecture.md#layer-10-contract) must be met by hand.
+**Cost.** The repository cannot build its own prerequisites: the [layer 10 contract](../reference/planes-contract.md) must be met by hand.
 
 **Next.** cloud-baseline adds `stacks/10-shared-planes` without changing layers 20 and 30.
 
@@ -151,7 +151,7 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** Many clouds have a single internal network. A tenant joining the intranet appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
 
-**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see [testing.md](testing.md)).
+**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see [testing.md](test-results.md)).
 
 **Choose two networks when** you can: the administration network then admits nobody but operators by construction.
 
@@ -183,7 +183,7 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 ## Evidence
 
-The architecture is tested on a real cloud, with the findings that shaped several choices above: [testing.md](testing.md).
+The architecture is tested on a real cloud, with the findings that shaped several choices above: [testing.md](test-results.md).
 
 
 The module this architecture builds on is tested on a real cloud: apply, empty plan after apply, destroy. Results are in the module's [testing report](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/testing.md).

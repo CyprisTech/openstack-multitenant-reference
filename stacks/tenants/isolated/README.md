@@ -1,4 +1,4 @@
-# Stack 30 — tenant `isolated`
+# Tenant type `isolated`
 
 A workload with no public exposure and no path to the other tenants ([ADR-0001](../../../docs/adr/0001-reference-architecture.md), D5):
 

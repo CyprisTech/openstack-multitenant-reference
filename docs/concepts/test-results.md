@@ -1,6 +1,6 @@
 # Testing
 
-Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. The tenants of the scenario run in one test project, each stack with its own `clouds.yaml` entry (see [ADR-0001](adr/0001-reference-architecture.md), D1).
+Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. The tenants of the scenario run in one test project, each stack with its own `clouds.yaml` entry (see [ADR-0001](../adr/0001-reference-architecture.md), D1).
 
 ## Environment
 
@@ -46,7 +46,7 @@ Findings:
 
 ### Two floating IPs on one port (2026-10-27)
 
-Test configuration: [`tests/integration/dual-floating-ip`](../tests/integration/dual-floating-ip/README.md). Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
+Test configuration: [`tests/integration/dual-floating-ip`](../../tests/integration/dual-floating-ip/README.md). Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
 
 | Check | Result |
 |---|---|
@@ -186,7 +186,7 @@ Findings, fixed in `delete-cluster.sh` and the READMEs (the scripted fixes run f
 
 ### One-shot rebuild (2026-10-29)
 
-The whole environment rebuilt from an empty project, as a user would: published module (`v0.1.2` from GitHub), fresh `tofu init` in every stack, node image kept from the previous cycle. Steps and checkpoints: [test procedure](test-procedure.md).
+The whole environment rebuilt from an empty project, as a user would: published module (`v0.1.2` from GitHub), fresh `tofu init` in every stack, node image kept from the previous cycle. Steps and checkpoints: [test procedure](../reference/test-procedure.md).
 
 | Step | Wall-clock | Result |
 |---|---|---|
@@ -210,7 +210,7 @@ Findings:
 
 ### Teardown and rebuild with the fixes (2026-10-29)
 
-A second full cycle, from the branch with the fixes of the first rebuild, following the [test procedure](test-procedure.md) step by step.
+A second full cycle, from the branch with the fixes of the first rebuild, following the [test procedure](../reference/test-procedure.md) step by step.
 
 | Step | Wall-clock | Result |
 |---|---|---|
