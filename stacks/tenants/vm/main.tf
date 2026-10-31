@@ -7,35 +7,21 @@
 # with a DNS-01 or TLS-ALPN-01 challenge.
 
 locals {
-  prefix    = "${var.site}-web"
+  prefix = "${var.site}-web"
+
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
 
-  # Addresses of the entry point on svc_public, read from its router by name (ADR-0001, D1
-  # and D9): only they may reach the published port, and only they are trusted to send a
-  # PROXY protocol header.
-  edge_sources = [for ip in data.openstack_networking_router_v2.edge_svc_public.external_fixed_ip : ip.ip_address]
+  # Ranges of the entry point on svc_public (ADR-0001, D1 and D9): only they may reach the
+  # published port, and only they are trusted to send a PROXY protocol header. Given by the
+  # entry point's output, or read from its router when it is in the same project.
+  edge_sources = var.edge_sources != null ? var.edge_sources : [
+    for ip in data.openstack_networking_router_v2.edge_svc_public[0].external_fixed_ip : "${ip.ip_address}/32"
+  ]
 
-  https_rules = {
-    for i, ip in local.edge_sources : "https-from-edge-${i}" => {
-      direction = "ingress", protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = "${ip}/32"
-    }
-  }
-  # Metrics ports, from the collector only.
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [var.planes.monitoring.cidr])
-  metrics_rules = {
-    for pair in setproduct(var.monitoring.metrics_ports, local.metrics_sources) : "metrics-${pair[0]}-${replace(pair[1], "/", "_")}" => {
-      direction = "ingress", protocol = "tcp", port_min = pair[0], port_max = pair[0], remote_ip_prefix = pair[1]
-    }
-  }
+  # Sources of the metrics scrapes: the collector only.
+  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
 
   bastion_name = "${local.prefix}-bastion"
-  with_bastion = var.bastion != null
-
-  ssh_rules = {
-    for i, cidr in var.admin.ssh_cidrs : "ssh-${i}" => {
-      direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-    }
-  }
 
   nginx_conf = <<-EOT
     server {
@@ -43,8 +29,8 @@ locals {
         ssl_certificate     /etc/nginx/tls/cert.pem;
         ssl_certificate_key /etc/nginx/tls/key.pem;
 
-    %{for ip in local.edge_sources~}
-        set_real_ip_from ${ip};
+    %{for cidr in local.edge_sources~}
+        set_real_ip_from ${cidr};
     %{endfor~}
         real_ip_header proxy_protocol;
 
@@ -59,41 +45,58 @@ locals {
 }
 
 data "openstack_networking_router_v2" "edge_svc_public" {
-  name = "${var.site}-edge-svc-public"
+  count = var.edge_sources == null ? 1 : 0
+  name  = "${var.site}-edge-svc-public"
 }
 
-module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
-  count  = local.with_bastion ? 1 : 0
+# Who may reach the web instances.
+module "admission" {
+  source = "../../../modules/admission"
 
-  hostname = local.bastion_name
-  users = {
-    for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
+  allow = {
+    https-from-edge = { ports = [443], sources = local.edge_sources }
+    metrics         = { ports = var.monitoring.metrics_ports, sources = local.metrics_sources }
+    ssh             = { ports = [22], sources = var.admin.ssh_cidrs }
   }
+}
 
-  # The second interface (on the web network) must not take the routes and resolvers that
-  # DHCP pushes for the web instances: the bastion keeps a single default route through the
-  # administration network.
-  write_files = {
-    "/etc/netplan/60-second-interface.yaml" = {
-      permissions = "0600"
-      content     = <<-EOT
-        network:
-          version: 2
-          ethernets:
-            ens4:
-              dhcp4: true
-              dhcp4-overrides:
-                use-routes: false
-                use-dns: false
-      EOT
-    }
+module "bastion" {
+  source = "../../../modules/bastion"
+
+  name          = local.bastion_name
+  bastion       = var.bastion
+  admin_network = "${local.prefix}-admin"
+  default_cidr  = "10.31.0.0/28"
+  network       = local.prefix
+  port          = "web"
+  users         = var.admin.users
+  instance = {
+    az     = var.az
+    image  = var.image
+    flavor = var.flavor
+    boot   = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
   }
-  runcmd = ["netplan apply"]
+  mtu             = var.network_mtu
+  dns_nameservers = var.dns_nameservers
+}
+
+# How the stack joins the planes (ADR-0003, D2): from shared/planes when given, otherwise
+# operator planes in gateway mode.
+module "planes" {
+  source = "../../../modules/plane-attachment"
+
+  planes     = ["svc_public", "monitoring"]
+  attachment = var.plane_attachment
+  instances  = local.instances
+  exposure = {
+    primary = "svc_public"
+    extra   = ["monitoring"]
+    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
+  }
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -125,20 +128,16 @@ module "cloudinit" {
 }
 
 module "web" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
 
   tenant = {
     existing = {
       dns_zones = var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } }
       networks = merge({
         egress     = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
-        svc_public = { name = var.planes.svc_public.network, subnets = { main = { name = var.planes.svc_public.subnet } } }
-        monitoring = { name = var.planes.monitoring.network, subnets = { main = { name = var.planes.monitoring.subnet } } }
-        }, {
-        for k in(local.with_bastion ? ["admin"] : []) : k => {
-          name = try(var.bastion.external_network.network, ""), subnets = { main = { name = try(var.bastion.external_network.subnet, "") } }
-        }
-      })
+        svc_public = module.planes.networks.svc_public
+        monitoring = module.planes.networks.monitoring
+      }, module.bastion.existing_networks)
     }
 
     networks = merge({
@@ -149,45 +148,20 @@ module "web" {
         }
         routers = {
           egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
-          # The published addresses are floating IPs of this router on svc_public.
-          svc-public = {
-            external_network = "svc_public", internal_subnet = "main",
-            advertise_routes = [var.planes.svc_public.cidr]
-          }
-          monitoring = {
-            external_network = "monitoring", internal_subnet = "main",
-            advertise_routes = [var.planes.monitoring.cidr]
-          }
+          # Gateway mode: the published addresses are floating IPs of this router on svc_public.
+          # Interface mode: the instances' own addresses, reached through the routes.
+          svc-public = module.planes.routers["svc-public"]
+          monitoring = module.planes.routers["monitoring"]
         }
       }
-      }, {
-      # Administration network of the bastion: its only router joins the administration network.
-      for k in(local.with_bastion ? ["${local.prefix}-admin"] : []) : k => {
-        mtu     = var.network_mtu
-        subnets = { main = { cidr = try(var.bastion.cidr, "10.31.0.0/28"), dns_nameservers = var.dns_nameservers } }
-        routers = { admin = { external_network = "admin", internal_subnet = "main", default_gateway = true } }
-      }
-    })
+    }, module.bastion.networks)
 
     security_groups = merge({
       "${local.prefix}-https" = {
         description = "Web instances: HTTPS from the public entry point only, SSH from the bastion"
-        rules = merge(local.https_rules, local.metrics_rules, local.ssh_rules, {
-          for k in(local.with_bastion ? ["ssh-from-bastion"] : []) : k => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_group = local.bastion_name
-          }
-        })
+        rules       = merge(module.admission.rules, module.bastion.ssh_rules)
       }
-      }, {
-      for k in(local.with_bastion ? [local.bastion_name] : []) : k => {
-        description = "Bastion: SSH from the administration sources"
-        rules = {
-          for i, cidr in try(var.bastion.ssh_cidrs, []) : "ssh-${i}" => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-          }
-        }
-      }
-    })
+    }, module.bastion.security_groups)
 
     server_groups = {
       (local.prefix) = { policy = var.server_group_policy }
@@ -207,43 +181,14 @@ module "web" {
             network         = local.prefix
             subnet          = "main"
             security_groups = ["${local.prefix}-https"]
-            floating_ip     = { pool = "svc_public" }
-            # Exposure to the monitoring collector (ADR-0001, D2).
-            extra_floating_ips = {
-              monitoring = {
-                pool = "monitoring"
-                dns  = var.monitoring.dns_zone == null ? [] : [{ name = name, zone = "monitoring" }]
-              }
-            }
+            # Exposure on the planes (ADR-0001, D2): floating IPs in gateway mode, the
+            # instance's own address in interface mode.
+            floating_ip        = module.planes.ports[name].floating_ip
+            extra_floating_ips = module.planes.ports[name].extra_floating_ips
+            dns                = module.planes.ports[name].dns
           }
         }
       }
-      }, {
-      for name in(local.with_bastion ? [local.bastion_name] : []) : name => {
-        az           = var.az
-        flavor       = coalesce(try(var.bastion.flavor, null), var.flavor)
-        image        = var.image
-        boot         = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
-        server_group = null
-        user_data    = module.cloudinit_bastion[0].rendered
-        labels       = ["bastion"]
-        ports = {
-          # Primary port: default route and floating IP on the administration network.
-          admin = {
-            network         = "${local.prefix}-admin"
-            subnet          = "main"
-            security_groups = [local.bastion_name]
-            floating_ip     = { pool = "admin" }
-          }
-          # Second port on the web network, without a gateway of its own.
-          web = {
-            network         = local.prefix
-            subnet          = "main"
-            security_groups = [local.bastion_name]
-            floating_ip     = null
-          }
-        }
-      }
-    })
+    }, module.bastion.instances)
   }
 }

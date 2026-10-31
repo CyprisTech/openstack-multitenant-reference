@@ -8,11 +8,6 @@ flavor           = "m1.medium-nodisk" # bootstrap instance: kind runs there
 boot_volume_size = 20
 
 egress_network = { network = "public", subnet = "public" }
-planes = {
-  svc_public = { network = "svc_public", subnet = "svc_public", cidr = "198.51.100.0/24" }
-  monitoring = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
-  intranet   = { network = "intranet", subnet = "intranet", cidr = "192.0.2.0/24" }
-}
 # admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the intranet
 
 network_mtu     = 1362
@@ -36,3 +31,10 @@ cluster = {
 }
 
 monitoring = { dns_zone = "mon.site-a.example.org.", collector_cidrs = ["203.0.113.10/32"] }
+
+# Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
+edge_sources = ["198.51.100.5/32"]
+
+# How this stack joins the planes: its entry of the attachments output of stack shared/planes,
+# whether the planes are the operator's or built in a hub project. For example:
+#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .platform.planes}' > planes.auto.tfvars.json

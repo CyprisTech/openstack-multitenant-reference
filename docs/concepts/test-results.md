@@ -1,6 +1,6 @@
 # Testing
 
-Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. The tenants of the scenario run in one test project, each stack with its own `clouds.yaml` entry (see [ADR-0001](../adr/0001-reference-architecture.md), D1).
+Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Until 2026-10-29 the scenario ran in one test project; since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-plane-provisioning.md)), in both plane modes.
 
 ## Environment
 
@@ -231,3 +231,23 @@ Findings:
 2. **Capacity per host, not only quota.** The edge instances are in hard anti-affinity. Replacing one needs room on a host other than the other's; on the three-host test cloud, the hosts left were full and Nova answered `No valid host was found`. The earlier cycles fitted by chance. Removing the bootstrap instance, as ADR-0002 plans once the cluster manages itself, freed the room. The test procedure now removes it before publishing routes and lists capacity per host in the prerequisites.
 3. **Duplicate release proxies are intermittent:** none this time, three charts out of seven in the first rebuild.
 4. **Designate:** the slow records are in the shared zone (about 9 minutes, zone `PENDING UPDATE`), not in the project's own zone (68 s).
+
+### One project per stack, both plane modes (2026-10-31)
+
+The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-plane-provisioning.md) prescribes — hub (planes only), shared services (collector, intranet service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
+
+| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
+|---|---|---|---|---|---|
+| Gateway mode (operator planes) | collector 81 s, entry point 4 min 13 s, `vm` 2 min 3 s, `isolated` 1 min 33 s, Kubernetes stack 9 min 33 s (DNS), cluster 18 min 11 s | ✅ 36/36, client address preserved | ✅ **45/45** | — (no transit router) | ✅ empty |
+| Interface mode, shared services in the hub project | cluster 17 min 20 s | ✅ 36/36 | ✅ 45/45 at the second run (see 2) | ✅ closed on 443, 22, 9100 | ✅ empty |
+| Interface mode, shared services in their own project (the recommended layout) | planes 11 s, collector 51 s, entry point 2 min 48 s, `vm` 1 min 39 s, `isolated` 1 min 33 s, Kubernetes stack 1 min 3 s, cluster 19 min 5 s | ✅ 36/36 | ✅ **45/45** at the first run | ✅ closed on 443, 22, 9100 | ✅ empty |
+
+Teardown: cluster 6 to 7 min, stacks 4 min; no leftover in any project.
+
+Findings:
+
+1. **What the interface mode relies on holds on this cloud.** A member shares a network by RBAC with given projects; a project cannot choose its address on a network it does not own (hence the transit router, the only fixed address); the plane's owner sees every port on it (the discovery of the attached routers' addresses); OVN routes a packet back out of the interface it came in (the transit router); Octavia members behind the plane work; the cloud controller manager gives an internal load balancer the fixed address requested in `loadBalancerIP` (the Kubernetes ingress and Prometheus at 10.24.0.10 and .11).
+2. **A first isolation run with 10 rows in error**, all from the `isolated` instance and all SSH banner timeouts — no probe gave a wrong result. The second run, minutes later, gave 45/45. Cause not identified; the procedure says to run the test again when a row is in error rather than wrong.
+3. **Renaming an attachment on the same project** fails the first apply of `shared/planes` (`DuplicateRbacPolicy`: the new policy is created before the old one is deleted); a second apply completes it. Documented in the stack's README.
+4. **Duplicate release proxies after `clusterctl move`** came back once (cloud controller manager and Traefik), without visible effect; none in the two other cycles. Still open, for the Kubernetes day-to-day work.
+5. **Routes pushed by DHCP reach the instances at lease renewal.** With `tenant_ranges` set from the start, the entry point's routes never change when a tenant is added; changing the aggregates later needs a lease renewal on the instances.

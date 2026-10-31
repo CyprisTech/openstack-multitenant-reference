@@ -35,14 +35,26 @@ variable "boot_volume_size" {
 }
 
 variable "isolated_cidr" {
-  description = "Range of the isolated network. It may overlap the ranges of other tenants: nothing routes between them."
+  description = "Range of the isolated network. With operator planes it may overlap the ranges of other tenants; on an interface plane it must not (shared/planes checks it)."
   type        = string
   default     = "10.22.0.0/24"
 }
 
-variable "monitoring_plane" {
-  description = "The monitoring plane (layer 10 contract): network and subnet names, and its range."
-  type        = object({ network = string, subnet = string, cidr = string })
+variable "plane_attachment" {
+  description = <<-EOT
+    The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),
+    keyed by plane: how its router joins each plane and how its instances are seen there,
+    whatever provides the plane (the operator, or a hub project).
+  EOT
+  type = map(object({
+    mode         = string
+    nat          = bool
+    cidr         = string
+    network_id   = string
+    network_name = string
+    subnet_id    = string
+    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+  }))
 }
 
 variable "dns_nameservers" {
@@ -91,8 +103,8 @@ variable "network_mtu" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the instances to the monitoring collector (ADR-0001, D2): every instance gets a
-    floating IP of the monitoring plane.
+    Exposure of the instance to the monitoring collector (ADR-0001, D2): a floating IP of the
+    monitoring plane in gateway mode, its own address in interface mode.
     - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
       instance is written for the collector's DNS service discovery; null writes no record.
     - metrics_ports: ports opened to the collector (node exporter by default).

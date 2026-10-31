@@ -54,12 +54,32 @@ variable "egress_network" {
   })
 }
 
-variable "planes" {
-  description = "Shared planes joined by the tenant (layer 10 contract): network and subnet names, and the range advertised by DHCP."
-  type = object({
-    svc_public = object({ network = string, subnet = string, cidr = string })
-    monitoring = object({ network = string, subnet = string, cidr = string })
-  })
+variable "plane_attachment" {
+  description = <<-EOT
+    The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),
+    keyed by plane: how its router joins each plane and how its instances are seen there,
+    whatever provides the plane (the operator, or a hub project).
+  EOT
+  type = map(object({
+    mode         = string
+    nat          = bool
+    cidr         = string
+    network_id   = string
+    network_name = string
+    subnet_id    = string
+    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+  }))
+}
+
+variable "edge_sources" {
+  description = <<-EOT
+    Ranges the entry point connects from on svc_public, in CIDR notation: output
+    svc_public_sources of stack shared/entry-point. Only they may reach the published port and
+    send a PROXY protocol header. null reads the entry point's router by name, which works only
+    when the entry point is in the same project.
+  EOT
+  type        = list(string)
+  default     = null
 }
 
 variable "domains" {

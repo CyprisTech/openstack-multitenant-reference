@@ -61,20 +61,49 @@ variable "egress_network" {
   type        = object({ network = string, subnet = string })
 }
 
-variable "planes" {
-  description = "Shared planes joined by the platform (layer 10 contract): network and subnet names, and the range advertised by DHCP."
+variable "plane_attachment" {
+  description = <<-EOT
+    The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),
+    keyed by plane: how its router joins each plane and how its instances are seen there,
+    whatever provides the plane (the operator, or a hub project).
+  EOT
+  type = map(object({
+    mode         = string
+    nat          = bool
+    cidr         = string
+    network_id   = string
+    network_name = string
+    subnet_id    = string
+    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+  }))
+}
+
+variable "edge_sources" {
+  description = "Ranges the entry point connects from on svc_public: output svc_public_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header."
+  type        = list(string)
+}
+
+variable "service_addresses" {
+  description = <<-EOT
+    Host numbers, in the cluster network, of the load balancers of the cluster Services on
+    interface planes: ingress (svc_public) and prometheus (monitoring). Neutron does not
+    allocate the first addresses of the cluster network to anything else (reserved below
+    reserved_hosts), so these addresses are known before the cluster exists.
+  EOT
   type = object({
-    svc_public = object({ network = string, subnet = string, cidr = string })
-    monitoring = object({ network = string, subnet = string, cidr = string })
-    intranet   = object({ network = string, subnet = string, cidr = string })
+    ingress        = optional(number, 10)
+    prometheus     = optional(number, 11)
+    reserved_hosts = optional(number, 32)
   })
+  default = {}
 }
 
 variable "admin_network" {
   description = <<-EOT
     Administration network carrying the floating IPs of the Kubernetes API and of the bootstrap
-    instance (ADR-0002, D6). null uses the intranet plane for this role: then admin.sources must
-    be specific addresses, never the range of the intranet.
+    instance (ADR-0002, D6). null uses the intranet plane for this role, which requires an
+    operator intranet plane (gateway mode): then admin.sources must be specific addresses, never
+    the range of the intranet.
   EOT
   type        = object({ network = string, subnet = string, cidr = string })
   default     = null

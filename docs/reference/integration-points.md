@@ -34,7 +34,7 @@ The components under `tests/fixtures` (a collector, an intranet service) only st
 |---|---|
 | Plane | `svc_public` |
 | Direction | The entry point connects to the tenants' backends |
-| Interface | Each tenant stack outputs `routes`: `{ "<domain>" = { backends = ["<address>:443", …] } }`; `scripts/publish-routes.sh` gathers them and applies the entry point |
+| Interface | Each tenant stack outputs `published_domains`: `{ "<domain>" = { backends = ["<address>:443", …] } }`; `scripts/publish-domains.sh` gathers them and applies the entry point |
 | What reaches the backend | The TLS stream untouched (SNI passthrough), preceded by a PROXY protocol v2 header with the client address |
 | Admitted | Backends accept HTTPS, and the PROXY header, only from the entry point's addresses on `svc_public`, read from its router (`<site>-edge-svc-public`) |
 | Tenant provides | Backends that terminate TLS for their domains and accept PROXY protocol v2 |

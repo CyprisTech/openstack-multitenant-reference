@@ -92,10 +92,16 @@
             app.kubernetes.io/name: traefik
       service:
         annotations:
+%{ if ingress_internal ~}
+          # Interface plane: no floating IP, the load balancer address in the cluster network
+          # (spec.loadBalancerIP) is published by the entry point through the transit router.
+          service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+%{ else ~}
           loadbalancer.openstack.org/floating-network-id: "${svc_public_id}"
           # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
           # Service is deleted.
           loadbalancer.openstack.org/keep-floatingip: "true"
+%{ endif ~}
           # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
           # header, which the TCP listener passes through. A second header from the load
           # balancer would break the TLS handshake.
@@ -145,8 +151,12 @@
 %{ if length(collectors) > 0 ~}
           type: LoadBalancer
           annotations:
+%{ if prometheus_internal ~}
+            service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+%{ else ~}
             loadbalancer.openstack.org/floating-network-id: "${monitoring_id}"
             loadbalancer.openstack.org/keep-floatingip: "true"
+%{ endif ~}
           loadBalancerIP: ${prometheus_ip}
           # The collector only: it federates this server (ADR-0002, D5).
           loadBalancerSourceRanges: ${jsonencode(collectors)}

@@ -30,26 +30,30 @@ flowchart LR
 - **No return route is needed**: the target answers the router's or the floating IP's address, which is on the plane.
 - **Tenant ranges may overlap**: they are never seen on the plane.
 
-## Mode 2 — Interface on the plane (shared private planes)
+## Mode 2 — Interface on the plane, through a transit router (shared private planes)
 
-The account holder creates the plane as a private network of a hub project and shares it with the tenant projects (Neutron RBAC, `access_as_shared`). It is not an external network: a tenant router can only join it with an interface.
+The account holder creates the plane as a private network of the hub project — a project that holds the network only — and shares it with the projects of the tenants and of the shared services (Neutron RBAC, `access_as_shared`). It is not an external network: a tenant router can only join it with an interface. Stack [`shared/planes`](../../stacks/shared/planes/README.md) does it.
 
 ```mermaid
 flowchart LR
-    T["Traefik 10.20.0.10"] --> RE["edge router<br/>interface on the plane: 192.0.2.5<br/>route 10.21.0.0/24 via 192.0.2.7"]
-    RE --> P["plane"] --> RW["web router<br/>interface on the plane: 192.0.2.7<br/>route 10.20.0.0/24 via 192.0.2.5"]
+    T["Traefik 10.20.0.10"] --> RE["edge router<br/>interface 192.0.2.181 (from Neutron)<br/>route 10.21.0.0/16 via 192.0.2.1"]
+    RE --> TR["transit router of the hub<br/>192.0.2.1 (fixed)<br/>10.20.0.0/24 via 192.0.2.181<br/>10.21.0.0/24 via 192.0.2.82"]
+    TR --> RW["web router<br/>interface 192.0.2.82 (from Neutron)<br/>route 10.20.0.0/24 via 192.0.2.1"]
     RW --> V["VM 10.21.0.15"]
 ```
 
-- **No translation**: the target sees the real address of the instance, in its tenant network. Admission rules can name the entry point's or the collector's instances precisely.
-- **No floating IP**: floating IPs only exist on external networks.
-- **Routes in both directions**: the router of the side that opens the connection gets a route to the target tenant's range through the target router's address on the plane, and the target tenant's router gets the route back. These are router routes (Neutron extra routes), generated from the stacks' outputs, like the routes of the entry point: no address is written by hand.
-- Routes are added only between tenants and the shared services (entry point, collector, internal services), **never between two tenants**.
-- **Tenant ranges must not overlap**, with each other or with the planes.
+- **No translation**: the target sees the real address of the instance, in its tenant network. Admission rules name the entry point's or the collector's range.
+- **No floating IP**: floating IPs only exist on external networks. Services published on the plane (a Kubernetes ingress, a federated Prometheus) use internal load balancers at fixed addresses of the tenant network.
+- **One fixed address per plane: the transit router's.** A project cannot choose its address on a network it does not own (Neutron policy `create_port:fixed_ips:ip_address`), so each attached router takes an address from Neutron; the hub, owner of the plane, places the transit router where it wants.
+- **Routes of the attached routers, known in advance**, all through the transit router. Each attachment has a **role per plane**: `shared` (the entry point on `svc_public`, the collector on `monitoring`) or `tenant` (a workload, or a target such as the entry point on `monitoring`). A tenant routes to the shared services of the plane; a shared service routes to the other shared services and to the tenants, through aggregates of their ranges when given. **Never between two tenants.** The routes reach the instances by DHCP, at lease renewal.
+- **Routes of the transit router, discovered.** The plane's owner sees every port on it: at each apply, `shared/planes` finds the address of each attached router and routes the attachment's range to it. OpenStack has no route propagation between projects: this apply is where it happens.
+- **Adding a tenant**: apply `shared/planes` (RBAC policy), the tenant's stack, then `shared/planes` again (route on the transit router). No shared service is applied again when the tenant's range is inside the aggregates.
+- **Tenant ranges must not overlap**, with each other or with the planes; `shared/planes` checks it.
+- **Limit**: Neutron caps the routes of a router (`max_routes`, 30 by default), so a transit router serves about 30 attachments per plane.
 
 ## What isolates tenants, in both modes
 
-The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point, the collector or the operators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds.
+The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point, the collector or the operators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
 
 ## The alternative not used: ports of the instances on the planes
 
@@ -71,5 +75,5 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 | Cloud | Planes are | Mode |
 |---|---|---|
 | Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for identifiable instances |
-| Public, planes built by the account holder | private networks shared by RBAC | 2 — interface, routes generated by the stacks |
+| Public, planes built by the account holder | private networks shared by RBAC | 2 — interface, through the hub's transit router |
 | Private, operator allows `enable_snat = false` | external networks | 1 without translation: real addresses, but return routes on the plane side; possible, not provided |

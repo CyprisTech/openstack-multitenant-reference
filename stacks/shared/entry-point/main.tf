@@ -3,60 +3,66 @@
 # routing by SNI without terminating TLS.
 
 locals {
-  prefix    = "${var.site}-edge"
+  prefix = "${var.site}-edge"
+
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
   members   = [for name in local.instances : "${name}.main"]
 
   # Traefik metrics (8082) and the metrics ports of the instances, from the collector only.
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [var.planes.monitoring.cidr])
-  metrics_rules = {
-    for pair in setproduct(distinct(concat([8082], var.monitoring.metrics_ports)), local.metrics_sources) : "metrics-${pair[0]}-${replace(pair[1], "/", "_")}" => {
-      direction = "ingress", protocol = "tcp", port_min = pair[0], port_max = pair[0], remote_ip_prefix = pair[1]
-    }
-  }
+  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
 
   bastion_name = "${local.prefix}-bastion"
-  with_bastion = var.bastion != null
 
-  ssh_rules = {
-    for i, cidr in var.admin.ssh_cidrs : "ssh-${i}" => {
-      direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-    }
+}
+
+# Who may reach the Traefik instances.
+module "admission" {
+  source = "../../../modules/admission"
+
+  allow = {
+    from-lb = { ports = [80, 443], sources = [var.edge_cidr] } # Octavia amphorae, on the edge network
+    metrics = { ports = concat([8082], var.monitoring.metrics_ports), sources = local.metrics_sources }
+    ssh     = { ports = [22], sources = var.admin.ssh_cidrs }
   }
 }
 
-module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
-  count  = local.with_bastion ? 1 : 0
+module "bastion" {
+  source = "../../../modules/bastion"
 
-  hostname = local.bastion_name
-  users = {
-    for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
+  name          = local.bastion_name
+  bastion       = var.bastion
+  admin_network = "${local.prefix}-admin"
+  default_cidr  = "10.32.0.0/28"
+  network       = local.prefix
+  port          = "edge"
+  users         = var.admin.users
+  instance = {
+    az     = var.az
+    image  = var.image
+    flavor = var.flavor
+    boot   = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
   }
+  mtu             = var.network_mtu
+  dns_nameservers = var.dns_nameservers
+}
 
-  # The second interface (on the edge network) must not take the routes and resolvers that
-  # DHCP pushes for the edge instances: the bastion keeps a single default route through the
-  # administration network.
-  write_files = {
-    "/etc/netplan/60-second-interface.yaml" = {
-      permissions = "0600"
-      content     = <<-EOT
-        network:
-          version: 2
-          ethernets:
-            ens4:
-              dhcp4: true
-              dhcp4-overrides:
-                use-routes: false
-                use-dns: false
-      EOT
-    }
+# How the stack joins the planes (ADR-0003, D2): from shared/planes when given, otherwise
+# operator planes in gateway mode.
+module "planes" {
+  source = "../../../modules/plane-attachment"
+
+  planes     = ["svc_public", "monitoring"]
+  attachment = var.plane_attachment
+  instances  = local.instances
+  exposure = {
+    primary = null
+    extra   = ["monitoring"]
+    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
   }
-  runcmd = ["netplan apply"]
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -87,19 +93,15 @@ module "cloudinit" {
 
 module "edge" {
   # Git source: works with OpenTofu and Terraform alike (registry: CyprisTech/tenant/openstack).
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
 
   tenant = {
     existing = {
       networks = merge({
         public     = { name = var.public_network.network, subnets = { main = { name = var.public_network.subnet } } }
-        svc_public = { name = var.planes.svc_public.network, subnets = { main = { name = var.planes.svc_public.subnet } } }
-        monitoring = { name = var.planes.monitoring.network, subnets = { main = { name = var.planes.monitoring.subnet } } }
-        }, {
-        for k in(local.with_bastion ? ["admin"] : []) : k => {
-          name = try(var.bastion.external_network.network, ""), subnets = { main = { name = try(var.bastion.external_network.subnet, "") } }
-        }
-      })
+        svc_public = module.planes.networks.svc_public
+        monitoring = module.planes.networks.monitoring
+      }, module.bastion.existing_networks)
       dns_zones = merge(
         var.public_dns == null ? {} : { public = { name = var.public_dns.zone } },
         var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } },
@@ -116,48 +118,18 @@ module "edge" {
           # Default route and public floating IP.
           public = { external_network = "public", internal_subnet = "main", default_gateway = true }
           # Plane routers: their routes are pushed to the instances by DHCP (ADR-0001, D2).
-          svc-public = {
-            external_network = "svc_public", internal_subnet = "main",
-            advertise_routes = [var.planes.svc_public.cidr]
-          }
-          monitoring = {
-            external_network = "monitoring", internal_subnet = "main",
-            advertise_routes = [var.planes.monitoring.cidr]
-          }
+          svc-public = module.planes.routers["svc-public"]
+          monitoring = module.planes.routers["monitoring"]
         }
       }
-      }, {
-      # Administration network of the bastion: its only router joins the administration network.
-      for k in(local.with_bastion ? ["${local.prefix}-admin"] : []) : k => {
-        mtu     = var.network_mtu
-        subnets = { main = { cidr = try(var.bastion.cidr, "10.32.0.0/28"), dns_nameservers = var.dns_nameservers } }
-        routers = { admin = { external_network = "admin", internal_subnet = "main", default_gateway = true } }
-      }
-    })
+    }, module.bastion.networks)
 
     security_groups = merge({
       "${local.prefix}-proxy" = {
         description = "Traefik instances of the public entry point"
-        rules = merge({
-          # Octavia amphorae connect from the edge network.
-          http  = { direction = "ingress", protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = var.edge_cidr }
-          https = { direction = "ingress", protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = var.edge_cidr }
-          }, local.metrics_rules, local.ssh_rules, {
-          for k in(local.with_bastion ? ["ssh-from-bastion"] : []) : k => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_group = local.bastion_name
-          }
-        })
+        rules       = merge(module.admission.rules, module.bastion.ssh_rules)
       }
-      }, {
-      for k in(local.with_bastion ? [local.bastion_name] : []) : k => {
-        description = "Bastion: SSH from the administration sources"
-        rules = {
-          for i, cidr in try(var.bastion.ssh_cidrs, []) : "ssh-${i}" => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-          }
-        }
-      }
-    })
+    }, module.bastion.security_groups)
 
     server_groups = {
       (local.prefix) = { policy = var.server_group_policy }
@@ -177,34 +149,15 @@ module "edge" {
             network         = local.prefix
             subnet          = "main"
             security_groups = ["${local.prefix}-proxy"]
-            floating_ip     = null
-            # Exposure to the monitoring collector (ADR-0001, D2).
-            extra_floating_ips = {
-              monitoring = {
-                pool = "monitoring"
-                dns  = var.monitoring.dns_zone == null ? [] : [{ name = name, zone = "monitoring" }]
-              }
-            }
+            # Exposure on the planes (ADR-0001, D2): floating IPs in gateway mode, the
+            # instance's own address in interface mode.
+            floating_ip        = module.planes.ports[name].floating_ip
+            extra_floating_ips = module.planes.ports[name].extra_floating_ips
+            dns                = module.planes.ports[name].dns
           }
         }
       }
-      }, {
-      for name in(local.with_bastion ? [local.bastion_name] : []) : name => {
-        az           = var.az
-        flavor       = coalesce(try(var.bastion.flavor, null), var.flavor)
-        image        = var.image
-        boot         = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
-        server_group = null
-        user_data    = module.cloudinit_bastion[0].rendered
-        labels       = ["bastion"]
-        ports = {
-          # Primary port: default route and floating IP on the administration network.
-          admin = { network = "${local.prefix}-admin", subnet = "main", security_groups = [local.bastion_name], floating_ip = { pool = "admin" } }
-          # Second port on the edge network, without a gateway of its own.
-          edge = { network = local.prefix, subnet = "main", security_groups = [local.bastion_name], floating_ip = null }
-        }
-      }
-    })
+    }, module.bastion.instances)
 
     load_balancers = {
       (local.prefix) = {
@@ -239,8 +192,10 @@ module "edge" {
   }
 }
 
-# Address under which the edge reaches svc_public: backends admit it in their security
-# groups (ADR-0001, D7). Read from the router, never written by hand (D9).
+# Address under which the edge reaches svc_public in gateway mode: backends admit it in their
+# security groups (ADR-0001, D7). Read from the router, never written by hand (D9). In interface
+# mode there is no translation: backends admit the edge range.
 data "openstack_networking_router_v2" "svc_public" {
+  count     = module.planes.nat.svc_public ? 1 : 0
   router_id = module.edge.networks[local.prefix].routers["svc-public"].id
 }

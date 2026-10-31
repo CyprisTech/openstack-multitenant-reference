@@ -1,8 +1,9 @@
-# Test collector for the reachability matrix: a small instance standing for the monitoring
-# collector. It reaches the monitoring plane through its own router (source NAT), so the
-# tenants see a single, known source address: the router's gateway address on the plane,
-# given to the tenant stacks as monitoring.collector_cidrs. It is administered through a
-# floating IP on an administration network, whose router is its default gateway.
+# Test collector for the isolation test: a small instance standing for the monitoring
+# collector, a shared service of the monitoring plane. The tenants admit it by the addresses
+# of the collector_cidrs output, given to the tenant stacks as monitoring.collector_cidrs:
+# its router's gateway address on an operator plane (source NAT), its own range on an
+# interface plane. It is administered through a floating IP on an administration network,
+# whose router is its default gateway.
 
 terraform {
   required_version = ">= 1.9"
@@ -28,7 +29,23 @@ variable "network_mtu" {
   type    = number
   default = null
 }
-variable "monitoring_plane" { type = object({ network = string, subnet = string, cidr = string }) }
+variable "plane_attachment" {
+  description = "The service's entry of the attachments output of stack shared/planes (role shared on monitoring)."
+  type = map(object({
+    mode         = string
+    nat          = bool
+    cidr         = string
+    network_id   = string
+    network_name = string
+    subnet_id    = string
+    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+  }))
+}
+variable "cidr" {
+  description = "Range of the collector's network; on an interface plane, the attachment's cidr in shared/planes."
+  type        = string
+  default     = "10.34.0.0/28"
+}
 variable "admin_network" { type = object({ network = string, subnet = string }) }
 variable "ssh_cidrs" { type = list(string) }
 variable "ssh_keys" { type = list(string) }
@@ -37,8 +54,15 @@ locals {
   name = "${var.site}-collector"
 }
 
+module "planes" {
+  source = "../../../modules/plane-attachment"
+
+  planes     = ["monitoring"]
+  attachment = var.plane_attachment
+}
+
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
 
   hostname       = local.name
   package_update = false
@@ -46,23 +70,21 @@ module "cloudinit" {
 }
 
 module "collector" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
 
   tenant = {
     existing = {
-      networks = {
-        admin      = { name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } } }
-        monitoring = { name = var.monitoring_plane.network, subnets = { main = { name = var.monitoring_plane.subnet } } }
-      }
+      networks = merge({
+        admin = { name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } } }
+      }, module.planes.networks)
     }
     networks = {
       (local.name) = {
         mtu     = var.network_mtu
-        subnets = { main = { cidr = "10.34.0.0/28" } }
-        routers = {
-          admin      = { external_network = "admin", internal_subnet = "main", default_gateway = true }
-          monitoring = { external_network = "monitoring", internal_subnet = "main", advertise_routes = [var.monitoring_plane.cidr] }
-        }
+        subnets = { main = { cidr = var.cidr } }
+        routers = merge({
+          admin = { external_network = "admin", internal_subnet = "main", default_gateway = true }
+        }, module.planes.routers)
       }
     }
     security_groups = {
@@ -82,6 +104,7 @@ module "collector" {
 }
 
 data "openstack_networking_router_v2" "monitoring" {
+  count     = module.planes.nat.monitoring ? 1 : 0
   router_id = module.collector.networks[local.name].routers["monitoring"].id
 }
 
@@ -91,6 +114,8 @@ output "address" {
 }
 
 output "collector_cidrs" {
-  description = "Source addresses of the collector as seen on the monitoring plane."
-  value       = [for ip in data.openstack_networking_router_v2.monitoring.external_fixed_ip : "${ip.ip_address}/32"]
+  description = "Source addresses of the collector as seen by the tenants: its router's gateway address on an operator plane, its range on an interface plane."
+  value = module.planes.nat.monitoring ? [
+    for ip in data.openstack_networking_router_v2.monitoring[0].external_fixed_ip : "${ip.ip_address}/32"
+  ] : [var.cidr]
 }

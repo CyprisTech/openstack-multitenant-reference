@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-hub" # clouds.yaml entry of the hub project
+site  = "site-a"
+
+planes = {
+  # Public cloud: a private network of the hub project, shared with the attached projects by RBAC.
+  svc_public = { mode = "interface", cidr = "172.31.0.0/24" }
+  # Private cloud: an external network provided by the operator, adopted by name.
+  monitoring = { mode = "gateway", cidr = "203.0.113.0/24", network = "monitoring", subnet = "monitoring" }
+}
+
+# planes: role of the attachment on each plane it joins ("shared" service or "tenant").
+attachments = {
+  edge     = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
+  web      = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  collector = { project_id = "<project id>", cidr = "10.40.0.0/24", planes = { monitoring = "shared" } }
+  isolated = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+}
+
+# Per plane, aggregates of the tenant ranges, routed by the shared services through the transit
+# router: adding a tenant inside them changes no shared service.
+tenant_ranges = { svc_public = ["10.21.0.0/16", "10.22.0.0/15"] }

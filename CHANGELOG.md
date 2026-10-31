@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+One account, one project per tenant: the shared planes can be built by the account holder on a public cloud, every stack runs in its own project, and the repository is reorganised by role. **Breaking**: paths and some inputs (migration notes below).
+
+### Added
+
+- ADR-0003: scope (one account, one project per tenant or shared service, the hub project holding the network only) and the two ways the planes are provided — by the operator (gateway mode, as before) or as private networks of a hub project shared by RBAC and joined through a transit router (interface mode).
+- Stack `shared/planes`: adopts operator planes, or creates shared private planes with their RBAC policies and transit routers; attachments with a role per plane; routes generated for every attachment; discovery of the attached routers' addresses; overlap checks.
+- `stacks/shared/planes` as the single description of the planes for every stack, adopted or built; `plane_attachment` the only plane input of the stacks. In interface mode, routers with an interface on the plane and routes through the transit router, instances reached at their own address, Kubernetes Services on internal load balancers at fixed addresses (`service_addresses`).
+- Local modules `plane-attachment`, `bastion` and `admission` (the logic every stack repeated, written once), `plane-discovery` and `range-overlaps` (the technical parts of `shared/planes`).
+- Outputs `svc_public_sources` (entry point) and `intranet_sources` (Kubernetes tenant); inputs `edge_sources` and `allowed_sources`, so that no stack reads an object of another project.
+- Documentation by task: concepts (architecture, how a tenant joins a plane, connecting two tenants, trade-offs, landscape, test results), guides (add a tenant, publish a domain, check the isolation, Kubernetes tour, teardown), reference (test procedure, isolation matrix, planes contract, integration points), one getting started for every cloud, with the configuration of the planes per context (`examples/planes`); spec of a Kubernetes cluster for shared services.
+- Isolation test: tenant-to-tenant rows at the private addresses; the hostile-route case in the test procedure.
+- CI validates and lints the Kubernetes tenant and the test fixtures.
+
+### Changed
+
+- Domain publication renamed, so that "routes" only means network routes: script `scripts/publish-domains.sh` (was `publish-routes.sh`), input `domains` of the entry point (was `routes`), output `published_domains` of the tenants (was `routes`), file `domains.auto.tfvars.json` (was `routes.auto.tfvars.json`). The script now stops when a deployed tenant's state lacks the output (apply it first), and refuses to remove every published domain unless `--allow-empty`: either case used to replace the entry point instances with a configuration routing nothing.
+- The rules of the security groups are keyed `<flow>-<port>-<source>` (module `admission`): on an existing deployment they are replaced, with the same content.
+- `cloudinit` is referenced at the published tag `v0.1.3`.
+
+### Fixed
+
+- `shared/planes`: the first apply on an empty project.
+
+### Migration from 0.2.x
+
+| Before | After |
+|---|---|
+| `stacks/20-public-edge` | `stacks/shared/entry-point` |
+| `stacks/30-tenants/web` | `stacks/tenants/vm` |
+| `stacks/30-tenants/isolated` | `stacks/tenants/isolated` |
+| `stacks/30-tenants/platform` | `stacks/tenants/kubernetes` |
+| `tests/reachability` | `tests/isolation` |
+| `tests/integration/collector`, `tests/integration/intranet-service` | `tests/fixtures/collector`, `tests/fixtures/intranet-service` |
+| every stack: input `planes` (operator networks), `isolated` and collector `monitoring_plane`, intranet service `intranet` | input `plane_attachment` only, from the `attachments` output of `stacks/shared/planes`, which adopts the operator's planes (`examples/planes/operator.tfvars.example`) |
+| intranet service fixture: sources read by name | input `allowed_sources` |
+| `scripts/publish-routes.sh` | `scripts/publish-domains.sh` |
+| entry point: input `routes`, output `routes`, file `routes.auto.tfvars.json` | input `domains`, output `domains`, file `domains.auto.tfvars.json` (rename the file and its top-level key) |
+| tenants: output `routes` | `published_domains` (apply the tenants before publishing) |
+| entry point: output `svc_public_source_ips` (addresses) | `svc_public_sources` (CIDR ranges) |
+| `vm`, `kubernetes`: entry point read by name | input `edge_sources` (output `svc_public_sources` of the entry point); `vm` still reads it by name when `null` and in the same project |
+
+States are not affected by the moves: move each stack's state with its directory.
+
 ## [0.2.1] - 2026-10-29
 
 Fixes from two full test cycles (teardown and rebuild), and the test procedure. No change of interface.

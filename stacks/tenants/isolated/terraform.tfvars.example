@@ -7,7 +7,6 @@ image = "ubuntu-24.04"
 flavor           = "m1.small-nodisk"
 boot_volume_size = 8 # null with a flavor that has a local disk
 
-monitoring_plane = { network = "monitoring", subnet = "monitoring", cidr = "203.0.113.0/24" }
 
 # Smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract).
 network_mtu = 1362
@@ -28,3 +27,7 @@ bastion = {
   external_network = { network = "intranet", subnet = "intranet" }
   ssh_cidrs        = ["192.0.2.0/24"]
 }
+
+# How this stack joins the planes: its entry of the attachments output of stack shared/planes,
+# whether the planes are the operator's or built in a hub project. For example:
+#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .isolated.planes}' > planes.auto.tfvars.json

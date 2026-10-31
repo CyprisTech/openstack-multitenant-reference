@@ -22,11 +22,11 @@ The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. M
 
 ## Publishing the domains on the entry point
 
-The `routes` output has the shape of the `routes` variable of the entry point. Generate it, then roll the entry point instances one at a time (see the [stack 20 README](../../shared/entry-point/README.md#changing-the-routes)):
+The `published_domains` output has the shape of the `domains` input of the entry point. [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh) gathers it from every tenant and rolls the entry point instances one at a time; by hand:
 
 ```bash
-tofu output -json routes \
-  | jq '{routes: .}' > ../../shared/entry-point/routes.auto.tfvars.json   # git-ignored
+tofu output -json published_domains \
+  | jq '{domains: .}' > ../../shared/entry-point/domains.auto.tfvars.json   # git-ignored
 ```
 
 No address is written by hand (ADR-0001, D9).

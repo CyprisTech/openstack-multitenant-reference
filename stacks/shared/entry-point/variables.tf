@@ -54,15 +54,21 @@ variable "public_network" {
   })
 }
 
-variable "planes" {
+variable "plane_attachment" {
   description = <<-EOT
-    Shared planes joined by the edge (layer 10 contract): network and subnet names, and the
-    range advertised by DHCP to reach the plane.
+    The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),
+    keyed by plane: how its router joins each plane and how its instances are seen there,
+    whatever provides the plane (the operator, or a hub project).
   EOT
-  type = object({
-    svc_public = object({ network = string, subnet = string, cidr = string })
-    monitoring = object({ network = string, subnet = string, cidr = string })
-  })
+  type = map(object({
+    mode         = string
+    nat          = bool
+    cidr         = string
+    network_id   = string
+    network_name = string
+    subnet_id    = string
+    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+  }))
 }
 
 variable "octavia_flavor_id" {
@@ -93,13 +99,14 @@ variable "traefik_image" {
   }
 }
 
-variable "routes" {
+variable "domains" {
   description = <<-EOT
     Public domains routed by SNI, keyed by domain name.
     - backends: "host:port" of the backends (addresses or names resolvable from the edge network).
     - proxy_protocol: send PROXY protocol v2 to the backends; they must be configured to accept it.
     - max_connections: simultaneous connections allowed per client address.
-    A change of routes takes effect when the instances are replaced, one at a time (see README).
+    A change takes effect when the instances are replaced, one at a time: scripts/publish-domains.sh
+    does it from the published_domains outputs of the tenants (see README).
   EOT
   type = map(object({
     backends        = list(string)
@@ -109,8 +116,8 @@ variable "routes" {
   default = {}
 
   validation {
-    condition     = alltrue([for r in values(var.routes) : length(r.backends) > 0])
-    error_message = "Each route needs at least one backend."
+    condition     = alltrue([for r in values(var.domains) : length(r.backends) > 0])
+    error_message = "Each domain needs at least one backend."
   }
 }
 

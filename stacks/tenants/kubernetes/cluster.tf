@@ -29,27 +29,27 @@ locals {
   ])), 0, 8)
 
   manifest_vars = {
-    revision      = local.revision
-    cluster       = var.cluster
-    prefix        = local.prefix
-    az            = var.az
-    network       = local.network
-    subnet        = local.subnet
-    router        = local.router
-    admin_network = local.admin_network.network
-    admin_sources = var.admin.sources
-    ssh_key_name  = var.admin.ssh_key_name
-    pod_mtu       = local.pod_mtu
-    versions      = local.versions
-    svc_public    = var.planes.svc_public.network
-    monitoring    = var.planes.monitoring.network
-    edge_sources  = local.edge_sources
-    collectors    = var.monitoring.collector_cidrs
-    cluster_cidr  = var.cluster_cidr
-    svc_public_id = data.openstack_networking_network_v2.svc_public.id
-    monitoring_id = data.openstack_networking_network_v2.monitoring.id
-    ingress_ip    = openstack_networking_floatingip_v2.ingress.address
-    prometheus_ip = local.expose_prometheus ? openstack_networking_floatingip_v2.prometheus[0].address : ""
+    revision            = local.revision
+    cluster             = var.cluster
+    prefix              = local.prefix
+    az                  = var.az
+    network             = local.network
+    subnet              = local.subnet
+    router              = local.router
+    admin_network       = local.admin_network.network
+    admin_sources       = var.admin.sources
+    ssh_key_name        = var.admin.ssh_key_name
+    pod_mtu             = local.pod_mtu
+    versions            = local.versions
+    edge_sources        = var.edge_sources
+    collectors          = var.monitoring.collector_cidrs
+    cluster_cidr        = var.cluster_cidr
+    svc_public_id       = local.ingress_internal ? "" : var.plane_attachment.svc_public.network_id
+    monitoring_id       = local.prometheus_internal ? "" : var.plane_attachment.monitoring.network_id
+    ingress_ip          = local.ingress_address
+    prometheus_ip       = local.prometheus_address
+    ingress_internal    = local.ingress_internal
+    prometheus_internal = local.prometheus_internal
   }
 
   manifests = {
@@ -64,17 +64,9 @@ locals {
   }
 }
 
-# Load balancers of the cluster Services take their floating IP from these planes (by ID).
-data "openstack_networking_network_v2" "svc_public" {
-  name = var.planes.svc_public.network
-}
-
-data "openstack_networking_network_v2" "monitoring" {
-  name = var.planes.monitoring.network
-}
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
   count  = var.bootstrap ? 1 : 0
 
   hostname = local.instance

@@ -10,26 +10,28 @@ output "instances" {
   }
 }
 
-output "svc_public_source_ips" {
-  description = "Addresses the edge uses on svc_public. Backends admit them on their published ports (ADR-0001, D7)."
-  value       = [for ip in data.openstack_networking_router_v2.svc_public.external_fixed_ip : ip.ip_address]
+output "svc_public_sources" {
+  description = "Ranges the edge connects from on svc_public, in CIDR notation: the router's gateway address in gateway mode, the edge range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge_sources)."
+  value = module.planes.nat.svc_public ? [
+    for ip in data.openstack_networking_router_v2.svc_public[0].external_fixed_ip : "${ip.ip_address}/32"
+  ] : [var.edge_cidr]
 }
 
-output "routes" {
+output "domains" {
   description = "Domains currently routed by the entry point."
-  value       = sort(keys(var.routes))
+  value       = sort(keys(var.domains))
 }
 
 output "bastion" {
   description = "Floating IP of the bastion on the administration network, or null."
-  value       = local.with_bastion ? module.edge.instances[local.bastion_name].ports["admin"].floating_ip : null
+  value       = var.bastion != null ? module.edge.instances[local.bastion_name].ports["admin"].floating_ip : null
 }
 
 output "monitoring_targets" {
   description = "Instances exposed to the monitoring collector: floating IP on the monitoring plane and DNS name (or null)."
   value = {
     for name in local.instances : name => {
-      address = module.edge.instances[name].ports["main"].floating_ips["monitoring"]
+      address = !module.planes.nat.monitoring ? module.edge.instances[name].ports["main"].ip : module.edge.instances[name].ports["main"].floating_ips["monitoring"]
       fqdn    = var.monitoring.dns_zone == null ? null : "${name}.${var.monitoring.dns_zone}"
     }
   }

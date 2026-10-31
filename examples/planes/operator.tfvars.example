@@ -1,0 +1,22 @@
+# stacks/shared/planes on a private or sovereign cloud whose operator provides the planes as
+# external networks: they are adopted, nothing is created. Any project's credentials can read
+# them; the shared services project is a natural choice.
+cloud = "shared-services"
+site  = "site-a"
+
+# cidr: the range reached through the plane (it may be wider than the plane's own subnet).
+planes = {
+  svc_public = { mode = "gateway", cidr = "198.51.100.0/24", network = "svc_public", subnet = "svc_public" }
+  monitoring = { mode = "gateway", cidr = "203.0.113.0/24", network = "monitoring", subnet = "monitoring" }
+  intranet   = { mode = "gateway", cidr = "192.0.2.0/24", network = "intranet", subnet = "intranet" }
+}
+
+# Every project joining the planes, with its role on each one. On operator planes, tenant ranges
+# may overlap: tenants are seen through floating IPs of the planes.
+attachments = {
+  edge      = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
+  collector = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  web       = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  isolated  = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+  platform  = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
+}

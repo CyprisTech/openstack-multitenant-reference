@@ -1,0 +1,23 @@
+# stacks/shared/planes on a public cloud: the planes are private networks of the hub project,
+# shared with the attached projects by RBAC and joined through a transit router. A member role is
+# enough. Applied with the hub project's credentials; the hub holds the network only.
+cloud = "hub"
+site  = "site-a"
+
+planes = {
+  svc_public = { mode = "interface", cidr = "172.31.0.0/24", mtu = 1362 }
+  monitoring = { mode = "interface", cidr = "172.31.1.0/24", mtu = 1362 }
+}
+
+# Every project joining the planes, with its role on each one. On interface planes, ranges must
+# not overlap: tenants are seen at their own addresses.
+attachments = {
+  edge      = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
+  collector = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  web       = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  isolated  = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+  platform  = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+}
+
+# The entry point routes these aggregates: a new tenant inside them changes no shared service.
+tenant_ranges = { svc_public = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"] }

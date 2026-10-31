@@ -36,5 +36,5 @@ __pycache__/
 # Node image build: local variables and work directory
 images/kubernetes-node/build.json
 images/kubernetes-node/.work/
-# Interrupted route publication (scripts/publish-routes.sh)
-stacks/shared/entry-point/.routes-publication-pending
+# Interrupted domain publication (scripts/publish-domains.sh)
+stacks/shared/entry-point/.domains-publication-pending

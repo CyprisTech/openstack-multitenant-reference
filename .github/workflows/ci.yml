@@ -12,10 +12,18 @@ env:
   # Every root configuration of the repository. The stacks and the test configurations call the
   # published module by tag: init downloads it from GitHub.
   CONFIGURATIONS: >-
+    modules/admission
+    modules/bastion
+    modules/plane-attachment
+    modules/plane-discovery
+    modules/range-overlaps
+    stacks/shared/planes
     stacks/shared/entry-point
     stacks/tenants/vm
     stacks/tenants/isolated
+    stacks/tenants/kubernetes
     tests/fixtures/collector
+    tests/fixtures/intranet-service
     tests/integration/dual-floating-ip
 
 jobs:
@@ -67,12 +75,12 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated; do
+          for d in modules/admission modules/bastion modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations
         run: |
-          for d in tests/integration/*/; do
+          for d in tests/fixtures/*/ tests/integration/*/; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/tests/integration/.tflint.hcl" --format compact
           done
 
@@ -88,7 +96,7 @@ jobs:
       - name: tour script syntax
         run: python3 -m py_compile tests/tour/capture.py
       - name: shell scripts syntax
-        run: bash -n scripts/publish-routes.sh images/kubernetes-node/build.sh
+        run: bash -n scripts/publish-domains.sh images/kubernetes-node/build.sh
       - name: documentation links
         run: python3 tests/docs/check_links.py
 

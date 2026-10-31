@@ -30,19 +30,19 @@ locals {
     accessLog = {}
   })
 
-  route_keys = { for domain in keys(var.routes) : domain => replace(domain, ".", "-") }
+  route_keys = { for domain in keys(var.domains) : domain => replace(domain, ".", "-") }
 
   tcp_config = {
     serversTransports = {
       proxy-v2 = { proxyProtocol = { version = 2 } }
     }
     middlewares = {
-      for domain, r in var.routes : "${local.route_keys[domain]}-limit" => {
+      for domain, r in var.domains : "${local.route_keys[domain]}-limit" => {
         inFlightConn = { amount = r.max_connections }
       }
     }
     routers = {
-      for domain, r in var.routes : local.route_keys[domain] => {
+      for domain, r in var.domains : local.route_keys[domain] => {
         entryPoints = ["websecure"]
         rule        = "HostSNI(`${domain}`)"
         service     = local.route_keys[domain]
@@ -51,7 +51,7 @@ locals {
       }
     }
     services = {
-      for domain, r in var.routes : local.route_keys[domain] => {
+      for domain, r in var.domains : local.route_keys[domain] => {
         loadBalancer = merge(
           { servers = [for b in r.backends : { address = b }] },
           r.proxy_protocol ? { serversTransport = "proxy-v2" } : {}
@@ -61,7 +61,7 @@ locals {
   }
 
   # With no route, Traefik only redirects port 80 and refuses TLS connections.
-  traefik_dynamic = length(var.routes) == 0 ? "{}\n" : yamlencode({ tcp = local.tcp_config })
+  traefik_dynamic = length(var.domains) == 0 ? "{}\n" : yamlencode({ tcp = local.tcp_config })
 
   traefik_unit = <<-EOT
     [Unit]

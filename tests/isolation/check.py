@@ -5,6 +5,10 @@ Reads the outputs of the deployed stacks, runs TCP probes from inside the tenant
 their bastions) and from the machine running the test, and compares every result with the
 matrix of docs/architecture.md. Exits with status 1 if any row differs.
 
+The same rows hold whatever the plane modes (ADR-0003, D2): the addresses come from the stacks'
+outputs, floating IPs of the planes in gateway mode, the instances' own addresses in interface
+mode. Each stack may live in its own project; the test only reads their outputs.
+
     tests/isolation/check.py --stacks stacks --collector tests/fixtures/collector \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
         [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service]
@@ -123,6 +127,12 @@ def main():
     for name, t in sorted({**edge["monitoring_targets"], **web["monitoring_targets"]}.items()):
         rows.append((f"isolated {iso_vm[0]}", f"{name} (monitoring {t['address']})", 9100, "closed",
                      lambda a=t["address"]: p.remote(iso["bastion"], iso_vm[1], a, 9100)))
+    # Tenant to tenant, at the private addresses: no route between tenants, and in interface mode,
+    # where the private addresses are routed to the shared services, the security groups.
+    rows.append((f"web {web_vm[0]}", f"isolated {iso_vm[0]} (private {iso_vm[1]})", 9100, "closed",
+                 lambda: p.remote(web["bastion"], web_vm[1], iso_vm[1], 9100)))
+    rows.append((f"isolated {iso_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed",
+                 lambda: p.remote(iso["bastion"], iso_vm[1], web_vm[1], 443)))
     rows.append((f"isolated {iso_vm[0]}", "Internet (1.1.1.1)", 443, "closed",
                  lambda: p.remote(iso["bastion"], iso_vm[1], "1.1.1.1", 443)))
 
@@ -137,7 +147,7 @@ def main():
         # the cloud controller manager silently allocates another address when the requested
         # one is unavailable.
         plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
-        ingress = next(iter(plat["routes"].values()))["backends"][0].split(":")[0]
+        ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
         metrics = plat["prometheus"]["address"]
         svc_ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
@@ -145,6 +155,8 @@ def main():
                            "-o", "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
         api = kget("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
         intranet = outputs(args.tool, args.intranet_service)["address"]
+        # A probe pod left by an interrupted run would block the new one.
+        kget("-n", "default", "delete", "pod", "reachability-probe", "--ignore-not-found", "--wait=true")
         kget("run", "reachability-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
              "--restart=Never", "--command", "--", "sleep", "600")
         kget("wait", "-n", "default", "--for=condition=Ready", "pod/reachability-probe", "--timeout=120s")

@@ -1,7 +1,6 @@
-# Layer 30, tenant "isolated": a workload with no public exposure and no path to the other
-# tenants (ADR-0001, D5). Its network has a single router, to the monitoring plane, which
-# carries the floating IP the collector scrapes. Nothing else is reachable from it, and it
-# reaches nothing but the monitoring plane.
+# Tenant "isolated": a workload with no public exposure and no path to the other tenants
+# (ADR-0001, D5). Its network has a single router, to the monitoring plane: the collector
+# reaches the instance through it, and it reaches nothing but the monitoring plane.
 #
 # The workload is a stand-in: a metrics endpoint served by the Python standard library,
 # so that the instance needs no package and no Internet access.
@@ -11,20 +10,9 @@ locals {
   instance = "${local.prefix}-1"
 
   bastion_name = "${local.prefix}-bastion"
-  with_bastion = var.bastion != null
 
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [var.monitoring_plane.cidr])
-  metrics_rules = {
-    for pair in setproduct(var.monitoring.metrics_ports, local.metrics_sources) : "metrics-${pair[0]}-${replace(pair[1], "/", "_")}" => {
-      direction = "ingress", protocol = "tcp", port_min = pair[0], port_max = pair[0], remote_ip_prefix = pair[1]
-    }
-  }
-
-  ssh_rules = {
-    for i, cidr in var.admin.ssh_cidrs : "ssh-${i}" => {
-      direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-    }
-  }
+  # Sources of the metrics scrapes: the collector only.
+  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
 
   metrics_unit = <<-EOT
     [Unit]
@@ -41,38 +29,53 @@ locals {
   EOT
 }
 
-module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
-  count  = local.with_bastion ? 1 : 0
+# How the stack joins the monitoring plane (ADR-0003, D2). Its router is the default gateway:
+# the tenant has no other way out.
+module "planes" {
+  source = "../../../modules/plane-attachment"
 
-  hostname = local.bastion_name
-  users = {
-    for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
+  planes          = ["monitoring"]
+  attachment      = var.plane_attachment
+  default_gateway = "monitoring"
+  instances       = [local.instance]
+  exposure = {
+    primary = "monitoring"
+    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
   }
+}
 
-  # The second interface (on the isolated network) must not take the routes that DHCP pushes
-  # for the isolated instance: the bastion keeps a single default route through the
-  # administration network.
-  write_files = {
-    "/etc/netplan/60-second-interface.yaml" = {
-      permissions = "0600"
-      content     = <<-EOT
-        network:
-          version: 2
-          ethernets:
-            ens4:
-              dhcp4: true
-              dhcp4-overrides:
-                use-routes: false
-                use-dns: false
-      EOT
-    }
+# Who may reach the instance.
+module "admission" {
+  source = "../../../modules/admission"
+
+  allow = {
+    metrics = { ports = var.monitoring.metrics_ports, sources = local.metrics_sources }
+    ssh     = { ports = [22], sources = var.admin.ssh_cidrs }
   }
-  runcmd = ["netplan apply"]
+}
+
+module "bastion" {
+  source = "../../../modules/bastion"
+
+  name          = local.bastion_name
+  bastion       = var.bastion
+  admin_network = "${local.prefix}-admin"
+  default_cidr  = "10.33.0.0/28"
+  network       = local.prefix
+  port          = "isolated"
+  users         = var.admin.users
+  instance = {
+    az     = var.az
+    image  = var.image
+    flavor = var.flavor
+    boot   = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+  }
+  mtu             = var.network_mtu
+  dns_nameservers = var.dns_nameservers
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
 
   hostname       = local.instance
   package_update = false # no Internet access by design
@@ -95,59 +98,29 @@ module "cloudinit" {
 }
 
 module "isolated" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
 
   tenant = {
     existing = {
       dns_zones = var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } }
-      networks = merge({
-        monitoring = { name = var.monitoring_plane.network, subnets = { main = { name = var.monitoring_plane.subnet } } }
-        }, {
-        for k in(local.with_bastion ? ["admin"] : []) : k => {
-          name = try(var.bastion.external_network.network, ""), subnets = { main = { name = try(var.bastion.external_network.subnet, "") } }
-        }
-      })
+      networks  = merge(module.planes.networks, module.bastion.existing_networks)
     }
 
     networks = merge({
       (local.prefix) = {
-        mtu = var.network_mtu
-        subnets = {
-          main = { cidr = var.isolated_cidr, dns_nameservers = var.dns_nameservers }
-        }
-        routers = {
-          # The only router: it carries the monitoring floating IP and the replies to the collector.
-          monitoring = { external_network = "monitoring", internal_subnet = "main", default_gateway = true }
-        }
-      }
-      }, {
-      # Administration network of the bastion: its only router joins the administration network.
-      for k in(local.with_bastion ? ["${local.prefix}-admin"] : []) : k => {
         mtu     = var.network_mtu
-        subnets = { main = { cidr = try(var.bastion.cidr, "10.33.0.0/28"), dns_nameservers = var.dns_nameservers } }
-        routers = { admin = { external_network = "admin", internal_subnet = "main", default_gateway = true } }
+        subnets = { main = { cidr = var.isolated_cidr, dns_nameservers = var.dns_nameservers } }
+        # The only router, to the monitoring plane, also the default gateway.
+        routers = module.planes.routers
       }
-    })
+    }, module.bastion.networks)
 
     security_groups = merge({
       "${local.prefix}-workload" = {
         description = "Isolated workload: metrics from the collector only, SSH from the bastion"
-        rules = merge(local.metrics_rules, local.ssh_rules, {
-          for k in(local.with_bastion ? ["ssh-from-bastion"] : []) : k => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_group = local.bastion_name
-          }
-        })
+        rules       = merge(module.admission.rules, module.bastion.ssh_rules)
       }
-      }, {
-      for k in(local.with_bastion ? [local.bastion_name] : []) : k => {
-        description = "Bastion: SSH from the administration sources"
-        rules = {
-          for i, cidr in try(var.bastion.ssh_cidrs, []) : "ssh-${i}" => {
-            direction = "ingress", protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = cidr
-          }
-        }
-      }
-    })
+    }, module.bastion.security_groups)
 
     instances = merge({
       (local.instance) = {
@@ -163,26 +136,12 @@ module "isolated" {
             subnet          = "main"
             security_groups = ["${local.prefix}-workload"]
             # Exposure to the monitoring collector (ADR-0001, D2): the only published address.
-            floating_ip = {
-              pool = "monitoring"
-              dns  = var.monitoring.dns_zone == null ? [] : [{ name = local.instance, zone = "monitoring" }]
-            }
+            floating_ip        = module.planes.ports[local.instance].floating_ip
+            extra_floating_ips = module.planes.ports[local.instance].extra_floating_ips
+            dns                = module.planes.ports[local.instance].dns
           }
         }
       }
-      }, {
-      for name in(local.with_bastion ? [local.bastion_name] : []) : name => {
-        az        = var.az
-        flavor    = coalesce(try(var.bastion.flavor, null), var.flavor)
-        image     = var.image
-        boot      = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
-        user_data = module.cloudinit_bastion[0].rendered
-        labels    = ["bastion"]
-        ports = {
-          admin    = { network = "${local.prefix}-admin", subnet = "main", security_groups = [local.bastion_name], floating_ip = { pool = "admin" } }
-          isolated = { network = local.prefix, subnet = "main", security_groups = [local.bastion_name] }
-        }
-      }
-    })
+    }, module.bastion.instances)
   }
 }
