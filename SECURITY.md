@@ -14,7 +14,7 @@
 Please include:
 
 - the affected version or commit;
-- a description of the issue and its impact (for example, a flow the reachability matrix declares denied but that is open, a security group rule broader than documented, a secret written to an unexpected place);
+- a description of the issue and its impact (for example, a flow the isolation matrix declares denied but that is open, a security group rule broader than documented, a secret written to an unexpected place);
 - the steps or configuration that reproduce it, **with all credentials, addresses, domains and names replaced by placeholders**.
 
 Never send state files, plan files, `terraform.tfvars`, `clouds.yaml`, application credentials or real infrastructure details.
@@ -30,7 +30,7 @@ Never send state files, plan files, `terraform.tfvars`, `clouds.yaml`, applicati
 
 ## Scope
 
-In scope: the stacks, the test configurations, the reachability matrix script and the isolation claims of the documentation.
+In scope: the stacks, the test configurations, the isolation test and the isolation claims of the documentation.
 
 Out of scope: vulnerabilities of the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant/security) module (report them there), of OpenStack, the OpenStack provider, OpenTofu, Terraform or Traefik (report them to the respective projects), and the way an operator stores state or secrets.
 
@@ -41,4 +41,4 @@ Out of scope: vulnerabilities of the [terraform-openstack-tenant](https://github
 - **The edge does not terminate TLS.** It holds no tenant certificate; it can only limit connections, not filter HTTP.
 - **The demonstration backends are not production services**: the `web` stack serves a self-signed certificate.
 - **State files contain secrets** and infrastructure details: treat every state as a secret.
-- The reachability matrix only opens TCP connections; it changes nothing, but it uses SSH keys that reach every tenant's bastion. Run it from a trusted machine.
+- The isolation test only opens TCP connections; it changes nothing, but it uses SSH keys that reach every tenant's bastion. Run it from a trusted machine.

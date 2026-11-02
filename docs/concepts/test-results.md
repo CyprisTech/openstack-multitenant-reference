@@ -1,6 +1,6 @@
 # Testing
 
-Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Until 2026-10-29 the scenario ran in one test project; since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-plane-provisioning.md)), in both plane modes.
+Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Until 2026-10-29 the scenario ran in one test project; since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-boundary.md)), in both plane modes.
 
 ## Environment
 
@@ -234,7 +234,7 @@ Findings:
 
 ### One project per stack, both plane modes (2026-10-31)
 
-The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-plane-provisioning.md) prescribes — hub (planes only), shared services (collector, intranet service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
+The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-boundary.md) prescribes — hub (planes only), shared services (collector, intranet service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
 
 | Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
 |---|---|---|---|---|---|

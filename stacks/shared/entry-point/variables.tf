@@ -154,7 +154,7 @@ variable "bastion" {
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
-    cidr             = optional(string, "10.32.0.0/28")
+    cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
@@ -164,7 +164,7 @@ variable "bastion" {
 variable "network_mtu" {
   description = <<-EOT
     MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant
-    networks, nor the MTU of the planes they join (layer 10 contract): a larger value creates a
+    networks, nor the MTU of the planes they join (planes contract): a larger value creates a
     path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator
     enables it. null keeps the cloud default.
   EOT
@@ -174,8 +174,9 @@ variable "network_mtu" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the instances to the monitoring collector (ADR-0001, D2): every instance gets a
-    floating IP of the monitoring plane.
+    Exposure of the instances to the monitoring collector. On a plane with NAT, every instance
+    gets a floating IP of the monitoring plane; on an interface plane, it is reached at its own
+    address.
     - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
       instance is written for the collector's DNS service discovery; null writes no record.
     - metrics_ports: ports opened to the collector (node exporter by default).

@@ -1,11 +1,11 @@
 # Spec: a Kubernetes cluster for shared services
 
 - **Status:** Proposed — for the release after `v0.3.0`, with the Kubernetes day-to-day operations it depends on
-- **Related:** [ADR-0002](../adr/0002-platform-kubernetes.md) (Kubernetes tenant), [ADR-0003](../adr/0003-scope-and-plane-provisioning.md) (projects, planes, roles per plane), [integration points](../reference/integration-points.md)
+- **Related:** [ADR-0002](../adr/0002-platform-kubernetes.md) (Kubernetes tenant), [ADR-0003](../adr/0003-scope-and-boundary.md) (projects), [ADR-0004](../adr/0004-planes-and-isolation.md) (planes, roles per plane), [integration points](../reference/integration-points.md)
 
 ## Problem
 
-Shared services — a registry, a directory, an internal API, a metrics collector, log collection — run in their own projects, joined to the planes with the role `shared` (ADR-0003). Many operators want to run several of them on one Kubernetes cluster rather than one set of instances each.
+Shared services — a registry, a directory, an internal API, a metrics collector, log collection — run in their own projects, joined to the planes with the role `shared` (ADR-0004). Many operators want to run several of them on one Kubernetes cluster rather than one set of instances each.
 
 The [Kubernetes tenant](../../stacks/tenants/kubernetes/README.md) cannot do it today. It is built as a consumer of the planes, with one flow per plane:
 

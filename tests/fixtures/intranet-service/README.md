@@ -17,3 +17,47 @@ tofu init && tofu apply
 ```
 
 Like any shared service, it runs in its own project, not in the hub project (which holds the network only).
+
+## Inputs and outputs
+
+<!-- BEGIN_TF_DOCS -->
+### Requirements
+
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.9 |
+| openstack | ~> 3.2 |
+
+### Modules
+
+| Name | Source | Version |
+| ---- | ------ | ------- |
+| admission | ../../../modules/admission | n/a |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.3 |
+| planes | ../../../modules/plane-attachment | n/a |
+| service | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | 84c898b5d5036296a7cd3496a54e0721ccbc4936 |
+
+### Inputs
+
+| Name | Description | Type | Default | Required |
+| ---- | ----------- | ---- | ------- | :------: |
+| allowed\_sources | Sources admitted on port 8080: output intranet\_sources of the Kubernetes tenant. | `list(string)` | n/a | yes |
+| az | n/a | `string` | n/a | yes |
+| cloud | n/a | `string` | n/a | yes |
+| flavor | n/a | `string` | n/a | yes |
+| image | n/a | `string` | n/a | yes |
+| plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on intranet). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
+| site | n/a | `string` | n/a | yes |
+| ssh\_cidrs | n/a | `list(string)` | n/a | yes |
+| ssh\_keys | n/a | `list(string)` | n/a | yes |
+| boot\_volume\_size | n/a | `number` | `null` | no |
+| cidr | Range of the service's network; on an interface plane, the attachment's cidr in shared/planes. | `string` | `"10.35.0.0/28"` | no |
+| network\_mtu | n/a | `number` | `null` | no |
+
+### Outputs
+
+| Name | Description |
+| ---- | ----------- |
+| address | Address of the service on the intranet (port 8080): its floating IP on an operator plane (which also carries SSH), its own address on an interface plane. |
+| service\_sources | Sources admitted on port 8080. |
+<!-- END_TF_DOCS -->

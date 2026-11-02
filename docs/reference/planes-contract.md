@@ -1,8 +1,8 @@
 # Planes contract
 
-What the stacks expect from the shared planes, whoever provides them: the operator of a private cloud, or the account holder with shared private networks ([ADR-0003](../adr/0003-scope-and-plane-provisioning.md)).
+What the stacks expect from the shared planes, whoever provides them: the operator of a private cloud, or the account holder with shared private networks ([ADR-0004](../adr/0004-planes-and-isolation.md)).
 
-Whoever provides the planes — the cloud operator, or the account holder with shared private networks (in progress, ADR-0003) — supplies the following objects; the stacks find them by name.
+Whoever provides the planes — the cloud operator, or the account holder with shared private networks (ADR-0004) — supplies the following objects; the stacks find them by name.
 
 | Object | Requirement |
 |---|---|

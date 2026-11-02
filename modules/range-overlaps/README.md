@@ -12,3 +12,25 @@ module "overlaps" {
 }
 # module.overlaps.overlaps: [] or ["attachment a (10.21.0.0/24) and attachment b (10.21.0.0/22)"]
 ```
+
+## Inputs and outputs
+
+<!-- BEGIN_TF_DOCS -->
+### Requirements
+
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.9 |
+
+### Inputs
+
+| Name | Description | Type | Default | Required |
+| ---- | ----------- | ---- | ------- | :------: |
+| ranges | IPv4 ranges to check, keyed by a name shown in the result. Two ranges are compared when they<br/>share a scope, or when one of them has the scope "*" (compared with every range). | <pre>map(object({<br/>    cidr   = string<br/>    scopes = list(string)<br/>  }))</pre> | n/a | yes |
+
+### Outputs
+
+| Name | Description |
+| ---- | ----------- |
+| overlaps | Pairs of overlapping ranges that share a scope, as "<name> (<cidr>) and <name> (<cidr>)"; empty when none. |
+<!-- END_TF_DOCS -->

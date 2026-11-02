@@ -1,6 +1,6 @@
 # Spec: plane bindings for public clouds
 
-- **Status:** superseded by [ADR-0003](../adr/0003-scope-and-plane-provisioning.md) (shared private planes); kept for its questions, which the level 2 tests answer
+- **Status:** superseded by [ADR-0004](../adr/0004-planes-and-isolation.md) (shared private planes); kept for its questions, which the level 2 tests answer
 
 ## Problem
 

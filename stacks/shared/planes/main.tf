@@ -1,4 +1,4 @@
-# Shared planes (ADR-0003, D2), applied with the hub project's credentials. Read from top to
+# Shared planes (ADR-0004), applied with the hub project's credentials. Read from top to
 # bottom:
 #   1. operator planes (gateway mode): adopted, nothing created;
 #   2. shared private planes (interface mode): a network per plane with its transit router,

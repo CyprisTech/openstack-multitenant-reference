@@ -25,7 +25,7 @@ variable "egress_network" {
 }
 
 variable "admin_network" {
-  description = "Administration network (layer 10 contract): Packer connects to a floating IP of this network."
+  description = "Administration network (planes contract): Packer connects to a floating IP of this network."
   type        = object({ network = string, subnet = string })
 }
 
@@ -53,7 +53,7 @@ variable "dns_nameservers" {
 variable "network_mtu" {
   description = <<-EOT
     MTU of the build network. It must not exceed the MTU the cloud can carry for tenant networks,
-    nor the MTU of the networks it joins (layer 10 contract). null keeps the cloud default.
+    nor the MTU of the networks it joins (planes contract). null keeps the cloud default.
   EOT
   type        = number
   default     = null

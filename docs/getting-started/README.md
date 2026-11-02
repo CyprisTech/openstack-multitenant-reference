@@ -28,12 +28,13 @@ About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes fo
 
 ## 1. Planes
 
+Every command runs from the root of the repository.
+
 ```bash
-cd stacks/shared/planes
-cp ../../../examples/planes/operator.tfvars.example terraform.tfvars   # operator planes, or:
-cp ../../../examples/planes/hub.tfvars.example terraform.tfvars        # planes built in a hub project
-tofu init && tofu apply
-tofu output -json attachments   # one plane_attachment per stack
+cp examples/planes/operator.tfvars.example stacks/shared/planes/terraform.tfvars   # operator planes, or:
+cp examples/planes/hub.tfvars.example stacks/shared/planes/terraform.tfvars        # planes built in a hub project
+tofu -chdir=stacks/shared/planes init && tofu -chdir=stacks/shared/planes apply
+tofu -chdir=stacks/shared/planes output -json attachments   # one plane_attachment per stack
 ```
 
 Give each stack its entry, for example:
@@ -49,18 +50,20 @@ Your collector joins `monitoring` with its `plane_attachment`; the tenants admit
 ## 3. Entry point
 
 ```bash
-cd stacks/shared/entry-point && cp terraform.tfvars.example terraform.tfvars   # adapt
-tofu init && tofu apply
-tofu output -json svc_public_sources   # edge_sources of the tenants
+cp stacks/shared/entry-point/terraform.tfvars.example stacks/shared/entry-point/terraform.tfvars   # adapt
+tofu -chdir=stacks/shared/entry-point init && tofu -chdir=stacks/shared/entry-point apply
+tofu -chdir=stacks/shared/entry-point output -json svc_public_sources   # edge_sources of the tenants
 ```
 
 ## 4. Tenants
 
-Independent of each other, each in its own project, with its `plane_attachment` and `edge_sources`.
+Independent of each other, each in its own project, with its `plane_attachment`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. From the root of the repository:
 
 ```bash
-cd stacks/tenants/vm       && cp terraform.tfvars.example terraform.tfvars && tofu init && tofu apply
-cd stacks/tenants/isolated && cp terraform.tfvars.example terraform.tfvars && tofu init && tofu apply
+for t in vm isolated; do
+  cp stacks/tenants/$t/terraform.tfvars.example stacks/tenants/$t/terraform.tfvars   # adapt
+  tofu -chdir=stacks/tenants/$t init && tofu -chdir=stacks/tenants/$t apply
+done
 ```
 
 Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On hub planes its ingress and Prometheus get internal load balancers at fixed addresses; the Kubernetes API and the bootstrap instance need floating IPs on an external network (`admin_network`).
@@ -68,7 +71,7 @@ Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On h
 ## 5. Planes again (hub only)
 
 ```bash
-cd stacks/shared/planes && tofu apply && tofu output -json transit
+tofu -chdir=stacks/shared/planes apply && tofu -chdir=stacks/shared/planes output -json transit
 ```
 
 The hub discovers the address of each attached router and routes to it. Until then, the entry point and the collector cannot reach the tenants.

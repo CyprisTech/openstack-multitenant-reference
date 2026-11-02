@@ -2,7 +2,7 @@
 # The values below mirror the ones used for the integration tests, with generic names and
 # documentation address ranges.
 cloud = "example-site-a"
-site  = "site-a" # same site as the entry point (stack 20)
+site  = "site-a" # same site as the entry point
 az    = "nova"
 image = "ubuntu-24.04"
 
@@ -17,10 +17,13 @@ egress_network = { network = "public", subnet = "public-subnet" }
 # Resolvers reachable through the egress network.
 dns_nameservers = ["9.9.9.9", "1.1.1.1"]
 
-# Smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract).
+# Smallest of the tenant overlay MTU and the plane MTUs (planes contract).
 network_mtu = 1362
 
 domains = ["site-a.example.org", "site-b.example.org"]
+
+# Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
+edge_sources = ["198.51.100.5/32"]
 
 # SSH users, created on the bastion and on the web instances. No direct SSH source:
 # administration goes through the bastion.
@@ -35,8 +38,9 @@ bastion = {
   ssh_cidrs        = ["192.0.2.0/24"]
 }
 
-# Exposure to the monitoring collector: a floating IP of the monitoring plane per instance, an
-# A record in the monitoring zone, metrics ports open to the collector's addresses only.
+# Exposure to the monitoring collector: metrics ports open to the collector's addresses only
+# (output collector_cidrs of the collector). On a plane with NAT, each instance also gets a
+# floating IP of the monitoring plane and an A record in the monitoring zone.
 monitoring = {
   dns_zone        = "mon.site-a.example.org."
   collector_cidrs = ["203.0.113.10/32"]

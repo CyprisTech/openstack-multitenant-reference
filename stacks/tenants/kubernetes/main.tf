@@ -1,4 +1,4 @@
-# Layer 30, tenant "platform": a Kubernetes cluster created by Cluster API with the OpenStack
+# Kubernetes tenant: a Kubernetes cluster created by Cluster API with the OpenStack
 # provider (ADR-0002). Terraform prepares the infrastructure of the project (D1): the cluster
 # network with its routers to the planes, the server groups of the machines and the bootstrap
 # instance. The cluster itself is described by the manifests of manifests/, rendered here and
@@ -31,7 +31,7 @@ locals {
   )
 }
 
-# How the cluster network joins the planes (ADR-0003, D2).
+# How the cluster network joins the planes (ADR-0004).
 module "planes" {
   source = "../../../modules/plane-attachment"
 

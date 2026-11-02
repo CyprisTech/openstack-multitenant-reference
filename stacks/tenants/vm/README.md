@@ -45,13 +45,56 @@ With `bastion` set, the stack creates a small network whose only router joins th
 ssh -J ops@<bastion floating IP> ops@<web instance address>
 ```
 
-## Outputs
+## Inputs and outputs
+
+<!-- BEGIN_TF_DOCS -->
+### Requirements
+
+| Name | Version |
+| ---- | ------- |
+| terraform | >= 1.9 |
+| openstack | ~> 3.2 |
+
+### Modules
+
+| Name | Source | Version |
+| ---- | ------ | ------- |
+| admission | ../../../modules/admission | n/a |
+| bastion | ../../../modules/bastion | n/a |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.3 |
+| planes | ../../../modules/plane-attachment | n/a |
+| web | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | 84c898b5d5036296a7cd3496a54e0721ccbc4936 |
+
+### Inputs
+
+| Name | Description | Type | Default | Required |
+| ---- | ----------- | ---- | ------- | :------: |
+| az | Availability zone of the instances. | `string` | n/a | yes |
+| cloud | Entry of clouds.yaml used by this stack. | `string` | n/a | yes |
+| edge\_sources | Ranges the entry point connects from on svc\_public, in CIDR notation: output<br/>svc\_public\_sources of stack shared/entry-point. Only they may reach the published port and<br/>send a PROXY protocol header. | `list(string)` | n/a | yes |
+| egress\_network | External network giving the default route (package installation). The instances get no public address on it. | <pre>object({<br/>    network = string<br/>    subnet  = string<br/>  })</pre> | n/a | yes |
+| flavor | Flavor name of the web instances. | `string` | n/a | yes |
+| image | Image name of the web instances (an Ubuntu LTS cloud image). | `string` | n/a | yes |
+| plane\_attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),<br/>keyed by plane: how its router joins each plane and how its instances are seen there,<br/>whatever provides the plane (the operator, or a hub project). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
+| site | Short site name; must match the site of the entry point (stack shared/entry-point). | `string` | n/a | yes |
+| admin | Administration access: users (login => SSH public keys, sudo granted) and SSH source ranges. No access by default. | <pre>object({<br/>    users     = optional(map(list(string)), {})<br/>    ssh_cidrs = optional(list(string), [])<br/>  })</pre> | `{}` | no |
+| bastion | Optional administration bastion. It lives in its own small network whose router joins<br/>external\_network (an administration network such as an intranet) and carries a floating<br/>IP on it. A second port on the web network gives it access to the web instances; the web<br/>network itself gets no route to the administration network.<br/>- ssh\_cidrs: sources allowed to reach the bastion on port 22.<br/>The users of var.admin are created on the bastion and on the web instances. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    cidr             = optional(string)<br/>    flavor           = optional(string)<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | `null` | no |
+| boot\_volume\_size | Size in GiB of a root volume created from the image; null boots from the flavor's local disk. | `number` | `null` | no |
+| dns\_nameservers | DNS resolvers of the web network, reachable through its routes. | `list(string)` | `[]` | no |
+| domains | Domains served by the web instances and published through the entry point. | `list(string)` | <pre>[<br/>  "site-a.example.org",<br/>  "site-b.example.org"<br/>]</pre> | no |
+| monitoring | Exposure of the instances to the monitoring collector. On a plane with NAT, every instance<br/>gets a floating IP of the monitoring plane; on an interface plane, it is reached at its own<br/>address.<br/>- dns\_zone: zone shared with the project (name with its trailing dot) where an A record per<br/>  instance is written for the collector's DNS service discovery; null writes no record.<br/>- metrics\_ports: ports opened to the collector (node exporter by default).<br/>- collector\_cidrs: addresses of the collector as seen by the instances. null opens the<br/>  metrics ports to the whole monitoring plane range, which includes the routers of every<br/>  tenant joining that plane: set it to keep tenants from scraping each other. | <pre>object({<br/>    dns_zone        = optional(string)<br/>    metrics_ports   = optional(list(number), [9100])<br/>    collector_cidrs = optional(list(string))<br/>  })</pre> | `{}` | no |
+| network\_mtu | MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes they join (planes contract): a larger value creates a<br/>path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator<br/>enables it. null keeps the cloud default. | `number` | `null` | no |
+| server\_group\_policy | Placement of the two web instances: "anti-affinity" or "soft-anti-affinity". | `string` | `"anti-affinity"` | no |
+| web\_cidr | Range of the web network. On planes with NAT tenants may reuse the same range; on interface planes it must be unique (stack shared/planes checks it). | `string` | `"10.21.0.0/24"` | no |
+
+### Outputs
 
 | Name | Description |
-|---|---|
-| `routes` | Routes for the entry point (variable `routes` of the entry point) |
-| `backends` | Published backends, `address:443` on `svc_public` |
-| `edge_sources` | Addresses of the entry point admitted on port 443 |
-| `instances` | Web instances and their private addresses |
-| `bastion` | Floating IP of the bastion, or null |
-| `monitoring_targets` | Floating IP on the monitoring plane and DNS name of each instance |
+| ---- | ----------- |
+| backends | Published backends ("address:443"): floating IPs on svc\_public in gateway mode, the instances' own addresses in interface mode. Published through the entry point (output published\_domains). |
+| bastion | Floating IP of the bastion on the administration network, or null. |
+| edge\_sources | Addresses of the entry point admitted on port 443. |
+| instances | Web instances and their private addresses. |
+| monitoring\_targets | Instances exposed to the monitoring collector: floating IP on the monitoring plane and DNS name (or null). |
+| published\_domains | Domains served by this tenant and their backends, for the domains input of the entry point (scripts/publish-domains.sh). |
+<!-- END_TF_DOCS -->

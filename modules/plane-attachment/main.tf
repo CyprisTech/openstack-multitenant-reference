@@ -1,4 +1,4 @@
-# How a stack joins the shared planes (ADR-0003, D2), computed once for every stack: the planes
+# How a stack joins the shared planes (ADR-0004), computed once for every stack: the planes
 # to adopt, the plane routers, and how instances are exposed. No resource: the outputs are
 # fragments of the tenant model of terraform-openstack-tenant.
 #

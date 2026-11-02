@@ -4,7 +4,7 @@ variable "cloud" {
 }
 
 variable "site" {
-  description = "Short site name; must match the site of the public entry point (stack 20)."
+  description = "Short site name; must match the site of the entry point (stack shared/entry-point)."
   type        = string
 
   validation {
@@ -49,7 +49,7 @@ variable "dns_nameservers" {
 variable "network_mtu" {
   description = <<-EOT
     MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant
-    networks, nor the MTU of the planes the network joins (layer 10 contract). The pod network
+    networks, nor the MTU of the planes the network joins (planes contract). The pod network
     uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default.
   EOT
   type        = number

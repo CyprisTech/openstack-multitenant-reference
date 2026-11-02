@@ -1,4 +1,5 @@
-# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud. Complete configurations, with
+# every stack of the reference: examples/planes (operator planes, or planes built in a hub).
 cloud = "example-hub" # clouds.yaml entry of the hub project
 site  = "site-a"
 
@@ -11,10 +12,10 @@ planes = {
 
 # planes: role of the attachment on each plane it joins ("shared" service or "tenant").
 attachments = {
-  edge     = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  web      = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
-  collector = { project_id = "<project id>", cidr = "10.40.0.0/24", planes = { monitoring = "shared" } }
-  isolated = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+  edge      = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
+  collector = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  web       = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  isolated  = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
 }
 
 # Per plane, aggregates of the tenant ranges, routed by the shared services through the transit

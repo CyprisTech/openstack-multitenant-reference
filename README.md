@@ -9,7 +9,7 @@
 Run several tenants on one OpenStack account — **one project each** — sharing a public entry point, monitoring and internal services, with every flow between them explicit and an isolation test to run after each change. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module.
 
 > [!NOTE]
-> **`v0.2.1`** runs on clouds whose operator provides the shared planes (private and sovereign clouds). Public clouds, with planes built by the account holder, are in progress ([ADR-0003](docs/adr/0003-scope-and-plane-provisioning.md)).
+> **`v0.2.1`** runs on clouds whose operator provides the shared planes (private and sovereign clouds). Public clouds, with planes built by the account holder, are in progress ([ADR-0004](docs/adr/0004-planes-and-isolation.md)).
 
 **Start here:** [getting started](#getting-started) to deploy it; the [architecture](docs/concepts/architecture.md) and the [trade-offs](docs/concepts/trade-offs.md) to evaluate it.
 
@@ -43,6 +43,8 @@ The shared planes are, inside one account, the hub-and-spoke that OpenStack does
 
 ## Is it for you?
 
+Written for **platform teams on a public or sovereign cloud with a member role** and for **hosting providers running one project per customer**; operators of a private cloud provide the planes. Needs, difficulties and coverage per profile: [who it is for](docs/concepts/audiences.md).
+
 | You… | |
 |---|---|
 | host several customers, teams or environments on one OpenStack account | **Yes** |
@@ -50,6 +52,8 @@ The shared planes are, inside one account, the hub-and-spoke that OpenStack does
 | run a single application or tenant | Use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples |
 | give each customer its own OpenStack account, or span several clouds | Not yet: shared planes do not cross accounts. Manage each account as a single tenant with the module; an encrypted overlay between accounts is on the [roadmap](#roadmap) |
 | want an operated, production-ready platform | See projects such as Sovereign Cloud Stack or Azimuth; this is a reference with a [checklist](#before-production) |
+
+**What the reference owns** ([ADR-0003](docs/adr/0003-scope-and-boundary.md), D4): the multi-tenant architecture — tenants, planes, isolation, exposure, availability — and its day-to-day operations. Platform services (monitoring, logs, audit, backups, secrets) plug into documented **integration points** with tools of your choice. The cloud foundation (projects, quotas, single sign-on) and the workloads are out of scope.
 
 ## Two contexts
 
@@ -201,7 +205,7 @@ This is a reference, not an operated platform. Before production, plan for:
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
 | **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
-| **Concepts** | [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [plane bindings](docs/specs/plane-bindings.md) (superseded) |
+| **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [plane bindings](docs/specs/plane-bindings.md) (superseded) |
 | **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [collector](tests/fixtures/collector/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) · [two floating IPs on a port](tests/integration/dual-floating-ip/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
@@ -229,15 +233,37 @@ Quotas per project: [sizing](docs/concepts/architecture.md#sizing).
 
 ## Roadmap
 
+Sorted by the boundary of [ADR-0003](docs/adr/0003-scope-and-boundary.md) (D4). Each item gets its specification when work on it starts.
+
+**In the reference**
+
 | Release | Content | Status |
 |---|---|---|
 | v0.1.0 – v0.2.1 | Entry point, `vm` and `isolated` tenants, monitoring integration, Kubernetes tenant, isolation test, test procedure | released |
-| **v0.3.0** | One account, one project per tenant; shared planes on public clouds; documentation by task; new stack layout (breaking: paths) | in progress |
-| next | Kubernetes tenant day-to-day operations: upgrade, scaling, credential rotation; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | planned |
-| on demand | Connections between two tenants (peering) through a transit network, declared in `shared/planes` ([pattern](docs/concepts/connecting-tenants.md)) | planned |
-| later | Planes as code for cloud operators, with cloud-baseline ([terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.2`) | planned |
+| **v0.3.0** | One account, one project per tenant; shared planes on public clouds; new stack layout (breaking: paths); tenants exposed by service addresses, through the shared entry point or their own load balancer; domains published without replacing the entry point ([ADR-0006](docs/adr/0006-exposure.md)) | in progress |
+| next | Certificates of the published domains; Kubernetes tenant day-to-day operations: upgrade, scaling, credential rotation; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | planned |
+| next | Availability zones; recovery of the architecture (states, rebuild order, drill) | planned |
+| later | Network services for the tenants: egress, DNS resolution, time, package mirrors; IPv6 | planned |
 | later | Failover between sites | planned |
+| on demand | Connections between two tenants (peering) through a transit network, declared in `shared/planes` ([pattern](docs/concepts/connecting-tenants.md)) | planned |
 | later | Tenants in several accounts or clouds, joined by an encrypted overlay | planned |
+
+**Integration points** (the contract in the reference, the tools yours)
+
+| Release | Content | Status |
+|---|---|---|
+| v0.3.0 | Monitoring: tenants push to your receiver, nothing connects into a tenant ([ADR-0007](docs/adr/0007-monitoring.md)) | in progress |
+| next | Logs and audit | planned |
+| later | Backups of tenant data; secrets; a GitOps pipeline for the stacks (example) | planned |
+
+**Out of scope**
+
+| Need | Where |
+|---|---|
+| Projects, quotas, roles, flavors, images, planes as code on a private cloud | cloud-baseline ([terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.2`) |
+| Single sign-on, identity federation, cost, self-service | cloud-baseline on a private cloud; the provider's IAM on a public one |
+| Operating the cloud itself (deployment, upgrades, databases of OpenStack) | the cloud's own tooling |
+| Workloads and their deployment | each tenant |
 
 ## Related project
 

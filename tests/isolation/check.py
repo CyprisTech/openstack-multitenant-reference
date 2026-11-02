@@ -5,7 +5,7 @@ Reads the outputs of the deployed stacks, runs TCP probes from inside the tenant
 their bastions) and from the machine running the test, and compares every result with the
 matrix of docs/architecture.md. Exits with status 1 if any row differs.
 
-The same rows hold whatever the plane modes (ADR-0003, D2): the addresses come from the stacks'
+The same rows hold whatever the plane modes (ADR-0004): the addresses come from the stacks'
 outputs, floating IPs of the planes in gateway mode, the instances' own addresses in interface
 mode. Each stack may live in its own project; the test only reads their outputs.
 

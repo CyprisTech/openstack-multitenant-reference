@@ -8,10 +8,10 @@ flavor           = "m1.small-nodisk"
 boot_volume_size = 8 # null with a flavor that has a local disk
 
 
-# Smallest of the tenant overlay MTU and the plane MTUs (layer 10 contract).
+# Smallest of the tenant overlay MTU and the plane MTUs (planes contract).
 network_mtu = 1362
 
-# The collector scrapes the instance through its floating IP on the monitoring plane.
+# Metrics ports open to the collector's addresses only (output collector_cidrs of the collector).
 monitoring = {
   dns_zone        = "mon.site-a.example.org."
   collector_cidrs = ["203.0.113.10/32"]

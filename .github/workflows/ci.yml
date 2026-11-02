@@ -99,6 +99,13 @@ jobs:
         run: bash -n scripts/publish-domains.sh images/kubernetes-node/build.sh
       - name: documentation links
         run: python3 tests/docs/check_links.py
+      - name: inputs and outputs tables (terraform-docs)
+        run: |
+          curl -sSLo tfd.tgz https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz
+          tar xzf tfd.tgz terraform-docs && rm tfd.tgz
+          for d in stacks/shared/* stacks/tenants/* tests/fixtures/* modules/*; do ./terraform-docs -c .terraform-docs.yml "$d"; done
+          rm terraform-docs
+          git diff --exit-code -- '*README.md'
 
   secrets:
     name: gitleaks (full history)

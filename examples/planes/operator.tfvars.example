@@ -14,9 +14,10 @@ planes = {
 # Every project joining the planes, with its role on each one. On operator planes, tenant ranges
 # may overlap: tenants are seen through floating IPs of the planes.
 attachments = {
-  edge      = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  collector = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
-  web       = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
-  isolated  = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
-  platform  = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
+  edge             = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
+  collector        = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  intranet-service = { project_id = "<shared services project>", cidr = "10.35.0.0/28", planes = { intranet = "shared" } }
+  web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+  platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
 }

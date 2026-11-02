@@ -10,5 +10,5 @@ ssh_cidrs = ["192.0.2.10/32"]
 
 dns_nameservers = ["9.9.9.9", "1.1.1.1"]
 
-# Smallest of the tenant overlay MTU and the MTU of the networks joined (layer 10 contract).
+# Smallest of the tenant overlay MTU and the MTU of the networks joined (planes contract).
 network_mtu = 1362

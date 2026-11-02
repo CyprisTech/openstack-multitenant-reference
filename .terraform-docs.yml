@@ -1,0 +1,28 @@
+formatter: markdown table
+version: ">= 0.24.0"
+
+output:
+  file: README.md
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: false
+  default: true
+  escape: true
+  hide-empty: true
+  html: true
+  indent: 3
+  # Ignore .terraform.lock.hcl: a local lock file would replace the version constraint with
+  # the locked version and make the CI check fail on a clean checkout.
+  lockfile: false
+  required: true
+  sensitive: true
+  type: true

@@ -1,6 +1,6 @@
 # How a tenant joins a plane
 
-A plane is a network shared by several projects: `svc_public` for publication, `monitoring` for metrics, `intranet` for internal services. This page explains the two ways a tenant joins a plane, what each means for addresses, routing and isolation, and why a third way — ports of the instances directly on the planes — is not used. The decision is [ADR-0003](../adr/0003-scope-and-plane-provisioning.md), D2.
+A plane is a network shared by several projects: `svc_public` for publication, `monitoring` for metrics, `intranet` for internal services. This page explains the two ways a tenant joins a plane, what each means for addresses, routing and isolation, and why a third way — ports of the instances directly on the planes — is not used. The decision is [ADR-0004](../adr/0004-planes-and-isolation.md).
 
 ## Gateway and interface: two kinds of router port
 

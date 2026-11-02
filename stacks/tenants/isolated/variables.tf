@@ -4,7 +4,7 @@ variable "cloud" {
 }
 
 variable "site" {
-  description = "Short site name; must match the site of the public entry point (stack 20)."
+  description = "Short site name; must match the site of the entry point (stack shared/entry-point)."
   type        = string
 
   validation {
@@ -83,7 +83,7 @@ variable "bastion" {
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
-    cidr             = optional(string, "10.31.0.0/28")
+    cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
@@ -93,7 +93,7 @@ variable "bastion" {
 variable "network_mtu" {
   description = <<-EOT
     MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant
-    networks, nor the MTU of the planes they join (layer 10 contract): a larger value creates a
+    networks, nor the MTU of the planes they join (planes contract): a larger value creates a
     path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator
     enables it. null keeps the cloud default.
   EOT

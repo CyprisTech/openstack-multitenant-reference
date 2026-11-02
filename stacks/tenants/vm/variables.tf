@@ -4,7 +4,7 @@ variable "cloud" {
 }
 
 variable "site" {
-  description = "Short site name; must match the site of the public entry point (stack 20)."
+  description = "Short site name; must match the site of the entry point (stack shared/entry-point)."
   type        = string
 
   validation {
@@ -35,7 +35,7 @@ variable "boot_volume_size" {
 }
 
 variable "web_cidr" {
-  description = "Range of the web network. Tenants may reuse the same range: they never route to each other."
+  description = "Range of the web network. On planes with NAT tenants may reuse the same range; on interface planes it must be unique (stack shared/planes checks it)."
   type        = string
   default     = "10.21.0.0/24"
 }
@@ -75,11 +75,9 @@ variable "edge_sources" {
   description = <<-EOT
     Ranges the entry point connects from on svc_public, in CIDR notation: output
     svc_public_sources of stack shared/entry-point. Only they may reach the published port and
-    send a PROXY protocol header. null reads the entry point's router by name, which works only
-    when the entry point is in the same project.
+    send a PROXY protocol header.
   EOT
   type        = list(string)
-  default     = null
 }
 
 variable "domains" {
@@ -119,7 +117,7 @@ variable "bastion" {
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
-    cidr             = optional(string, "10.31.0.0/28")
+    cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
@@ -129,7 +127,7 @@ variable "bastion" {
 variable "network_mtu" {
   description = <<-EOT
     MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant
-    networks, nor the MTU of the planes they join (layer 10 contract): a larger value creates a
+    networks, nor the MTU of the planes they join (planes contract): a larger value creates a
     path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator
     enables it. null keeps the cloud default.
   EOT
@@ -139,8 +137,9 @@ variable "network_mtu" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the instances to the monitoring collector (ADR-0001, D2): every instance gets a
-    floating IP of the monitoring plane.
+    Exposure of the instances to the monitoring collector. On a plane with NAT, every instance
+    gets a floating IP of the monitoring plane; on an interface plane, it is reached at its own
+    address.
     - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
       instance is written for the collector's DNS service discovery; null writes no record.
     - metrics_ports: ports opened to the collector (node exporter by default).

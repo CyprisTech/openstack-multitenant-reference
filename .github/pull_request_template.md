@@ -13,7 +13,7 @@
 
 - [ ] `fmt`, `validate` and `tflint` pass locally on every changed configuration
 - [ ] Tested on an OpenStack cloud (apply, empty plan after apply, destroy), or not applicable
-- [ ] The reachability matrix (`docs/architecture.md` and `tests/isolation/check.py`) is updated if a flow changed
-- [ ] Stack READMEs and `terraform.tfvars.example` updated if inputs or outputs changed
+- [ ] The isolation matrix (`docs/reference/isolation-matrix.md` and `tests/isolation/check.py`) is updated if a flow changed
+- [ ] `terraform.tfvars.example` updated and the inputs and outputs tables regenerated (`terraform-docs -c .terraform-docs.yml <dir>`) if inputs or outputs changed
 - [ ] `CHANGELOG.md` updated under *Unreleased*
 - [ ] No state, plan, `*.tfvars`, `*_override.tf`, credentials or real infrastructure details (domains, addresses, network names) in the diff

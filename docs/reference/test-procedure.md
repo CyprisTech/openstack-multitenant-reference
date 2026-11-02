@@ -1,6 +1,6 @@
 # Test procedure
 
-Every step of a full test cycle, with the checkpoint that must pass before the next step and the duration measured on the reference test cloud. Each stack runs in its own project, as in production ([ADR-0003](../adr/0003-scope-and-plane-provisioning.md)), and the cycle runs in either plane mode: **gateway** (planes provided by the operator) or **interface** (shared private planes of a hub project, with transit routers). The results of each cycle are in [test results](../concepts/test-results.md); the [getting started](../getting-started/README.md) is the short version.
+Every step of a full test cycle, with the checkpoint that must pass before the next step and the duration measured on the reference test cloud. Each stack runs in its own project, as in production ([ADR-0003](../adr/0003-scope-and-boundary.md)), and the cycle runs in either plane mode: **gateway** (planes provided by the operator) or **interface** (shared private planes of a hub project, with transit routers). The results of each cycle are in [test results](../concepts/test-results.md); the [getting started](../getting-started/README.md) is the short version.
 
 Run everything from a machine that is an administration source of the stacks (`admin.sources`, `bastion.ssh_cidrs`), with a `clouds.yaml` entry per project and **no `OS_*` variable in the shell**.
 
@@ -243,7 +243,7 @@ domains published: apps.platform.example.org, site-a.example.org, site-b.example
 ```bash
 kubectl --kubeconfig platform.kubeconfig apply -f stacks/tenants/kubernetes/demo/whoami.yaml
 LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .floating_ip)
-for d in site-a.example.org site-b.example.org apps.example.org; do
+for d in site-a.example.org site-b.example.org apps.platform.example.org; do
   for i in $(seq 12); do curl -sk --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
 done
 python3 tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig

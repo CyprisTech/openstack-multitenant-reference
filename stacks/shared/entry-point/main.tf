@@ -1,4 +1,4 @@
-# Layer 20: the public entry point (ADR-0001, D3 and D8).
+# The shared public entry point (ADR-0001, D3 and D8).
 # Octavia in TCP mode, pools in PROXY protocol, two Traefik instances on plain VMs
 # routing by SNI without terminating TLS.
 
@@ -46,8 +46,8 @@ module "bastion" {
   dns_nameservers = var.dns_nameservers
 }
 
-# How the stack joins the planes (ADR-0003, D2): from shared/planes when given, otherwise
-# operator planes in gateway mode.
+# How the stack joins the planes (ADR-0004), from its entry of the attachments output of
+# shared/planes.
 module "planes" {
   source = "../../../modules/plane-attachment"
 

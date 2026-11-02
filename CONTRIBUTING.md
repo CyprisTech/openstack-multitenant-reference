@@ -17,8 +17,8 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 |---|---|
 | `stacks/shared/entry-point` | The shared public entry point |
 | `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
-| `tests/isolation` | Executable reachability matrix |
-| `tests/fixtures/collector` | Test collector used by the matrix |
+| `tests/isolation` | The isolation test |
+| `tests/fixtures/collector`, `tests/fixtures/intranet-service` | Stand-ins for your platform services, used by the isolation test |
 | `tests/integration/dual-floating-ip` | One-off test behind the monitoring design (two floating IPs on one port) |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
@@ -30,9 +30,10 @@ Every directory under `stacks/` and `tests/integration/` is a root configuration
 |---|---|---|
 | [OpenTofu](https://opentofu.org/docs/intro/install/) and/or [Terraform](https://developer.hashicorp.com/terraform/install) | validate, deploy | >= 1.9 |
 | [TFLint](https://github.com/terraform-linters/tflint) | lint | latest |
-| Python | reachability matrix (standard library only) | >= 3.9 |
+| Python | isolation test (standard library only) | >= 3.9 |
+| [terraform-docs](https://terraform-docs.io) | inputs and outputs tables of the READMEs | 0.24 |
 | [gitleaks](https://github.com/gitleaks/gitleaks) | detect secrets | latest |
-| `jq`, `ssh` | route generation, matrix probes | any |
+| `jq`, `ssh` | domain publication, isolation test probes | any |
 
 ## Checks
 
@@ -61,7 +62,7 @@ CI only validates the code. Every change to a stack is also tested by the mainta
 
 1. **Apply**, then **plan again: the plan after apply must be empty.**
 2. Functional checks of the change (for example HTTPS through the entry point, the rolling replacement of the edge instances).
-3. **The reachability matrix.** [`tests/isolation/check.py`](tests/isolation/README.md) reads the outputs of the deployed stacks and of the [test collector](tests/fixtures/collector/README.md), opens TCP connections from inside each tenant (through its bastion), from the collector and from the machine running the test, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the `web` routes rolled onto the entry point, and the collector's `collector_cidrs` given to the stacks as `monitoring.collector_cidrs`.
+3. **The isolation test.** [`tests/isolation/check.py`](tests/isolation/README.md) reads the outputs of the deployed stacks and of the [test collector](tests/fixtures/collector/README.md), opens TCP connections from inside each tenant (through its bastion), from the collector and from the machine running the test, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the domains of `web` published on the entry point, and the collector's `collector_cidrs` given to the stacks as `monitoring.collector_cidrs`.
 4. **Destroy**, and check that nothing is left (instances, load balancers, floating IPs, DNS records).
 
 Use a dedicated, disposable project and project-scoped credentials (an application credential with the `member` role, plus `load-balancer_member` if your Octavia policy requires it). These tests create real resources and may cost money on a public cloud. Contributors are not required to run them; if you do, attach a summary without addresses or names to the pull request.

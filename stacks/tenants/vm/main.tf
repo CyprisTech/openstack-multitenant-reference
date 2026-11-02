@@ -1,4 +1,4 @@
-# Layer 30, tenant "web": two VMs serving several domains, published on the svc_public
+# Tenant of virtual machines: two VMs serving several domains, published on the svc_public
 # plane and reachable only from the public entry point (ADR-0001, D5 and D7).
 #
 # The web server is a demonstration backend: nginx terminates TLS with a self-signed
@@ -11,12 +11,9 @@ locals {
 
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
 
-  # Ranges of the entry point on svc_public (ADR-0001, D1 and D9): only they may reach the
-  # published port, and only they are trusted to send a PROXY protocol header. Given by the
-  # entry point's output, or read from its router when it is in the same project.
-  edge_sources = var.edge_sources != null ? var.edge_sources : [
-    for ip in data.openstack_networking_router_v2.edge_svc_public[0].external_fixed_ip : "${ip.ip_address}/32"
-  ]
+  # Ranges of the entry point on svc_public, from its output svc_public_sources: only they may
+  # reach the published port, and only they are trusted to send a PROXY protocol header.
+  edge_sources = var.edge_sources
 
   # Sources of the metrics scrapes: the collector only.
   metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
@@ -42,11 +39,6 @@ locals {
   EOT
 
   san = join(",", [for d in var.domains : "DNS:${d}"])
-}
-
-data "openstack_networking_router_v2" "edge_svc_public" {
-  count = var.edge_sources == null ? 1 : 0
-  name  = "${var.site}-edge-svc-public"
 }
 
 # Who may reach the web instances.
@@ -80,8 +72,8 @@ module "bastion" {
   dns_nameservers = var.dns_nameservers
 }
 
-# How the stack joins the planes (ADR-0003, D2): from shared/planes when given, otherwise
-# operator planes in gateway mode.
+# How the stack joins the planes (ADR-0004), from its entry of the attachments output of
+# shared/planes.
 module "planes" {
   source = "../../../modules/plane-attachment"
 

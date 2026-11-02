@@ -1,5 +1,5 @@
 name: Bug report
-description: A stack, the reachability matrix or the documentation does not behave as described
+description: A stack, the isolation test or the documentation does not behave as described
 labels: [bug]
 body:
   - type: markdown
@@ -51,8 +51,8 @@ body:
   - type: textarea
     id: contract
     attributes:
-      label: Layer 10 contract
-      description: How your cloud provides the planes (shared or external networks, MTUs, DNS zone). See docs/architecture.md.
+      label: Planes
+      description: How your cloud provides the planes (operator external networks or networks of a hub project, NAT or routed, MTUs, DNS zone). See docs/reference/planes-contract.md.
   - type: textarea
     id: config
     attributes:

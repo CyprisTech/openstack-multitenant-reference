@@ -29,7 +29,7 @@ locals {
   EOT
 }
 
-# How the stack joins the monitoring plane (ADR-0003, D2). Its router is the default gateway:
+# How the stack joins the monitoring plane (ADR-0004). Its router is the default gateway:
 # the tenant has no other way out.
 module "planes" {
   source = "../../../modules/plane-attachment"
