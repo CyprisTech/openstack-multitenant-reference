@@ -95,7 +95,7 @@ module "cloudinit" {
 }
 
 module "isolated" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.3"
 
   tenant = {
     existing = {
