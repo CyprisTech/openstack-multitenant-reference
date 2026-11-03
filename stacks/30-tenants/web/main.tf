@@ -63,7 +63,7 @@ data "openstack_networking_router_v2" "edge_svc_public" {
 }
 
 module "cloudinit_bastion" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
   count  = local.with_bastion ? 1 : 0
 
   hostname = local.bastion_name
