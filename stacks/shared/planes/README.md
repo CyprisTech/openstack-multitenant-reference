@@ -1,6 +1,6 @@
 # Stack `shared/planes`
 
-The shared planes ([ADR-0004](../../../docs/adr/0004-planes-and-isolation.md); [How a tenant joins a plane](../../../docs/concepts/plane-attachment.md)). The single source of the planes' description for every other stack, whatever provides the planes. Applied before the other stacks and again after an attachment joins or leaves: with the credentials of the **hub** project when it builds planes, of any project (the shared services') when it only adopts the operator's. The hub project holds the network only: the planes, their RBAC policies and their transit routers. Shared services (entry point, collector, internal services) run in their own projects, attached with the role `shared`.
+The shared planes ([ADR-0004](../../../docs/adr/0004-planes-and-isolation.md); [How a tenant joins a plane](../../../docs/concepts/plane-attachment.md)). The single source of the planes' description for every other stack, whatever provides the planes. Applied before the other stacks and again after an attachment joins or leaves: with the credentials of the **hub** project when it builds planes, of any project (the shared services') when it only adopts the operator's. The hub project holds the network only: the planes, their RBAC policies and their transit routers. Shared services (entry point, receivers, internal services) run in their own projects, attached with the role `shared`.
 
 | Plane mode | What this stack does | How an attached router joins |
 |---|---|---|
@@ -34,9 +34,10 @@ To rename an attachment, remove it and apply, then add it under its new name and
 - The hub project is not an attachment: it holds the network only.
 - Planes do not overlap each other nor any attachment ([`modules/range-overlaps`](../../../modules/range-overlaps/README.md)); attachments sharing an interface plane do not overlap (on gateway planes they may, being never seen); every plane of an attachment is declared; an attachment has a single router interface on a plane.
 
-The plane and its transit router are created with the network module of [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant).
 - Neutron caps the routes of a router (`max_routes`, 30 by default): the transit router of a plane routes to about 30 attachments.
 - Discovery relies on the default Neutron policy that lets a network's owner read the ports on it; check it on each cloud.
+
+The plane and its transit router are created with the network module of [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant).
 
 ## Inputs and outputs
 
@@ -80,8 +81,8 @@ The plane and its transit router are created with the network module of [terrafo
 | ---- | ----------- | ---- | ------- | :------: |
 | attachments | Projects joining the planes, keyed by name.<br/>- project\_id: project of the attachment (the target of the RBAC policies).<br/>- cidr: range of the attachment's network. Must not overlap a plane, nor another<br/>  attachment of the same interface plane.<br/>- planes: the planes it joins, each with its role on that plane:<br/>  - "shared": a shared service of the plane (the entry point on svc\_public, the metrics<br/>    receiver on monitoring, an internal service on intranet). It reaches the tenants and the other<br/>    shared services of the plane, and they reach it.<br/>  - "tenant": a workload, or a client of the shared services (the entry point pushes its<br/>    metrics on monitoring). It reaches the shared services of the plane only. | <pre>map(object({<br/>    project_id = string<br/>    cidr       = string<br/>    planes     = map(string)<br/>  }))</pre> | n/a | yes |
 | cloud | Entry of clouds.yaml of the hub project: the project that owns the shared private planes. | `string` | n/a | yes |
-| planes | Shared planes, keyed by name (svc\_public, monitoring, intranet).<br/>- mode "gateway": an external network provided by the cloud operator, adopted by name<br/>  (network, subnet). Tenant routers join it with their gateway; nothing is created here.<br/>- mode "interface": a private network created in the hub project and shared with the<br/>  attached projects by RBAC, with a transit router. Attached routers join it with an interface<br/>  and reach each other through the transit router.<br/>- cidr: range of the plane.<br/>- mtu: MTU of a created plane; null uses the cloud default. | <pre>map(object({<br/>    mode    = string<br/>    cidr    = string<br/>    network = optional(string)<br/>    subnet  = optional(string)<br/>    mtu     = optional(number)<br/>  }))</pre> | n/a | yes |
-| site | Short site name, used in resource names (ADR-0001, D9). | `string` | n/a | yes |
+| planes | Shared planes, any number, keyed by name (in the reference scenario: svc\_public,<br/>monitoring, intranet).<br/>- mode "gateway": an external network provided by the cloud operator, adopted by name<br/>  (network, subnet). Tenant routers join it with their gateway; nothing is created here.<br/>- mode "interface": a private network created in the hub project and shared with the<br/>  attached projects by RBAC, with a transit router. Attached routers join it with an interface<br/>  and reach each other through the transit router.<br/>- cidr: range of the plane.<br/>- mtu: MTU of a created plane; null uses the cloud default. | <pre>map(object({<br/>    mode    = string<br/>    cidr    = string<br/>    network = optional(string)<br/>    subnet  = optional(string)<br/>    mtu     = optional(number)<br/>  }))</pre> | n/a | yes |
+| site | Short site name: the name of the region in this deployment, used in resource names. | `string` | n/a | yes |
 | tenant\_ranges | Per interface plane, aggregates covering the ranges of its tenants, routed by the shared<br/>services through the transit router: adding a tenant inside them changes no shared service.<br/>A plane absent here: the shared services get one route per tenant of the plane. | `map(list(string))` | `{}` | no |
 
 ### Outputs

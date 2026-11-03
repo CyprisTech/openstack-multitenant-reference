@@ -1,6 +1,6 @@
 # Connecting two tenants
 
-Tenants are isolated from each other: the isolation test checks that no tenant reaches another. When two tenants do need to talk — the equivalent of VPC peering on other clouds — there are two ways. This page explains both and when to use each. It is a pattern, not a stack: the repository does not provide it yet.
+Tenants are isolated from each other: the isolation test checks that no tenant reaches another. When two tenants do need to talk — the equivalent of VPC peering on other clouds — there are two ways. This page explains both and when to use each. It is a pattern, not a part of the design: tenants never reach each other in this reference.
 
 ## First choice: a shared service
 
@@ -14,9 +14,9 @@ When the two tenants really need each other (two applications of one team, a mig
 
 ```mermaid
 flowchart LR
-    VA["VM of A<br/>10.21.0.15"] --> RA["router of A<br/>transit: 192.0.2.1<br/>route 10.24.0.0/24 via 192.0.2.2"]
+    VA["VM of A<br/>10.21.0.15"] --> RA["router of A<br/>transit: 198.51.100.65<br/>route 10.24.0.0/24 via 198.51.100.66"]
     RA --- T["transit network<br/>192.0.2.0/29<br/>owned by A, shared with B"]
-    T --- RB["router of B<br/>transit: 192.0.2.2<br/>route 10.21.0.0/24 via 192.0.2.1"]
+    T --- RB["router of B<br/>transit: 198.51.100.66<br/>route 10.21.0.0/24 via 198.51.100.65"]
     RB --> VB["VM of B<br/>10.24.0.8"]
 ```
 
@@ -40,4 +40,4 @@ Sharing A's application network directly looks simpler: B's router joins it and 
 
 ## In this repository
 
-Not implemented: the building blocks are there (router interfaces and routes in [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), RBAC sharing and address plan in `stacks/shared/planes`). A `peerings` input of `stacks/shared/planes` — explicit pairs, routes generated, rows of the isolation test opened — is on the roadmap, on demand.
+When an exception is needed, the building blocks are there (router interfaces and routes in [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), RBAC sharing and address plan in `stacks/shared/planes`): a pair of tenants declared explicitly, the routes between their ranges, and the rows of the isolation test that open for them.

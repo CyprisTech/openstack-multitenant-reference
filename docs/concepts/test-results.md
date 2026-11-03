@@ -1,16 +1,61 @@
 # Test results
 
-Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Until 2026-10-29 the scenario ran in one test project; since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-boundary.md)), in both plane modes.
+Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-boundary.md)), in both plane modes.
 
-The sections are kept in date order. **The ones before 2026-11-02 describe earlier designs** — numbered layers, a collector scraping the tenants through floating IPs of the monitoring plane, an entry point routing to the tenants' instances and replaced at each publication — and stay as the history of the findings that led to the current design ([ADR-0006](../adr/0006-exposure.md), [ADR-0007](../adr/0007-monitoring.md)). The current state is the last section.
+The summary and the detailed results below are those of the current design. The earlier runs, on earlier designs, are kept collapsed in [History](#history): their findings led to the current design.
+
+## Current state
+
+Tests of 2026-11-02 and 2026-11-03, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
+
+| Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
+|---|---|---|---|
+| Deployment | 7 stacks; empty plan after apply | ✅ | ✅ |
+| Isolation | executable matrix: tenants, shared services, administrators (33 rows) | ✅ 33/33 | ✅ 33/33 |
+| Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed on 443, 22, 9100 |
+| Ingress | HTTPS through the entry point, SNI without decryption, client address kept (3 domains × 12) | ✅ 36/36 | ✅ 36/36 |
+| Observability | push from every tenant type (Prometheus agent, OTLP, remote write); nothing connects in | ✅ | ✅ |
+| Kubernetes | self-managed cluster with Cluster API, management moved into the cluster | ✅ | ✅ |
+| Teardown | no leftover in any project | ✅ | ✅ |
+
+Publishing a domain under load, measured once: nothing is replaced, the domain answers 13 s after a 19 s apply, and none of the 290 requests sent meanwhile to another domain fails.
+
+Known limits, detailed in the findings below and in the [test procedure](../reference/test-procedure.md):
+
+- On hub planes, `shared/planes` is applied again after the tenants; until then the pushes time out and the agents retry.
+- The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
+- Duplicate release proxies after `clusterctl move` have been seen once, without visible effect ([History](#history)).
+
+The isolation matrix of the earlier designs had 45 rows; the counts are not comparable.
 
 ## Environment
 
-Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credential with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0, module `terraform-openstack-tenant` v0.1.1.
+Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 code for the current state (tested at its commit before the release); v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
-## Results
+## Detailed results: Service addresses, routes through metadata, monitoring by push (2026-11-02)
 
-### Stack 20 — public entry point (2026-10-27)
+The design of [ADR-0006](../adr/0006-exposure.md) and [ADR-0007](../adr/0007-monitoring.md), from empty projects, each stack in its own project, in both plane modes, following the [test procedure](../reference/test-procedure.md). The `vm` tenant behind its load balancer, the receiver (`tests/fixtures/receiver`, Prometheus 3.15.1) in the shared services project.
+
+| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
+|---|---|---|---|---|---|
+| Interface mode (hub planes) | planes 16 s, receiver 75 s, entry point 9 min 36 s, `vm` 3 min 42 s, `isolated` 70 s, Kubernetes stack 84 s, cluster 18 min 8 s, planes again 7 s | ✅ 36/36, client address preserved | ✅ **33/33** | ✅ closed on 443, 22, 9100 | ✅ empty (7 stacks) |
+| Gateway mode (operator planes, NAT) | planes 2 s, receiver 2 min 12 s, entry point 3 min 15 s, `vm` 3 min 5 s, `isolated` 2 min 42 s, Kubernetes stack 1 min 56 s, cluster 17 min 27 s | ✅ 36/36, client address preserved | ✅ **33/33** | — (no transit router) | ✅ empty (7 stacks) |
+
+Teardown (interface mode): cluster 4 min 19 s, stacks 4 min 51 s; no leftover in any project.
+
+Findings:
+
+1. **Publishing a domain no longer replaces anything.** A new domain added while a client sends two requests per second to another: the entry point's apply changes its two instances in place (19 s), the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails. Before, a publication took 5 to 8 minutes and lost requests (8 of 179 on 2026-10-29).
+2. **Every tenant pushes, nothing connects in.** The receiver holds series from the entry point, `vm`, `isolated` (OTLP from the stand-in workload) and the Kubernetes tenant (remote write), labelled `site`, `tenant`, `instance`; from the receiver, the metrics ports of the tenants are closed. On hub planes, the pushes time out until `shared/planes` is applied again after the tenants (step 7 of the procedure): the agents retry, nothing is lost but the delay.
+3. **The isolation test must wait** for the ingress Service's address and for the first push (30 s) after the publication; the procedure says so.
+
+## History
+
+Earlier designs: numbered layers, a collector scraping the tenants through floating IPs of the monitoring plane, an entry point routing to the tenants' instances and replaced at each publication. Kept in date order.
+
+<a id="stack-20--public-entry-point-2026-10-27"></a>
+<details>
+<summary><strong>Stack 20 — public entry point (2026-10-27)</strong></summary>
 
 | Check | Result |
 |---|---|
@@ -27,7 +72,11 @@ Finding: on the first run the resolvers of the edge network were only reachable 
 
 Observation: a TLS connection with an unknown server name is answered by Traefik with its default self-signed certificate and a `404`.
 
-### Stack 30 `web` and end-to-end path (2026-10-27)
+</details>
+
+<a id="stack-30-web-and-end-to-end-path-2026-10-27"></a>
+<details>
+<summary><strong>Stack 30 web and end-to-end path (2026-10-27)</strong></summary>
 
 | Check | Result |
 |---|---|
@@ -46,7 +95,11 @@ Findings:
 - **cloud-init.** nginx failed to start at package installation because the demo certificate was created later; the certificate is now created in `bootcmd`.
 - **Bastion routes.** The second interface of a bastion received the default route, plane routes and resolvers of the tenant network; DHCP routes and resolvers are now ignored on that interface.
 
-### Two floating IPs on one port (2026-10-27)
+</details>
+
+<a id="two-floating-ips-on-one-port-2026-10-27"></a>
+<details>
+<summary><strong>Two floating IPs on one port (2026-10-27)</strong></summary>
 
 Test configuration: `tests/integration/dual-floating-ip`, removed in `v0.3.0` with the design it served. Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
 
@@ -62,7 +115,11 @@ Findings:
 - **Replies follow the routes of the instance.** A floating IP on a plane answers only clients whose address is routed back through that plane's router: the plane CIDR is advertised by DHCP, so clients inside the plane work. A client whose address is outside the advertised ranges (for example an administration network reached without source NAT) gets its replies through the default gateway and the connection fails. This is why bastions use their administration router as default gateway.
 - **Security groups of the collector.** A host used as a test source had a monitoring port whose security groups allow scraping *into* it (ingress) but no outgoing TCP: its connections never left. A collector on the monitoring plane needs an egress rule to the metrics ports of the plane range.
 
-### Full scenario and reachability matrix (2026-10-27)
+</details>
+
+<a id="full-scenario-and-reachability-matrix-2026-10-27"></a>
+<details>
+<summary><strong>Full scenario and reachability matrix (2026-10-27)</strong></summary>
 
 Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, monitoring floating IPs and DNS records (module commit `fa88feb`, after `v0.1.1`; the same code is released as `v0.1.2`).
 
@@ -80,7 +137,11 @@ The matrix covers: the entry point from the outside; the web backends reachable 
 
 Finding: every tenant joins the monitoring plane through a router with source NAT, so seen from the plane all tenants have addresses of the plane range. Metrics ports opened to the plane range would let tenants scrape each other: they are now opened to the collector's addresses only (`monitoring.collector_cidrs`).
 
-### Kubernetes node image (2026-10-28)
+</details>
+
+<a id="kubernetes-node-image-2026-10-28"></a>
+<details>
+<summary><strong>Kubernetes node image (2026-10-28)</strong></summary>
 
 | Check | Result |
 |---|---|
@@ -95,7 +156,11 @@ Findings:
 - The template of image-builder has no default for `volume_type`: `build.json` must set it (empty string for the default type).
 - An administration source must be the address **as seen on the administration network**. Through source NAT it is the address of a router, and a machine may leave through a router other than the one its gateway suggests. Three attempts failed with guessed addresses before the source was read on the instance with `$SSH_CLIENT` (see `tests/integration/node-image`).
 
-### Stack 30 `platform`: Kubernetes with Cluster API (2026-10-28)
+</details>
+
+<a id="stack-30-platform-kubernetes-with-cluster-api-2026-10-28"></a>
+<details>
+<summary><strong>Stack 30 platform: Kubernetes with Cluster API (2026-10-28)</strong></summary>
 
 Node image `ubuntu-2404-kube-v1.36.5` (8 GiB virtual size), Cluster API v1.14.3, CAPO v0.15.1, CAAPH v0.6.4, ORC v2.6.0, Cilium 1.20.4, OpenStack cloud controller manager and Cinder CSI 2.36.5, Traefik chart 42.1.3, Prometheus chart 29.39.0. Three control-plane nodes and two workers (2 vCPU, 4 GiB, 15 GiB root volumes).
 
@@ -122,7 +187,11 @@ Findings, all fixed in the stack:
 
 Observation: the node image's virtual size is the minimum root disk of every node. The first build, on a 20 GiB volume, forced 20 GiB per node; rebuilt on 8 GiB, node disks are chosen per role by the cluster.
 
-### Platform hardening and first day-2 operation (2026-10-28)
+</details>
+
+<a id="platform-hardening-and-first-day-2-operation-2026-10-28"></a>
+<details>
+<summary><strong>Platform hardening and first day-2 operation (2026-10-28)</strong></summary>
 
 Remediation (MachineHealthCheck), certificate rotation (`rollout.before.certificatesExpiryDays`), kubelet serving certificates approved by kubelet-csr-approver, metrics-server. Applied to the running cluster: the new ClusterClass templates replaced the five machines one at a time, with an availability probe through the entry point every 5 seconds.
 
@@ -142,8 +211,11 @@ Findings:
 
 The routes publication script (`scripts/publish-routes.sh`, replacing the entry point instances one at a time) lost 8 of 179 requests in the same way at the entry point: the load balancer keeps sending to the instance being deleted until its monitor reacts. To do: take the member out of the pools before replacing the instance.
 
+</details>
 
-### Service addresses created by Terraform (2026-10-28)
+<a id="service-addresses-created-by-terraform-2026-10-28"></a>
+<details>
+<summary><strong>Service addresses created by Terraform (2026-10-28)</strong></summary>
 
 The floating IPs of the Traefik and Prometheus Services are now created by the platform stack (ADR-0002, D5) and requested by the Services (`loadBalancerIP`, `keep-floatingip`). Applied to the running cluster.
 
@@ -165,7 +237,11 @@ Findings:
 4. **Reinstalling a release while its Service is still being deleted.** CAAPH reinstalled Traefik at once; the new release adopted the Service that was being deleted, and was left without a Service when the deletion completed. A second reinstall, once nothing was being deleted, worked. Reinstall a release only after its load balancer Services are gone.
 5. **Resolver of the test collector.** The collector VM resolves with the resolver of its own network, which does not serve the monitoring zone, for any tenant. The federation check queried the cloud resolver; a real collector must use a resolver that serves the monitoring zone.
 
-### Teardown of the whole environment (2026-10-28)
+</details>
+
+<a id="teardown-of-the-whole-environment-2026-10-28"></a>
+<details>
+<summary><strong>Teardown of the whole environment (2026-10-28)</strong></summary>
 
 First run of `delete-cluster.sh`, then destroy of every stack.
 
@@ -186,7 +262,11 @@ Findings, fixed in `delete-cluster.sh` and the READMEs (the scripted fixes run f
 2. **Cluster deletion blocked twice.** The ORC `Image` was not carried back by `clusterctl move` (as on the way in), so CAPO waited for it; and the `KubeadmControlPlane` was gone before its machines, leaving its `kcp-cleanup` pre-terminate hook on them. The script now declares the image again after the move and removes the hook when the control plane object no longer exists.
 3. **Destroy order.** The test intranet service reads the platform's intranet router: destroy it before the platform stack, or with `-refresh=false`.
 
-### One-shot rebuild (2026-10-29)
+</details>
+
+<a id="one-shot-rebuild-2026-10-29"></a>
+<details>
+<summary><strong>One-shot rebuild (2026-10-29)</strong></summary>
 
 The whole environment rebuilt from an empty project, as a user would: published module (`v0.1.2` from GitHub), fresh `tofu init` in every stack, node image kept from the previous cycle. Steps and checkpoints: [test procedure](../reference/test-procedure.md).
 
@@ -210,7 +290,11 @@ Findings:
 4. **Duplicate release proxies after `clusterctl move`.** CAAPH created a second release proxy for 3 of the 7 charts (Traefik, cloud controller manager, metrics-server); the releases themselves were installed once and worked, but two proxies block every later update of a chart. Deleting one proxy, even without its finalizer, uninstalled the release; reinstalling while the old Service was still being deleted left Traefik without a Service. Recovered by reinstalling once nothing was being deleted; the floating IP created by Terraform was kept and reused. **Open:** a safe fix belongs to the day-2 work.
 5. **Designate.** Most records took 11 to 44 s; the three of the entry point took 508 to 553 s, with the shared zone in `PENDING UPDATE`. The same 9-minute delays appear in the module's integration logs of 2026-10-24 and 25: cloud-side and intermittent.
 
-### Teardown and rebuild with the fixes (2026-10-29)
+</details>
+
+<a id="teardown-and-rebuild-with-the-fixes-2026-10-29"></a>
+<details>
+<summary><strong>Teardown and rebuild with the fixes (2026-10-29)</strong></summary>
 
 A second full cycle, from the branch with the fixes of the first rebuild, following the [test procedure](../reference/test-procedure.md) step by step.
 
@@ -234,7 +318,11 @@ Findings:
 3. **Duplicate release proxies are intermittent:** none this time, three charts out of seven in the first rebuild.
 4. **Designate:** the slow records are in the shared zone (about 9 minutes, zone `PENDING UPDATE`), not in the project's own zone (68 s).
 
-### One project per stack, both plane modes (2026-10-31)
+</details>
+
+<a id="one-project-per-stack-both-plane-modes-2026-10-31"></a>
+<details>
+<summary><strong>One project per stack, both plane modes (2026-10-31)</strong></summary>
 
 The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-boundary.md) prescribes — hub (planes only), shared services (collector, intranet service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
 
@@ -254,20 +342,4 @@ Findings:
 4. **Duplicate release proxies after `clusterctl move`** came back once (cloud controller manager and Traefik), without visible effect; none in the two other cycles. Still open, for the Kubernetes day-to-day work.
 5. **Routes pushed by DHCP reach the instances at lease renewal.** With `tenant_ranges` set from the start, the entry point's routes never change when a tenant is added; changing the aggregates later needs a lease renewal on the instances.
 
-### Service addresses, routes through metadata, monitoring by push (2026-11-02)
-
-The design of [ADR-0006](../adr/0006-exposure.md) and [ADR-0007](../adr/0007-monitoring.md), from empty projects, each stack in its own project, in both plane modes, following the [test procedure](../reference/test-procedure.md). The `vm` tenant behind its load balancer, the receiver (`tests/fixtures/receiver`, Prometheus 3.15.1) in the shared services project.
-
-| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
-|---|---|---|---|---|---|
-| Interface mode (hub planes) | planes 16 s, receiver 75 s, entry point 9 min 36 s, `vm` 3 min 42 s, `isolated` 70 s, Kubernetes stack 84 s, cluster 18 min 8 s, planes again 7 s | ✅ 36/36, client address preserved | ✅ **33/33** | ✅ closed on 443, 22, 9100 | ✅ empty (7 stacks) |
-| Gateway mode (operator planes, NAT) | planes 2 s, receiver 2 min 12 s, entry point 3 min 15 s, `vm` 3 min 5 s, `isolated` 2 min 42 s, Kubernetes stack 1 min 56 s, cluster 17 min 27 s | ✅ 36/36, client address preserved | ✅ **33/33** | — (no transit router) | ✅ empty (7 stacks) |
-
-Teardown (interface mode): cluster 4 min 19 s, stacks 4 min 51 s; no leftover in any project.
-
-Findings:
-
-1. **Publishing a domain no longer replaces anything.** A new domain added while a client sends two requests per second to another: the entry point's apply changes its two instances in place (19 s), the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails. Before, a publication took 5 to 8 minutes and lost requests (8 of 179 on 2026-10-29).
-2. **Every tenant pushes, nothing connects in.** The receiver holds series from the entry point, `vm`, `isolated` (OTLP from the stand-in workload) and the Kubernetes tenant (remote write), labelled `site`, `tenant`, `instance`; from the receiver, the metrics ports of the tenants are closed. On hub planes, the pushes time out until `shared/planes` is applied again after the tenants (step 7 of the procedure): the agents retry, nothing is lost but the delay.
-3. **The isolation test must wait** for the ingress Service's address and for the first push (30 s) after the publication; the procedure says so.
-
+</details>

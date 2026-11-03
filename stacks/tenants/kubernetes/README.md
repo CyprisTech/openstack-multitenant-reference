@@ -14,7 +14,7 @@ Every version is pinned in [`cluster.tf`](cluster.tf).
 
 - The shared entry point (`stacks/shared/entry-point`) applied for the same site: the ingress admits its `svc_public_sources` only, given as `edge_sources`.
 - The node image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md).
-- An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project. Created by the operator, never by Terraform (ADR-0002, D1):
+- An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project. Created by an administrator, never by OpenTofu or Terraform (ADR-0002, D1):
 
   ```bash
   openstack application credential create platform-cluster \
@@ -38,7 +38,7 @@ ssh ops@$(tofu output -raw bootstrap) 'sudo install -m 600 /tmp/clouds.yaml /opt
 
 The script can be run again after a failure: each step skips what already exists. It ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance. The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
 
-Publish the ingress through the entry point with [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh): the `published_domains` output of this stack sends the domains of `cluster.domains` to the ingress address, known before the cluster exists. The ingress admits the entry point only, by the `edge_sources` input (output `svc_public_sources` of the entry point). The intranet services admit the cluster by its `intranet_sources` output. The cluster's Prometheus pushes to the receiver given as `monitoring.receiver`, with the labels `site` and `tenant`.
+Publish the ingress through the entry point with [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh): the `published_domains` output of this stack sends the domains of `cluster.domains` to the ingress address, known before the cluster exists. The ingress admits the entry point only, by the `edge_sources` input (output `svc_public_sources` of the entry point). The intranet services admit the cluster by its `intranet_sources` output. The cluster's Prometheus pushes to the receiver given as `monitoring.receiver`, with the labels `site`, `tenant` and `instance`.
 
 The ingress Service requests this address (`loadBalancerIP`) and keeps it when it is deleted (`keep-floatingip`): recreating the Service or the whole cluster does not change the published route. If the requested address is not available, the cloud controller manager silently allocates another one; `kubectl -n traefik get svc traefik` must show the address of `tofu output published_domains`.
 

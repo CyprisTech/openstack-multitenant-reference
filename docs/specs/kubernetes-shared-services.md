@@ -1,21 +1,21 @@
 # Spec: a Kubernetes cluster for shared services
 
-- **Status:** Proposed — for the release after `v0.3.0`, with the Kubernetes day-to-day operations it depends on
+- **Status:** Proposed — its release is given in the README's [status](../../README.md#status); it depends on the Kubernetes day-to-day operations
 - **Related:** [ADR-0002](../adr/0002-platform-kubernetes.md) (Kubernetes tenant), [ADR-0007](../adr/0007-monitoring.md) (monitoring by push), [ADR-0003](../adr/0003-scope-and-boundary.md) (projects), [ADR-0004](../adr/0004-planes-and-isolation.md) (planes, roles per plane), [integration points](../reference/integration-points.md)
 
 ## Problem
 
-Shared services — a registry, a directory, an internal API, a metrics receiver, log collection — run in their own projects, joined to the planes with the role `shared` (ADR-0004). Many operators want to run several of them on one Kubernetes cluster rather than one set of instances each.
+Shared services — a registry, a directory, an internal API, a metrics receiver, log collection — run in their own projects, joined to the planes with the role `shared` (ADR-0004). Many deployments want to run several of them on one Kubernetes cluster rather than one set of instances each.
 
 The [Kubernetes tenant](../../stacks/tenants/kubernetes/README.md) cannot do it today. It is built as a consumer of the planes, with one flow per plane:
 
 | Plane | Today | Admitted |
 |---|---|---|
-| `svc_public` | the ingress, reached by the entry point | the entry point only, PROXY v2 header expected |
-| `monitoring` | the cluster's Prometheus pushes to the receiver | nothing comes in |
-| `intranet` | the cluster consumes internal services | nothing comes in; `intranet_sources` describes the cluster as a client |
+| publication | the ingress, reached by the entry point | the entry point only, PROXY v2 header expected |
+| observability | the cluster's Prometheus pushes to the receiver | nothing comes in |
+| internal services | the cluster consumes internal services | nothing comes in; `intranet_sources` describes the cluster as a client |
 
-No other tenant can reach a service of the cluster: nothing is exposed on `intranet`, and tenants have no route to each other on `svc_public`.
+No other tenant can reach a service of the cluster: nothing is exposed on the internal services plane, and tenants have no route to each other on the publication plane.
 
 ## Goal
 
@@ -32,11 +32,11 @@ Out of scope: tenant workloads in the same cluster (a `shared` attachment reache
 
 ### 1. Role per plane (configuration only)
 
-The cluster's attachment in `shared/planes` takes the role `shared` on the planes where it offers services, for example `{ intranet = "shared", monitoring = "shared", svc_public = "tenant" }`. The transit router then routes the plane's tenants to the cluster and back. No change to `shared/planes`.
+The cluster's attachment in `shared/planes` takes the role `shared` on the planes where it offers services: for example `shared` on the internal services and observability planes, `tenant` on the publication plane. With the plane names of the scenario ([README](../../README.md#what-the-repository-contains)): `{ intranet = "shared", monitoring = "shared", svc_public = "tenant" }`. The transit router then routes the plane's tenants to the cluster and back. No change to `shared/planes`.
 
 ### 2. Exposed services, generic
 
-The hard-coded ingress Service on `svc_public` becomes one instance of a generic input:
+The hard-coded ingress Service on the publication plane becomes one instance of a generic input (plane names of the scenario):
 
 ```hcl
 exposed_services = {
@@ -60,7 +60,7 @@ A second Traefik entry point and Service on the plane where HTTP services are of
 
 ### 5. Consumers join the plane
 
-`vm` and `isolated` do not join `intranet` today. They get an optional `intranet` plane (one more entry in their `plane-attachment` call) and an `intranet_sources` output, as the Kubernetes tenant has.
+`vm` and `isolated` do not join the internal services plane today. They get it as an optional plane (one more entry in their `plane-attachment` call) and the matching `<plane>_sources` output, as the Kubernetes tenant has.
 
 ### 6. Inside the cluster
 
@@ -81,7 +81,7 @@ New rows: a declared consumer reaches its service; a tenant that is not a consum
 
 1. **A separate stack, `stacks/shared/kubernetes`**, next to `stacks/tenants/kubernetes`, both on a common module `modules/kubernetes-cluster` extracted from today's stack (Cluster API manifests, bootstrap, add-ons, scripts). The layout already says the role; inputs, outputs and defaults differ (exposed services, default-deny policies, sources in both directions); a `role` input would fill one stack with conditions, and a single wrong value would expose a tenant cluster as a shared one. The extraction is checked like the building blocks were: identical plans before and after.
 2. **TLS: an internal certificate authority by default** (cert-manager in the cluster), its root distributed to the consumers by cloud-init — the tenant stacks already render cloud-init, and it works for tenants without Internet access. Option documented: public certificates through an ACME DNS-01 challenge, when the names are under a public domain and the cluster reaches the Internet. Passthrough stays possible per route for services that manage their own TLS.
-3. **Names: a DNS zone written by the shared-services stack only**, with the services' internal addresses. Designate has no per-network private view: the zone's records are visible to whoever resolves it, which exposes internal addresses but no access. Option documented: a resolver of the cluster (CoreDNS) exposed on the intranet plane, used by the consumers, for a zone that stays private.
+3. **Names: a DNS zone written by the shared-services stack only**, with the services' internal addresses. Designate has no per-network private view: the zone's records are visible to whoever resolves it, which exposes internal addresses but no access. Option documented: a resolver of the cluster (CoreDNS) exposed on the internal services plane, used by the consumers, for a zone that stays private.
 
 ## Open questions
 

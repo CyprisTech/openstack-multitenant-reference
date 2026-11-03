@@ -1,6 +1,6 @@
 # Shared public entry point
 
-One public address for the domains of the tenants that choose it ([ADR-0006](../../../docs/adr/0006-exposure.md); ADR-0001, D3 and D8):
+One public address for the domains of the tenants that choose it ([ADR-0006](../../../docs/adr/0006-exposure.md); ADR-0001, D3):
 
 - an Octavia load balancer with a public floating IP; listeners in **TCP** on 80 and 443, pools in **PROXY** protocol, **TCP** health monitors;
 - two Traefik instances on plain VMs, in a server group (anti-affinity), Traefik running as a Podman container started by systemd;
@@ -86,7 +86,7 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | image | Image name of the edge instances (an Ubuntu LTS cloud image). | `string` | n/a | yes |
 | plane\_attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),<br/>keyed by plane: how its router joins each plane and how its instances are seen there,<br/>whatever provides the plane (the operator, or a hub project). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
 | public\_network | External network providing the public floating IP of the load balancer and the default route of the edge network. | <pre>object({<br/>    network = string<br/>    subnet  = string<br/>  })</pre> | n/a | yes |
-| site | Short site name, used in resource names (ADR-0001, D9). | `string` | n/a | yes |
+| site | Short site name: the name of the region in this deployment, used in resource names. | `string` | n/a | yes |
 | admin | Administration access to the Traefik instances. users: login => SSH public keys (sudo granted).<br/>ssh\_cidrs: sources allowed on port 22. Empty by default: no SSH access. | <pre>object({<br/>    users     = optional(map(list(string)), {})<br/>    ssh_cidrs = optional(list(string), [])<br/>  })</pre> | `{}` | no |
 | bastion | Optional administration bastion. It lives in its own small network whose router joins<br/>external\_network (an administration network such as an intranet) and carries a floating<br/>IP on it. A second port on the edge network gives it access to the Traefik instances; the edge<br/>network itself gets no route to the administration network.<br/>- ssh\_cidrs: sources allowed to reach the bastion on port 22.<br/>The users of var.admin are created on the bastion and on the Traefik instances. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    cidr             = optional(string)<br/>    flavor           = optional(string)<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | `null` | no |
 | boot\_volume\_size | Size in GiB of a root volume created from the image; null boots from the flavor's local disk. | `number` | `null` | no |
@@ -108,5 +108,5 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | domains | Domains currently routed by the entry point. |
 | instances | Traefik instances and their addresses on the edge network. |
 | load\_balancer | Virtual IP, public floating IP and DNS names of the entry point. |
-| svc\_public\_sources | Ranges the edge connects from on svc\_public, in CIDR notation: the router's gateway address in gateway mode, the edge range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge\_sources). |
+| svc\_public\_sources | Ranges the entry point connects from on svc\_public, in CIDR notation: the router's gateway address in gateway mode, the entry point's range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge\_sources). |
 <!-- END_TF_DOCS -->

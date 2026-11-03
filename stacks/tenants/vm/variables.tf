@@ -19,12 +19,12 @@ variable "az" {
 }
 
 variable "image" {
-  description = "Image name of the web instances (an Ubuntu LTS cloud image)."
+  description = "Image name of the instances (an Ubuntu LTS cloud image)."
   type        = string
 }
 
 variable "flavor" {
-  description = "Flavor name of the web instances."
+  description = "Flavor name of the instances."
   type        = string
 }
 
@@ -35,13 +35,13 @@ variable "boot_volume_size" {
 }
 
 variable "web_cidr" {
-  description = "Range of the web network. On planes with NAT tenants may reuse the same range; on interface planes it must be unique (stack shared/planes checks it)."
+  description = "Range of the tenant network. On planes with NAT tenants may reuse the same range; on interface planes it must be unique (stack shared/planes checks it)."
   type        = string
   default     = "10.21.0.0/24"
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers of the web network, reachable through its routes."
+  description = "DNS resolvers of the tenant network, reachable through its routes."
   type        = list(string)
   default     = []
 }
@@ -72,7 +72,7 @@ variable "plane_attachment" {
 }
 
 variable "instance_count" {
-  description = "Number of web instances. Above one, a load balancer is the service address (ADR-0006, D1); with one, the instance itself."
+  description = "Number of instances. Above one, a load balancer is the service address (ADR-0006, D1); with one, the instance itself."
   type        = number
   default     = 2
 
@@ -110,13 +110,13 @@ variable "edge_sources" {
 }
 
 variable "domains" {
-  description = "Domains served by the web instances and published through the entry point."
+  description = "Domains served by the instances and published through the entry point."
   type        = list(string)
   default     = ["site-a.example.org", "site-b.example.org"]
 }
 
 variable "server_group_policy" {
-  description = "Placement of the two web instances: \"anti-affinity\" or \"soft-anti-affinity\"."
+  description = "Placement of the instances: \"anti-affinity\" or \"soft-anti-affinity\"."
   type        = string
   default     = "anti-affinity"
 
@@ -139,10 +139,10 @@ variable "bastion" {
   description = <<-EOT
     Optional administration bastion. It lives in its own small network whose router joins
     external_network (an administration network such as an intranet) and carries a floating
-    IP on it. A second port on the web network gives it access to the web instances; the web
+    IP on it. A second port on the web network gives it access to the instances; the web
     network itself gets no route to the administration network.
     - ssh_cidrs: sources allowed to reach the bastion on port 22.
-    The users of var.admin are created on the bastion and on the web instances.
+    The users of var.admin are created on the bastion and on the instances.
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })

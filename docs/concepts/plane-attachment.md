@@ -1,6 +1,6 @@
 # How a tenant joins a plane
 
-A plane is a network shared by several projects: `svc_public` for publication, `monitoring` for metrics, `intranet` for internal services. This page explains the two ways a tenant joins a plane, what each means for addresses, routing and isolation, and why a third way — ports of the instances directly on the planes — is not used. The decision is [ADR-0004](../adr/0004-planes-and-isolation.md).
+A plane is a network shared by several projects, any number of them, each with its own purpose; in the reference scenario, `svc_public` for publication, `monitoring` for observability, `intranet` for internal services. This page explains the two ways a tenant joins a plane, what each means for addresses, routing and isolation, and why a third way — ports of the instances directly on the planes — is not used. The decision is [ADR-0004](../adr/0004-planes-and-isolation.md).
 
 ## Gateway and interface: two kinds of router port
 
@@ -16,7 +16,7 @@ The kind of network the plane is decides which port a tenant router can use on i
 
 ## Mode 1 — Gateway on the plane (planes provided by the operator)
 
-The operator creates the plane as an external network. Each tenant joins it with a router whose gateway is on the plane.
+The cloud operator creates the plane as an external network. Each tenant joins it with a router whose gateway is on the plane.
 
 ```mermaid
 flowchart LR
@@ -32,13 +32,13 @@ flowchart LR
 
 ## Mode 2 — Interface on the plane, through a transit router (shared private planes)
 
-The account holder creates the plane as a private network of the hub project — a project that holds the network only — and shares it with the projects of the tenants and of the shared services (Neutron RBAC, `access_as_shared`). It is not an external network: a tenant router can only join it with an interface. Stack [`shared/planes`](../../stacks/shared/planes/README.md) does it.
+You create the plane, with a member role, as a private network of the hub project — a project that holds the network only — and share it with the projects of the tenants and of the shared services (Neutron RBAC, `access_as_shared`). It is not an external network: a tenant router can only join it with an interface. Stack [`shared/planes`](../../stacks/shared/planes/README.md) does it.
 
 ```mermaid
 flowchart LR
-    T["Traefik 10.20.0.10"] --> RE["edge router<br/>interface 192.0.2.181 (from Neutron)<br/>route 10.21.0.0/16 via 192.0.2.1"]
+    T["entry point instance 10.20.0.10"] --> RE["entry point router<br/>interface 192.0.2.181 (from Neutron)<br/>route 10.21.0.0/16 via 192.0.2.1<br/>(an aggregate of tenant ranges)"]
     RE --> TR["transit router of the hub<br/>192.0.2.1 (fixed)<br/>10.20.0.0/24 via 192.0.2.181<br/>10.21.0.0/24 via 192.0.2.82"]
-    TR --> RW["web router<br/>interface 192.0.2.82 (from Neutron)<br/>route 10.20.0.0/24 via 192.0.2.1"]
+    TR --> RW["vm tenant router<br/>interface 192.0.2.82 (from Neutron)<br/>route 10.20.0.0/24 via 192.0.2.1"]
     RW --> V["VM 10.21.0.15"]
 ```
 
@@ -68,12 +68,12 @@ Instead of routers, each instance gets one port per plane it needs, directly on 
 | Tenant ranges | may overlap (mode 1) | must not overlap; every instance consumes plane addresses |
 | Routers and floating IPs | one router per plane and tenant | none |
 
-Use it when the tenants trust each other (teams of one organisation) and the plane design is under your control: plane subnets without a gateway, plane ranges pushed as host routes by DHCP, images that handle several interfaces. It can be added to the stacks if there is demand.
+Use it when the tenants trust each other (teams of one organisation) and the plane design is under your control: plane subnets without a gateway, plane ranges pushed as host routes by DHCP, images that handle several interfaces. It is not part of this design.
 
 ## Which mode where
 
 | Cloud | Planes are | Mode |
 |---|---|---|
 | Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
-| Public, planes built by the account holder | private networks shared by RBAC | 2 — interface, through the hub's transit router |
-| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; later, with cloud-baseline ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |
+| Public, planes built with a member role | private networks shared by RBAC | 2 — interface, through the hub's transit router |
+| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with cloud-baseline ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |

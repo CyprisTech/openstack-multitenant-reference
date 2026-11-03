@@ -11,7 +11,7 @@ output "instances" {
 }
 
 output "svc_public_sources" {
-  description = "Ranges the edge connects from on svc_public, in CIDR notation: the router's gateway address in gateway mode, the edge range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge_sources)."
+  description = "Ranges the entry point connects from on svc_public, in CIDR notation: the router's gateway address in gateway mode, the entry point's range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge_sources)."
   value = module.planes.nat.svc_public ? [
     for ip in data.openstack_networking_router_v2.svc_public[0].external_fixed_ip : "${ip.ip_address}/32"
   ] : [var.edge_cidr]

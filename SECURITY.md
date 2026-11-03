@@ -36,9 +36,9 @@ Out of scope: vulnerabilities of the [terraform-openstack-tenant](https://github
 
 ## Security-relevant behaviour of the architecture
 
-- **Isolation on `svc_public` rests on the load balancers' sources and the security groups.** Every project attached to the plane can reach every service address on it at the network level; a wrong rule exposes a tenant to every other on the plane ([trade-offs, 7](docs/concepts/trade-offs.md#7-isolation-on-the-svc_public-plane)).
-- **The metrics receiver trusts what the tenants push.** Series are identified by labels a tenant could forge; the receiver admits pushes from the monitoring plane (operator plane) or the routed tenant ranges (hub plane) ([trade-offs, 15](docs/concepts/trade-offs.md#15-monitoring-by-push)).
-- **The edge does not terminate TLS.** It holds no tenant certificate; it can only limit connections, not filter HTTP.
-- **The demonstration backends are not production services**: the `web` stack serves a self-signed certificate.
+- **Isolation on the publication plane (`svc_public` in the scenario) rests on the load balancers' sources and the security groups.** Every project attached to the plane can reach every service address on it at the network level; a wrong rule exposes a tenant to every other on the plane ([trade-offs, 7](docs/concepts/trade-offs.md#7-isolation-on-the-publication-plane)).
+- **The metrics receiver trusts what the tenants push.** Series are identified by labels a tenant could forge; the receiver admits pushes from the observability plane (operator plane) or the routed tenant ranges (hub plane) ([trade-offs, 15](docs/concepts/trade-offs.md#15-monitoring-by-push)).
+- **The entry point does not terminate TLS.** It holds no tenant certificate; it can only limit connections, not filter HTTP.
+- **The demonstration backends are not production services**: the `vm` stack serves a self-signed certificate.
 - **State files contain secrets** and infrastructure details: treat every state as a secret.
 - The isolation test only opens TCP connections; it changes nothing, but it uses SSH keys that reach every tenant's bastion. Run it from a trusted machine.

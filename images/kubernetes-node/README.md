@@ -1,6 +1,6 @@
 # Kubernetes node image
 
-Private image of the `platform` project, built with [image-builder](https://github.com/kubernetes-sigs/image-builder) and its OpenStack builder (Packer) — [ADR-0002](../../docs/adr/0002-platform-kubernetes.md), D1. The image outlives the cluster: it has its own build network and its own state.
+Private image of the Kubernetes tenant's project, built with [image-builder](https://github.com/kubernetes-sigs/image-builder) and its OpenStack builder (Packer) — [ADR-0002](../../docs/adr/0002-platform-kubernetes.md), D1. The image outlives the cluster: it has its own build network and its own state.
 
 | Pinned | Version | Where |
 |---|---|---|
@@ -26,7 +26,7 @@ cp terraform.tfvars.example terraform.tfvars   # adapt
 tofu init && tofu apply
 cd ..
 cp build.json.example build.json               # source image, flavor, volume
-OS_CLOUD=<entry of the platform project> ./build.sh
+OS_CLOUD=<entry of the Kubernetes tenant's project> ./build.sh
 ```
 
 To find the address under which the machine running Packer is seen, use the boot check in [tests/integration/node-image](../../tests/integration/node-image/README.md) (`$SSH_CLIENT`): through source NAT it is a router address, which is easy to guess wrong.

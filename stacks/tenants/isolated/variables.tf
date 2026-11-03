@@ -58,7 +58,7 @@ variable "plane_attachment" {
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers of the web network, reachable through its routes."
+  description = "DNS resolvers of the tenant network, reachable through its routes."
   type        = list(string)
   default     = []
 }

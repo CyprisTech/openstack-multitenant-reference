@@ -74,7 +74,7 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in modules/admission modules/bastion modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
+          for d in modules/admission modules/bastion modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations

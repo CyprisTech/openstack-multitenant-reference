@@ -7,7 +7,7 @@
 
 ## Context
 
-`v0.2.x` organised the stacks in numbered layers (`10`, `20`, `30`) and let a stack find another's objects by name. With one project per tenant ([ADR-0003](0003-scope-and-boundary.md)), a stack can no longer read the objects of another project, and the same logic (joining the planes, a bastion, admission rules) was repeated in every stack.
+`v0.2.x` organised the stacks in numbered directories (`10`, `20`, `30`) and let a stack find another's objects by name. With one project per tenant ([ADR-0003](0003-scope-and-boundary.md)), a stack can no longer read the objects of another project, and the same logic (joining the planes, a bastion, admission rules) was repeated in every stack.
 
 ## Options considered
 
@@ -29,12 +29,14 @@ modules/                    building blocks used by the stacks (D4)
 tests/isolation             the isolation test
 tests/fixtures              stand-ins for platform services, for the tests only
 images/kubernetes-node      the node image of the Kubernetes tenant
+examples/planes             configurations of shared/planes: operator planes, hub planes
+scripts/                    domain publication
 ```
 
 ### D2 — One state, one credential per stack
 
 - Each stack has its own state and its own `clouds.yaml` entry: an application credential scoped to the stack's project, with the roles `member` and `load-balancer_member` (a second one, for the cluster itself, in a Kubernetes tenant). No stack holds an administrator role.
-- The state backend is the deployer's choice; states contain secrets and are protected as such. Their protection belongs to the recovery of the architecture, on the roadmap.
+- The state backend is the deployer's choice; states contain secrets and are protected as such. Their protection belongs to the recovery of the architecture ([ADR-0003](0003-scope-and-boundary.md), D4).
 
 ### D3 — Contracts are outputs passed as inputs
 
@@ -49,7 +51,7 @@ The logic every stack needs is written once, as local modules:
 | Module | Role |
 |---|---|
 | `plane-attachment` | routers, routes and exposure of a stack on its planes, from its `plane_attachment` |
-| `bastion` | an optional administration instance, reachable from the operators' addresses only |
+| `bastion` | an optional administration instance, reachable from the administrators' addresses only |
 | `admission` | security group rules from declared flows, keyed `<flow>-<port>-<source>` |
 | `plane-discovery`, `range-overlaps` | the discovery of attached routers and the range checks of `shared/planes` |
 
@@ -57,8 +59,8 @@ The building blocks of one tenant (network, instances, load balancers, DNS) come
 
 ### D5 — Administration paths
 
-- **Two roles, administration and intranet** (ADR-0002, D6). Administration endpoints — a stack's bastion, the Kubernetes API — admit **named operator addresses only**, never the range of a plane. Recommended: a dedicated administration network; accepted: one network for both roles, with restricted sources.
-- **Instances admit SSH from their stack's bastion and from named operator addresses only**, none by default. An operator reaches an instance through the bastion of its stack, the bastion through the administration network.
+- **Two roles, administration and intranet** (ADR-0002, D6). Administration endpoints — a stack's bastion, the Kubernetes API — admit **named administrator addresses only**, never the range of a plane. Recommended: a dedicated administration network; accepted: one network for both roles, with restricted sources.
+- **Instances admit SSH from their stack's bastion and from named administrator addresses only**, none by default. An administrator reaches an instance through the bastion of its stack, the bastion through the administration network.
 - Single sign-on to these endpoints, and the audit of administration access, are level 1 and 3 ([ADR-0003](0003-scope-and-boundary.md), D4).
 
 ## Consequences

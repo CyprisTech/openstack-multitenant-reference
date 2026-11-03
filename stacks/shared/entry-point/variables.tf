@@ -4,7 +4,7 @@ variable "cloud" {
 }
 
 variable "site" {
-  description = "Short site name, used in resource names (ADR-0001, D9)."
+  description = "Short site name: the name of the region in this deployment, used in resource names."
   type        = string
 
   validation {

@@ -179,7 +179,7 @@ def main():
         rows.append((f"isolated {iso_vm[0]}", f"platform ingress {ingress}", 443, "closed", from_iso(ingress, 443)))
         rows.append(("platform pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(probe_pod, receiver, 9090)))
         rows.append(("receiver", "series pushed by platform", "-", "yes", lambda: pushed("platform")))
-        rows.append(("test runner (operator)", f"platform Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
+        rows.append(("test runner (administrator)", f"platform Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
         for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
             rows.append(("platform pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(probe_pod, b, 22)))

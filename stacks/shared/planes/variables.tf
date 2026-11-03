@@ -4,7 +4,7 @@ variable "cloud" {
 }
 
 variable "site" {
-  description = "Short site name, used in resource names (ADR-0001, D9)."
+  description = "Short site name: the name of the region in this deployment, used in resource names."
   type        = string
 
   validation {
@@ -15,7 +15,8 @@ variable "site" {
 
 variable "planes" {
   description = <<-EOT
-    Shared planes, keyed by name (svc_public, monitoring, intranet).
+    Shared planes, any number, keyed by name (in the reference scenario: svc_public,
+    monitoring, intranet).
     - mode "gateway": an external network provided by the cloud operator, adopted by name
       (network, subnet). Tenant routers join it with their gateway; nothing is created here.
     - mode "interface": a private network created in the hub project and shared with the

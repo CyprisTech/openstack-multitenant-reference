@@ -6,103 +6,138 @@
 [![OpenTofu >= 1.9](https://img.shields.io/badge/OpenTofu-%3E%3D1.9-ffda18?logo=opentofu)](https://opentofu.org)
 [![Terraform >= 1.9](https://img.shields.io/badge/Terraform-%3E%3D1.9-844fba?logo=terraform)](https://www.terraform.io)
 
-Run several tenants on one OpenStack account — **one project each** — sharing a public entry point and connected to your monitoring and internal services, with every flow between them explicit and an isolation test to run after each change. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module.
+A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules.
 
-> [!NOTE]
-> **`v0.2.1`** runs on clouds whose operator provides the shared planes (private and sovereign clouds). Public clouds, with planes built by the account holder, are in progress ([ADR-0004](docs/adr/0004-planes-and-isolation.md)).
+**Read:** [why](#why) and the [design areas](#design-areas) to evaluate it, [getting started](#getting-started) to deploy it, the [ADRs](docs/adr/README.md) for the reasoning.
 
-**Start here:** [getting started](#getting-started) to deploy it; the [architecture](docs/concepts/architecture.md) and the [trade-offs](docs/concepts/trade-offs.md) to evaluate it.
+## Contents
 
-## Table of contents
+- [Why](#why) · [Terms](#terms) · [Design areas](#design-areas) · [Principles](#principles) · [How it fits together](#how-it-fits-together)
+- [What the repository contains](#what-the-repository-contains) · [Built on terraform-openstack-tenant](#built-on-terraform-openstack-tenant) · [Scope](#scope)
+- [Getting started](#getting-started) · [Day-to-day](#day-to-day) · [Before production](#before-production) · [Documentation](#documentation)
+- [Status](#status) · [Requirements](#requirements) · [Contributing](#contributing) · [Security](#security) · [License](#license)
 
-- [What you get](#what-you-get)
-- [Is it for you?](#is-it-for-you)
-- [Two contexts](#two-contexts)
-- [How it fits together](#how-it-fits-together)
-- [Getting started](#getting-started)
-- [Day-to-day](#day-to-day)
-- [Before production](#before-production)
-- [Ready for, not yet demonstrated](#ready-for-not-yet-demonstrated)
-- [Documentation](#documentation)
-- [Status and requirements](#status-and-requirements)
-- [Roadmap](#roadmap)
-- [Related project](#related-project)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
+## Why
 
-## What you get
+Public clouds call it a *landing zone*: the structure an organisation puts in place before running workloads — how resources are divided, how networks connect, how services are exposed, observed and administered, and how isolation is enforced. AWS, Azure and Google Cloud provide one, and the design areas they cover are well established.
 
-The shared planes are, inside one account, the hub-and-spoke that OpenStack does not offer natively — the role a transit gateway plays on other clouds.
+OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them: no transit gateway or peering between projects, no shared ingress, no conventions spanning the projects of an organisation. Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify. This repository proposes that layer as a reference: decisions, reusable code and a tested scenario.
 
-- **A project per tenant**, with its own credentials and quotas, joined to the shared services through its own routers: nothing else crosses.
-- **One public address for many domains.** The shared entry point routes by SNI to each tenant's service address without decrypting: it never holds a tenant's TLS keys, passes the client address, and takes a new domain in seconds. A tenant may instead expose itself with its own address.
-- **Ready for your monitoring and internal services.** Every tenant pushes its metrics to your receiver, and nothing connects into a tenant; internal services are reachable only by the tenants allowed to use them ([integration points](docs/reference/integration-points.md)).
-- **Kubernetes as a tenant type**: a cluster in a tenant project, created with Cluster API, published, monitored and administered like any tenant — useful on clouds without a managed Kubernetes offer.
-- **An isolation test** that checks every flow, allowed and denied, to run after every change and to show customers or auditors how isolation is verified ([check the isolation](docs/guides/check-isolation.md)).
+## Terms
 
-## Is it for you?
-
-Written for **platform teams on a public or sovereign cloud with a member role** and for **hosting providers running one project per customer**; operators of a private cloud provide the planes. Needs, difficulties and coverage per profile: [who it is for](docs/concepts/audiences.md).
-
-| You… | |
+| Term | Meaning |
 |---|---|
-| host several customers, teams or environments on one OpenStack account | **Yes** |
-| need Kubernetes on an OpenStack cloud without a managed offer | **Yes**, as a tenant type |
-| run a single application or tenant | Use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples |
-| give each customer its own OpenStack account, or span several clouds | Not yet: shared planes do not cross accounts. Manage each account as a single tenant with the module; an encrypted overlay between accounts is on the [roadmap](#roadmap) |
-| want an operated, production-ready platform | See projects such as Sovereign Cloud Stack or Azimuth; this is a reference with a [checklist](#before-production) |
+| Tenant | A project running workloads, isolated from the other tenants |
+| Shared service | A service run once for several tenants, in its own project; the entry point that publishes the tenants' domains is one |
+| Plane | A shared network that connects tenants and shared services; any number, each with its own purpose. Each project joins it through its own router and, on each plane, either provides a service (role `shared`) or consumes (role `tenant`) |
+| Operator plane | A plane provided by the cloud operator as an external network |
+| Hub plane, hub project | A plane you build yourself, with a member role, as a network of a hub project shared with the other projects; the hub project holds the planes and a transit router, and runs nothing |
+| Service address | The address through which a tenant exposes a service; the domains it serves are published to it |
+| Integration point | Where a platform service of your choice (metrics, logs, backups…) plugs in: plane, flows, admission, what each stack configures |
+| Region | A set of OpenStack services with its own endpoints. A project is not tied to a region; its resources and the planes are. Each region has its own planes, hub and entry point; an encrypted overlay joins the hubs of several regions |
+| Site | The name of a region in a deployment, an input of every stack and part of every name |
+| Cloud operator | Who runs the OpenStack cloud: the provider, or your own infrastructure team |
+| Administrators | Who deploys and runs the stacks of this reference, from named addresses |
 
-**What the reference owns** ([ADR-0003](docs/adr/0003-scope-and-boundary.md), D4): the multi-tenant architecture — tenants, planes, isolation, exposure, availability — and its day-to-day operations. Platform services (monitoring, logs, audit, backups, secrets) plug into documented **integration points** with tools of your choice. The cloud foundation (projects, quotas, single sign-on) and the workloads are out of scope.
+## Design areas
 
-## Two contexts
+The design areas of a landing zone, and the answer of this reference to each. The decisions are recorded in [ADRs](docs/adr/README.md); [Status](#status) gives the release that delivers each area.
 
-The architecture and the stacks are the same; only the way the shared planes are provided changes, in the configuration of one stack, [`stacks/shared/planes`](stacks/shared/planes/README.md).
-
-| | Public cloud | Private or sovereign cloud |
+| Design area | Question | Answer of this reference |
 |---|---|---|
-| Shared planes | Private networks of a hub project (network only), shared with the other projects (Neutron RBAC) and joined through its transit routers | External networks provided by the cloud operator |
-| Rights needed | Member role in each project | Member role; the operator prepares the planes |
-| Configuration of `shared/planes` | [`hub.tfvars.example`](examples/planes/hub.tfvars.example): the planes are built | [`operator.tfvars.example`](examples/planes/operator.tfvars.example): the planes are adopted |
+| Resource organisation | How are the projects organised? | One project per tenant, per shared service, and a hub project for the shared networks ([ADR-0003](docs/adr/0003-scope-and-boundary.md)) |
+| Network topology and connectivity | How do isolated projects reach common networks and services? | Shared networks (*planes*), any number, provided by the cloud operator or built with a member role; each project provides or consumes on each plane, and routes follow from these roles. Several regions are joined by an encrypted overlay between their hubs ([ADR-0004](docs/adr/0004-planes-and-isolation.md), [ADR-0003](docs/adr/0003-scope-and-boundary.md) D2) |
+| Network services | How do tenants resolve names, keep time, install packages and reach the Internet? | Resolvers, time and package mirrors offered as shared services on the planes; egress to the Internet only through a declared path; IPv4 and IPv6 ([network services](docs/concepts/architecture.md#network-services)) |
+| Security and isolation | What keeps projects apart, and how is it proven? | Security groups at every target, a stated threat model, and an executable test of every flow, allowed and denied ([ADR-0004](docs/adr/0004-planes-and-isolation.md)) |
+| Exposure | How are services published to the Internet? | One address per service; a shared entry point for many domains on few addresses, or an address per tenant; TLS stays with the tenant, which obtains its certificates by ACME DNS-01 ([ADR-0006](docs/adr/0006-exposure.md)) |
+| Observability | How are isolated projects observed? | Metrics, logs and audit events pushed by each project to receivers of your choice; nothing connects into a project ([ADR-0007](docs/adr/0007-monitoring.md)) |
+| Identity and access | Who administers what, from where? | One least-privilege credential per stack and project; bastions and APIs open to named administrator addresses only ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
+| Resilience and continuity | What survives the loss of a host, a zone, a site? | Instances and load balancers spread over hosts and availability zones; an entry point per region with failover by DNS; the architecture rebuilt from code and protected states; tenant data backed up through an integration point ([resilience](docs/concepts/architecture.md#resilience-and-continuity)) |
+| Automation | How is it all described and changed? | Independent stacks, one state and one credential each, contracts passed as outputs, a tested procedure, a GitOps pipeline as an example ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
+| Workload platforms | What runs in a project? | Virtual machines, or Kubernetes created and maintained with Cluster API — upgrades, scaling, credential rotation — both in the same isolation model ([ADR-0003](docs/adr/0003-scope-and-boundary.md) D3, [ADR-0002](docs/adr/0002-platform-kubernetes.md)) |
+| Governance, identity federation, cost | Quotas, single sign-on, budgets | Out of scope: the cloud's own foundation ([scope](#scope)) |
+
+## Principles
+
+- **The project is the unit of isolation.** Every tenant and every shared service has its own credentials, quotas and networks.
+- **Everything that crosses projects goes through a declared shared network.** Nothing is reached through an undeclared path; tenants never reach each other.
+- **Isolation is enforced at each target and verified.** Routes are not a security boundary; security groups are, and a test probes every flow after each change.
+- **Flows are initiated by the side that holds the route back.** Tenants expose one address per service and push what they send; nothing opens a way into a tenant for someone else's convenience.
+- **The reference owns the architecture, not the tools.** Platform services (metrics, logs, internal services) plug into documented integration points with the tools you choose ([integration points](docs/reference/integration-points.md)).
+- **Works with a member role.** Nothing requires administrator rights on the cloud, so it applies to public and sovereign clouds as well as private ones.
 
 ## How it fits together
 
 ```mermaid
-flowchart LR
-    U(["Internet clients"])
-    subgraph SHARED["Shared services · their own projects"]
-        EP["Entry point<br/>one address, every domain<br/>SNI · no TLS key"]
-    end
-    subgraph TENANTS["Tenants · one project each, isolated from each other"]
-        direction TB
-        V["vm"]
-        K["kubernetes"]
-        I["isolated"]
-    end
-    subgraph YOURS["Your services"]
-        direction TB
-        C["Metrics receiver"]
-        S["Internal services"]
-        A["Operators"]
-    end
-    U -->|"HTTPS"| EP
-    EP -->|"svc_public plane<br/>PROXY v2, to each service address"| TENANTS
-    TENANTS -->|"monitoring plane · push"| C
-    TENANTS -->|"intranet plane"| S
-    A -.->|"administration · your addresses only<br/>bastions · Kubernetes API"| TENANTS
+flowchart TB
+    U(["Internet"]) --> EP["Entry point<br/><i>shared service</i>"]
+    EP --> PUB[["publication plane"]]
+    PUB --> TEN
+
+    TEN["<b>Tenants</b><br/>one project each<br/>web applications, Kubernetes,<br/>isolated workloads"]
+
+    ADM(["Administrators"]) -.->|"administration network"| TEN
+    TEN --> OBS[["observability plane"]]
+    TEN --> INT[["internal services plane"]]
+    OBS --> RCV["Receivers: metrics, logs, audit<br/><i>shared service</i>"]
+    INT --> SVC["Registry, directory…<br/><i>shared services</i>"]
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class EP,RCV,SVC shared
+    class PUB,OBS,INT plane
+    class TEN tenant
+    class U,ADM outside
 ```
 
-Each stack has its own state and its own `clouds.yaml` entry; what it needs from another stack is an output of that stack, passed as an input ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)). Topology, flows and decisions: [architecture](docs/concepts/architecture.md) and [ADRs](docs/adr/README.md).
+Arrows show who opens the connection: the entry point reaches the tenants through the publication plane, the tenants push to the receivers and call the internal services through the other planes, and nothing on a plane opens a connection into a tenant. Each tenant joins only the planes it needs, and tenants never reach each other. Blue: shared services, each in its own project; grey: planes; orange: tenants. The planes shown are those of the reference scenario.
 
-| Stack | What it creates |
+## What the repository contains
+
+| Layer | Content | Use |
+|---|---|---|
+| Decisions | [ADRs](docs/adr/README.md), [trade-offs](docs/concepts/trade-offs.md), [who it is for](docs/concepts/audiences.md) | read, challenge, adapt |
+| Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent) | use as they are |
+| Reference scenario | Three planes (publication, observability, internal services); a shared entry point, a metrics receiver and an internal service; three tenant types ([`vm`](stacks/tenants/vm/README.md), [`isolated`](stacks/tenants/isolated/README.md), [`kubernetes`](stacks/tenants/kubernetes/README.md)); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
+
+The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
+
+| Purpose | Plane in the scenario |
 |---|---|
-| [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the operator's external networks, or creates private networks in the hub project (network only), shared by RBAC and joined through a transit router; generates the routes of every attachment |
-| [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | Octavia in TCP on 80 and 443 in front of two Traefik instances on different hosts, routing by SNI to the tenants' service addresses, client address in PROXY v2, routes updated in place |
-| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Instances behind a load balancer, the tenant's service address, published through the entry point or with its own public address |
-| [`stacks/tenants/isolated`](stacks/tenants/isolated/README.md) | A workload with no public address, no Internet and no path to other tenants |
-| [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | A Kubernetes cluster with Cluster API (node image: [`images/kubernetes-node`](images/kubernetes-node/README.md)): ingress through the entry point, metrics pushed to your receiver, API on the administration network |
+| Publication: the entry point reaches the tenants' service addresses | `svc_public` |
+| Observability: every project pushes its metrics, logs and audit events | `monitoring` |
+| Internal services offered to some tenants | `intranet` |
 
-Every stack can add a bastion for administration, reachable only from your addresses.
+Another plane or shared service is declared in `shared/planes`; the stacks that join it name it in their call to [`modules/plane-attachment`](modules/plane-attachment/README.md). Each stack has its own state and `clouds.yaml` entry ([architecture](docs/concepts/architecture.md)).
+
+| Stack | Role in the scenario |
+|---|---|
+| [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the cloud operator's external networks, or builds shared networks in the hub project with a transit router; derives the routes of every project |
+| [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | A load balancer and two proxies routing by TLS server name to the tenants' service addresses, without decrypting |
+| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Virtual machines behind a load balancer, published through the entry point or with their own address |
+| [`stacks/tenants/isolated`](stacks/tenants/isolated/README.md) | A workload with no exposure and no way out but the observability plane |
+| [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | A Kubernetes cluster created with Cluster API ([node image](images/kubernetes-node/README.md)) |
+
+## Built on terraform-openstack-tenant
+
+Every stack describes its project with the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module, and inherits its properties:
+
+- **One model for every project.** Tenants, shared services and the hub are described the same way — networks, routers, security groups, instances, load balancers, DNS — so the architecture is a composition, not a collection of scripts.
+- **Composition across stacks and teams.** Objects owned by another stack are passed in as values (*adoption*), never looked up behind the caller's back; outputs follow a provider-neutral contract that upper layers (Kubernetes, configuration management, inventories) consume.
+- **Safe day-to-day changes.** Every resource key comes from the input: one plan, no `-target`, and an empty plan after apply. Lifecycle behaviours are fixed and documented, and inputs are validated before anything is created.
+- **Least privilege by construction.** A member role on the project is enough; the module reads no other project and creates no unnecessary secret.
+- **No imposed tooling.** No backend, secret store or CI tool; OpenTofu and Terraform on equal footing; tested on a real cloud before every release.
+- **The same model down to the foundation.** Its `cloud-baseline` module describes what needs the administrator role — projects, quotas, users, shared networks — with the same model, for private clouds.
+
+## Scope
+
+| In the reference | Integration points (your tools) | Out of scope |
+|---|---|---|
+| Resource organisation, planes in one or several regions, network services, isolation and its test, exposure and certificates, administration paths, resilience and recovery of the architecture, VM and Kubernetes tenants and their day-to-day operations | Metrics, logs, audit, backups of tenant data, secrets, a GitOps pipeline | The cloud's foundation (projects, quotas, identity federation, cost), the operation of the cloud itself, the workloads, projects administered by several organisations |
+
+Who it is for, profile by profile: [who it is for](docs/concepts/audiences.md). For a single project, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly.
 
 ## Getting started
 
@@ -145,7 +180,7 @@ web t1-web-1           platform ingress 10.24.0.10                            44
 isolated t1-isolated-1 platform ingress 10.24.0.10                            443  closed   closed   ok
 platform pod           receiver 10.34.0.12                                   9090  open     open     ok
 receiver               series pushed by platform                                -  yes      yes      ok
-test runner (operator) platform Kubernetes API 198.51.100.1                   6443  open     open     ok
+test runner (administrator) platform Kubernetes API 198.51.100.1              6443  open     open     ok
 platform pod           edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
 platform pod           web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
 platform pod           isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
@@ -170,22 +205,12 @@ isolated t1-isolated-1 intranet service 198.51.100.3                          80
 
 ## Before production
 
-This is a reference, not an operated platform. Before production, plan for:
+This is a reference, not an operated platform. What stays yours:
 
-- **backups** of the tenants' volumes and of each Kubernetes cluster (Velero, etcd snapshots work unchanged);
-- **central logs, audit and alerting**: integration points like monitoring, with your tools ([ADR-0003](docs/adr/0003-scope-and-boundary.md), D4);
-- **single sign-on** for the administration access (your identity provider, or the provider's IAM);
-- **certificates** of the published domains, obtained by each tenant with ACME DNS-01 on its zone;
-- **several sites**, if one is not enough: the code takes the site as an input, failover is not provided;
-- **capacity per compute host**: the entry point instances are in anti-affinity, a replacement needs room on another host than the other's.
-
-## Ready for, not yet demonstrated
-
-| | Why it fits | Not yet done |
-|---|---|---|
-| **GitOps** | Everything Cluster API needs is plain YAML rendered by the stack (ClusterClass, `Cluster`, add-on proxies): Flux or Argo CD can reconcile it as is ([trade-off 12](docs/concepts/trade-offs.md#12-add-ons-declared-with-cluster-api-not-gitops)) | A reconciliation loop that reverts drift |
-| **Backups** | Volumes are Cinder volumes behind the CSI driver; etcd runs on kubeadm control-plane nodes: Velero and etcd snapshots apply unchanged | A restore drill |
-| **Several sites** | The site is an input of every stack and part of every name; routes and records come from outputs ([sites](docs/concepts/architecture.md#sites)) | An entry point per site, a DNS switch, a failover drill |
+- **the tools** behind the integration points: metrics, logs and audit receivers, backup and secret stores;
+- **identity**: single sign-on for the administration access (your identity provider, or the provider's IAM);
+- **capacity**: quotas per project ([sizing](docs/concepts/architecture.md#sizing)) and room per compute host — the entry point instances are in anti-affinity, and a replacement needs room on another host;
+- **the trade-offs**: read [them](docs/concepts/trade-offs.md) against your own constraints.
 
 ## Documentation
 
@@ -194,23 +219,28 @@ This is a reference, not an operated platform. Before production, plan for:
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
 | **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
-| **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [plane bindings](docs/specs/plane-bindings.md) (superseded) |
+| **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md) |
 | **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
-## Status and requirements
+## Status
 
-| Part | Status |
-|---|---|
-| Entry point, `vm` and `isolated` tenants, bastions | delivered, tested |
-| Service addresses, exposure per tenant, routes updated in place ([ADR-0006](docs/adr/0006-exposure.md)) | delivered, tested in both plane modes |
-| Monitoring pushed to your receiver ([ADR-0007](docs/adr/0007-monitoring.md)) | delivered, tested in both plane modes |
-| Kubernetes tenant: creation, ingress, push of its metrics, hardening, teardown | delivered, tested; a few requests are lost while a node is drained ([test results](docs/concepts/test-results.md#platform-hardening-and-first-day-2-operation-2026-10-28)) |
-| Kubernetes tenant: upgrade, scaling, credential rotation | next |
-| Planes built by the account holder (hub planes, transit routers) | delivered, tested on the reference private cloud with one project per stack; not yet on a public cloud |
-| Certificates of the published domains (ACME DNS-01) | next |
+The design above is the target of `v1.0`. Each release delivers part of it, tested end to end on a real cloud ([test results](docs/concepts/test-results.md)); the order of the next ones may change.
 
-Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, in both plane modes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, isolation test (33/33), destroy without leftover. Not yet tested on a public OpenStack cloud: hub planes rely on Neutron policies (network sharing by members, the network owner's view of its ports) to check there. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest ([test results](docs/concepts/test-results.md)).
+| Release | Design areas delivered | |
+|---|---|---|
+| `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
+| **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | in progress |
+| `v0.4` | Certificates of the published domains; Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | |
+| `v0.5` | Availability zones; recovery of the architecture | |
+| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with `cloud-baseline`) | |
+| `v0.7` | Observability: logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
+| `v0.8` | Several regions joined by an encrypted overlay; failover of the entry point between regions | |
+| `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
+
+`v0.3` is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, isolation test (33/33), destroy without leftover. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
+
+## Requirements
 
 | Component | Requirement |
 |---|---|
@@ -218,48 +248,10 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amph
 | Provider `terraform-provider-openstack/openstack` | `~> 3.2` |
 | Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.1.4`, pinned in every stack |
 | OpenStack | Keystone v3, Nova (metadata service), Glance, Octavia (amphora); Neutron with routers, and network sharing by RBAC for hub planes; Cinder for boot volumes and Designate for the public records and the ACME DNS-01 challenges, both optional |
-| Credentials | One project per tenant and per shared service, plus the hub project in interface mode; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
+| Credentials | One project per tenant and per shared service, plus the hub project for hub planes; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
 | Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges). Hub planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |
 
 Quotas per project: [sizing](docs/concepts/architecture.md#sizing).
-
-## Roadmap
-
-Sorted by the boundary of [ADR-0003](docs/adr/0003-scope-and-boundary.md) (D4). Each item gets its specification when work on it starts.
-
-**In the reference**
-
-| Release | Content | Status |
-|---|---|---|
-| v0.1.0 – v0.2.1 | Entry point, `vm` and `isolated` tenants, monitoring integration, Kubernetes tenant, isolation test, test procedure | released |
-| **v0.3.0** | One account, one project per tenant; shared planes on public clouds; new stack layout (breaking: paths); tenants exposed by service addresses, through the shared entry point or their own load balancer; domains published without replacing the entry point ([ADR-0006](docs/adr/0006-exposure.md)) | in progress |
-| next | Certificates of the published domains; Kubernetes tenant day-to-day operations: upgrade, scaling, credential rotation; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | planned |
-| next | Availability zones; recovery of the architecture (states, rebuild order, drill) | planned |
-| later | Network services for the tenants: egress, DNS resolution, time, package mirrors; IPv6 | planned |
-| later | Failover between sites | planned |
-| on demand | Connections between two tenants (peering) through a transit network, declared in `shared/planes` ([pattern](docs/concepts/connecting-tenants.md)) | planned |
-| later | Tenants in several accounts or clouds, joined by an encrypted overlay | planned |
-
-**Integration points** (the contract in the reference, the tools yours)
-
-| Release | Content | Status |
-|---|---|---|
-| v0.3.0 | Monitoring: tenants push to your receiver, nothing connects into a tenant ([ADR-0007](docs/adr/0007-monitoring.md)) | in progress |
-| next | Logs and audit | planned |
-| later | Backups of tenant data; secrets; a GitOps pipeline for the stacks (example) | planned |
-
-**Out of scope**
-
-| Need | Where |
-|---|---|
-| Projects, quotas, roles, flavors, images, planes as code on a private cloud | cloud-baseline ([terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.2`) |
-| Single sign-on, identity federation, cost, self-service | cloud-baseline on a private cloud; the provider's IAM on a public one |
-| Operating the cloud itself (deployment, upgrades, databases of OpenStack) | the cloud's own tooling |
-| Workloads and their deployment | each tenant |
-
-## Related project
-
-[terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant): the OpenTofu and Terraform modules every stack of this repository is built on. They describe one tenant in a single declarative model; this repository shows how several tenants share one account.
 
 ## Contributing
 

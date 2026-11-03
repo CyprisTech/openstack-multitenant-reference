@@ -41,12 +41,12 @@ The Kubernetes tenant has always been exposed through one address: its ingress c
 
 - For each domain it serves, a tenant exposes **one service address**: its Octavia load balancer when it runs several instances, or its instance when it has only one. The tenant stack outputs `domain → address:port` (`published_domains`).
 - The entry point and every shared service know these addresses only: a tenant adds, removes or replaces instances without any change outside its project.
-- On a plane with NAT, the service address is a floating IP of `svc_public` on the load balancer or the single instance; on a routed plane, its own address.
+- On a plane with NAT, the service address is a floating IP of the publication plane (`svc_public` in the scenario) on the load balancer or the single instance; on a routed plane, its own address.
 - The pattern inside a tenant of virtual machines mirrors the Kubernetes tenant: a TCP load balancer, then a reverse proxy or the application terminating TLS.
 
 ### D2 — Exposure chosen per tenant
 
-- Each tenant either publishes its domains through the **shared entry point**, or exposes its service address with **its own public floating IP**. Both coexist in one account.
+- Each tenant either publishes its domains through the **shared entry point**, or exposes its service address with **its own public floating IP**. Both coexist in one deployment.
 - The shared entry point stays as decided in ADR-0001 (D3), its purpose stated: many domains behind one public address and one load balancer, TLS kept by each tenant. Its limits are documented: a failure affects every tenant published through it; no WAF and no TLS termination, by design of passthrough; port 80 only redirects to HTTPS.
 
 ### D3 — Routes delivered in place through instance metadata
@@ -69,8 +69,8 @@ No instance or load balancer carries floating IPs of several networks. Each plan
 
 ## Consequences
 
-- **Breaking for `v0.2.x` users**, released as `v0.3.0` with a migration note: `published_domains` carries service addresses instead of backend lists; the floating IPs of `svc_public` on the instances go away. ADR-0001 gets the status *superseded in part by ADR-0006* when this ADR is accepted; its text is not edited.
+- **Breaking for `v0.2.x` users**, released with a migration note: `published_domains` carries service addresses instead of backend lists; the floating IPs of `svc_public` on the instances go away. ADR-0001 gets the status *superseded in part by ADR-0006* when this ADR is accepted; its text is not edited.
 - A tenant of several instances needs a load balancer, which the cloud bills; a single-instance tenant does not.
 - The isolation test checks "entry point to service address" instead of "entry point to instance", and a new check publishes a domain while requests run and expects none lost.
 - The module keeps `extra_floating_ips` (several floating IPs on one port is a Neutron capability); its documentation states the routing condition it relies on.
-- To measure on the reference cloud: the delay before an updated metadata item is served to the instance (cache of the metadata service), hence the time to publish a domain.
+- Measured on the reference cloud: a domain answers 13 s after the entry point's apply (cache of the metadata service and timer), with no request lost ([test results](../concepts/test-results.md)).

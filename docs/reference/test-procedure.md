@@ -294,7 +294,7 @@ tofu -chdir=stacks/tenants/isolated apply   # back to normal
 9100 closed
 ```
 
-Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only its load balancer, its bastion and the operators.
+Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only its load balancer, its bastion and the administrators.
 
 ## 10. Teardown
 

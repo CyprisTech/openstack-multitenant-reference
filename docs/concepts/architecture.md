@@ -1,26 +1,26 @@
 # Architecture
 
-The living specification of the reference architecture: topology, data paths, lifecycle and sizing. The decisions behind it are recorded in the [ADRs](../adr/README.md); when the two disagree, the ADR states the intent and this document must be fixed.
+The living specification of the reference architecture, for the `v1.0` design: topology, data paths, network services, resilience, lifecycle and sizing. The terms are defined in the [README](../../README.md#terms). The decisions behind it are recorded in the [ADRs](../adr/README.md); when the two disagree, the ADR states the intent and this document must be fixed.
 
 All names are fictional: the organisation is `example.org`, and address ranges are documentation ranges or examples.
 
 ## Topology
 
-One OpenStack account, **one project per role** ([ADR-0003](../adr/0003-scope-and-boundary.md)): one per tenant, one per shared service (or a project of shared services), and a hub project holding the network only when the planes are built by the account holder. Tenants and shared services meet on three **planes** ([ADR-0004](../adr/0004-planes-and-isolation.md)):
+Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr/0003-scope-and-boundary.md)): one per tenant, one per shared service (or a project of shared services), and, in each region, a hub project holding the network only when you build the planes yourself, with a member role. Tenants and shared services meet on **planes** ([ADR-0004](../adr/0004-planes-and-isolation.md)), any number, each with its own purpose. The reference scenario has three:
 
-| Plane | Carries | Shared services on it (role `shared`) |
+| Plane | Purpose | Shared services on it (role `shared`) |
 |---|---|---|
-| `svc_public` | publication: the entry point to the tenants' service addresses | the entry point |
-| `monitoring` | metrics pushed by every tenant | your metrics receiver |
-| `intranet` | internal services consumed by some tenants | your internal services (registry, directory…) |
+| publication | the entry point reaches the tenants' service addresses | the entry point |
+| observability | every project pushes its metrics, logs and audit events | your receivers |
+| internal services | services offered to some tenants | your internal services (registry, directory…) |
 
 ```mermaid
 flowchart LR
     U(["Internet clients"])
-    OPS(["Operators"])
+    ADM(["Administrators"])
     subgraph SHARED["Shared services · their own projects"]
         EP["Entry point<br/>Octavia + Traefik x 2<br/>SNI, no TLS key"]
-        RCV["Metrics receiver<br/>(yours)"]
+        RCV["Receivers<br/>(yours)"]
         SVC["Internal services<br/>(yours)"]
     end
     subgraph TENANTS["Tenants · one project each"]
@@ -29,25 +29,40 @@ flowchart LR
         I["isolated"]
     end
     U -->|"HTTPS"| EP
-    EP -->|"svc_public · PROXY v2<br/>to each service address"| W & K
-    W & K & I -->|"monitoring · push"| RCV
-    K -->|"intranet"| SVC
-    OPS -.->|"administration network<br/>bastions, Kubernetes API"| TENANTS
+    EP -->|"publication · PROXY v2<br/>to each service address"| W & K
+    W & K & I & EP -->|"observability · push"| RCV
+    K -->|"internal services"| SVC
+    ADM -.->|"administration network<br/>bastions, Kubernetes API"| TENANTS
 ```
 
 | Project | Planes | Content |
 |---|---|---|
-| entry point | `svc_public` (shared), `monitoring` | Octavia load balancer with a public floating IP, two Traefik instances in anti-affinity |
-| `vm` tenant | `svc_public`, `monitoring` | instances behind a load balancer, the tenant's service address |
-| `kubernetes` tenant | `svc_public`, `monitoring`, `intranet` | a cluster created with Cluster API; its ingress load balancer is the service address |
-| `isolated` tenant | `monitoring` | one workload, no public address, no other way out |
+| entry point | publication (shared), observability | Octavia load balancer with a public floating IP, two Traefik instances in anti-affinity |
+| `vm` tenant | publication, observability | instances behind a load balancer, the tenant's service address |
+| `kubernetes` tenant | publication, observability, internal services | a cluster created with Cluster API; its ingress load balancer is the service address |
+| `isolated` tenant | observability | one workload, no public address, no other way out |
 | shared services | the planes they serve (`shared`) | the receiver, internal services; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) |
 
 The planes are provided by the cloud operator (external networks) or built in the hub project (shared networks and a transit router): the stacks are the same in both cases, only [`stacks/shared/planes`](../../stacks/shared/planes/README.md) changes ([How a tenant joins a plane](plane-attachment.md)).
 
+```mermaid
+flowchart LR
+    subgraph HUBP["Hub project (network only)"]
+        TR["transit router<br/>first address of each plane"]
+        PL["plane networks<br/>shared by RBAC"]
+        TR --- PL
+    end
+    E["entry point router<br/>role shared"] --- PL
+    R["receiver router<br/>role shared"] --- PL
+    A["tenant A router<br/>role tenant"] --- PL
+    B["tenant B router<br/>role tenant"] --- PL
+```
+
+With hub planes, every attached router routes through the transit router: tenants to the shared services, shared services to the tenants (through aggregates of their ranges), never a tenant to another. The hub discovers the address of each attached router and routes back to it.
+
 ## Network topology of a tenant
 
-Each tenant network has **one router per network it joins**. One of them is the default gateway; the planes' ranges are routed through the others, by routes DHCP pushes to the instances.
+Each tenant network has **one router per network it joins**. One of them is the default gateway; the planes' ranges are routed through the others, by routes DHCP pushes to the instances. The example below is a `vm` tenant, whose default gateway reaches the Internet through a declared egress network; the `isolated` tenant has no such router, and its only router, to the observability plane, is its default gateway.
 
 ```mermaid
 flowchart LR
@@ -56,26 +71,26 @@ flowchart LR
         LB["load balancer VIP<br/>(the service address)"]
     end
     RE["router egress<br/>default gateway"]
-    RS["router svc_public"]
-    RM["router monitoring"]
+    RS["router publication"]
+    RM["router observability"]
     VM --> RE --> PUB["egress network<br/>(Internet)"]
-    LB -.-> RS --> SVC["svc_public plane"]
-    VM --> RM --> MON["monitoring plane"]
+    LB -.-> RS --> SVC["publication plane"]
+    VM --> RM --> MON["observability plane"]
 ```
 
 How the router joins a plane, and how the tenant is seen there, depends on the plane ([ADR-0004](../adr/0004-planes-and-isolation.md), D1):
 
-| Plane | Router joins with | The tenant is seen at | Service address on `svc_public` |
+| Plane | Router joins with | The tenant is seen at | Service address on the publication plane |
 |---|---|---|---|
-| operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of `svc_public` on the load balancer |
+| operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of the plane on the load balancer |
 | shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |
 
 | Tenant | Default gateway | Other routers | Exposed |
 |---|---|---|---|
-| entry point | public network | `svc_public`, `monitoring` | public floating IP of its load balancer |
-| `vm` | egress | `svc_public`, `monitoring` | its service address on `svc_public` (or a public floating IP, `exposure = "public"`) |
-| `kubernetes` | egress | `svc_public`, `monitoring`, `intranet` | ingress (service address on `svc_public`), API (floating IP of the administration network) |
-| `isolated` | `monitoring` | — | nothing |
+| entry point | public network | publication, observability | public floating IP of its load balancer |
+| `vm` | egress | publication, observability | its service address on the publication plane (or a public floating IP, `exposure = "public"`) |
+| `kubernetes` | egress | publication, observability, internal services | ingress (service address on the publication plane), API (floating IP of the administration network) |
+| `isolated` | observability | — | nothing |
 | bastions | administration network | — (second port on the tenant network) | floating IP of the administration network |
 
 No instance carries floating IPs of several networks ([ADR-0006](../adr/0006-exposure.md), D4): every flow on a plane is initiated from the side that holds the route back.
@@ -108,7 +123,7 @@ sequenceDiagram
 | Hop | Source seen | Admitted by |
 |---|---|---|
 | Client → entry point load balancer | client | listener, public |
-| Traefik → tenant service address | the entry point's address on `svc_public` (output `svc_public_sources`) | the tenant load balancer's `allowed_cidrs` (`edge_sources`) |
+| Traefik → tenant service address | the entry point's address on the publication plane (output `svc_public_sources`) | the tenant load balancer's `allowed_cidrs` (`edge_sources`) |
 | Tenant load balancer → instances | amphora address, on the tenant network | security group of the instances; trusted as PROXY sender |
 
 On the Kubernetes tenant the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).
@@ -144,31 +159,53 @@ flowchart LR
 
 The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route. Limit: about 120 domains per entry point (Nova quota `metadata_items`, 128 by default).
 
-## Monitoring data path
+## Observability data path
 
-Monitoring is an integration point ([ADR-0007](../adr/0007-monitoring.md)): the reference states the contract, the receiver is yours.
+Observability is an integration point ([ADR-0007](../adr/0007-monitoring.md)): the reference states the contract, the receivers are yours. Metrics, logs and audit events follow the same pattern: an agent next to the source pushes through the observability plane; nothing connects into a project.
 
 ```mermaid
 flowchart LR
-    subgraph T["Each tenant"]
-        X["exporters<br/>(node, Traefik…)"] --> A["Prometheus agent<br/>(or the cluster's Prometheus)"]
+    subgraph T["Each project"]
+        X["exporters, logs, audit events"] --> A["agent<br/>(Prometheus agent, the cluster's Prometheus…)"]
     end
-    A -->|"remote write, through the monitoring plane"| R["Receiver<br/>(Prometheus, Mimir, VictoriaMetrics…)"]
+    A -->|"push, through the observability plane"| R["Receivers<br/>(Prometheus, Mimir, VictoriaMetrics, a log store…)"]
     I["isolated workload"] -->|"OTLP"| R
 ```
 
 | | Contract |
 |---|---|
-| Receiver | accepts Prometheus remote write (and OTLP); runs in a project of shared services, role `shared` on `monitoring` |
-| Flow | from the tenants to the receiver's address and port; nothing on the plane connects into a tenant |
-| Identification | labels `site`, `tenant`, `instance` on every series, not addresses |
-| Silent target | detected by the receiver, alert on missing series |
+| Receivers | accept Prometheus remote write and OTLP for metrics, and a push protocol for logs and audit events; run in a project of shared services, role `shared` on the observability plane |
+| Flow | from the projects to the receivers' addresses and ports; nothing on the plane connects into a project |
+| Identification | labels `site`, `tenant`, `instance` on every series and every log line, not addresses |
+| Silent source | detected by the receiver, alert on missing series |
+
+## Network services
+
+What every tenant needs from the network, offered the same way as any shared service ([ADR-0003](../adr/0003-scope-and-boundary.md), D4):
+
+| Service | Design |
+|---|---|
+| Name resolution | Resolvers as a shared service on a plane, reachable by every tenant; the tenants' subnets point to them |
+| Time | NTP servers as a shared service on the same plane |
+| Packages and images | Mirrors and a registry as shared services, so that tenants without Internet access, such as `isolated`, can still be built and updated |
+| Egress to the Internet | Only through a declared path: a router to an egress network in the tenant's own project, or a shared egress on a plane; never by default |
+| IPv6 | Dual stack on the planes and the tenant networks; the same roles and admission rules for both families |
+
+## Resilience and continuity
+
+| Failure | Design |
+|---|---|
+| A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it |
+| An availability zone | Instances and load balancers spread over the zones of the region; planes and routers are regional in Neutron |
+| A region | An entry point per region, active/passive, failover by DNS ([regions and sites](#regions-and-sites)) |
+| A stack or its state | The architecture is rebuilt from code in a documented order; the states are kept in a backend that is itself backed up |
+| Tenant data | Backed up by the tenants through the backup integration point; restored the same way |
 
 ## Administration paths
 
 ```mermaid
 flowchart LR
-    OPS(["Operators<br/>specific addresses"])
+    OPS(["Administrators<br/>specific addresses"])
     subgraph ADM["Administration network"]
         B1["bastion entry point"]
         B2["bastion vm"]
@@ -186,32 +223,33 @@ flowchart LR
 
 | Endpoint | Admitted | Not admitted |
 |---|---|---|
-| Bastions (SSH) | the operator addresses | every tenant, including the Kubernetes tenant (tested) |
-| Kubernetes API | the operator addresses; the cluster's own addresses (added by CAPO); the bootstrap instance while it manages the cluster | anything else |
-| Instances (SSH) | their stack's bastion; named operator addresses, none by default | anything else |
+| Bastions (SSH) | the administrator addresses | every tenant, including the Kubernetes tenant (tested) |
+| Kubernetes API | the administrator addresses; the cluster's own addresses (added by CAPO); the bootstrap instance while it manages the cluster | anything else |
+| Instances (SSH) | their stack's bastion; named administrator addresses, none by default | anything else |
 
-With one network for the administration and intranet roles, operator addresses must be single addresses, never the network range: tenants joining the intranet appear inside that range ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5).
+With one network for the administration and internal services roles, administrator addresses must be single addresses, never the network range: tenants joining that plane appear inside its range ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5).
 
 ## Lifecycle
 
 ```mermaid
 flowchart TB
     P["shared/planes<br/>planes, RBAC, routes of the attachments"]
-    S["shared services<br/>receiver, internal services"]
+    S["shared services the tenants push to<br/>receivers"]
     E["shared/entry-point"]
     T["tenants<br/>vm · isolated · kubernetes"]
+    S2["shared services that admit named consumers<br/>internal services"]
     P2["shared/planes again<br/>(hub planes: routes to the tenants)"]
     D["publish-domains.sh<br/>routes of the entry point"]
-    P --> S --> E --> T --> P2 --> D
+    P --> S --> E --> T --> S2 --> P2 --> D
 ```
 
 | Operation | Order |
 |---|---|
-| Deploy | planes → shared services → entry point → tenants (Kubernetes: node image first) → planes again on hub planes → publish the domains |
+| Deploy | planes → shared services the tenants push to → entry point → tenants (Kubernetes: node image first) → shared services that admit named consumers (they need the tenants' sources) → planes again on hub planes → publish the domains |
 | Publish or withdraw a domain | `scripts/publish-domains.sh`: the entry point's metadata is updated in place |
 | Add a tenant | [add a tenant](../guides/add-a-tenant.md) |
 | Upgrade Kubernetes | new node image, then `spec.topology.version` of the Cluster |
-| Tear down | [teardown](../guides/teardown.md): Kubernetes clusters first, then the tenants, the entry point, the shared services, the planes |
+| Tear down | [teardown](../guides/teardown.md): Kubernetes clusters first, then the internal services, the tenants, the entry point, the receivers, the planes |
 
 ## Kubernetes cluster creation
 
@@ -224,7 +262,7 @@ sequenceDiagram
     participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
     participant W as Workload cluster
     TF->>OS: network, routers to the planes, server groups, ingress address, bootstrap instance
-    Note over B: the operator copies the cluster credential (clouds.yaml)
+    Note over B: an administrator copies the cluster credential (clouds.yaml)
     B->>OS: CAPO: API load balancer (floating IP on the administration network)
     B->>OS: 3 control-plane servers, then workers (anti-affinity)
     B->>W: CAAPH: cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus
@@ -242,7 +280,7 @@ sequenceDiagram
 | Ingress | Traefik (Gateway API) behind a load balancer at the service address, PROXY v2 from the entry point |
 | Metrics | in-cluster Prometheus, pushed to the receiver (remote write) |
 | API | floating IP on the administration network, administration sources only |
-| Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by the operator and copied to the bootstrap instance; never in the state |
+| Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
 
 ## Isolation matrix
 
@@ -250,20 +288,40 @@ The expected flows between the Internet, the planes, the tenants and the shared 
 
 ## Planes contract
 
-What the stacks expect from planes provided by the operator (names, ranges, MTUs, reserved ranges) is the [planes contract](../reference/planes-contract.md).
+What the stacks expect from planes provided by the cloud operator (names, ranges, MTUs, reserved ranges) is the [planes contract](../reference/planes-contract.md).
 
-## Sites
+## Regions and sites
 
-The reference runs in one site. The code is site-ready so that failover between sites can be added without restructuring:
+A project is not tied to a region, but its resources and the planes are: each region has its own planes, its own hub and its own entry point. The site is the name of a region in a deployment.
 
-| Rule | Why it matters later |
+```mermaid
+flowchart LR
+    DNS(["Public DNS<br/>short TTL"])
+    subgraph RA["Region A (active)"]
+        EPA["entry point"]
+        HA["hub · planes"]
+        TA["tenants, shared services"]
+        EPA --- HA --- TA
+    end
+    subgraph RB["Region B (passive)"]
+        EPB["entry point"]
+        HB["hub · planes"]
+        TB["tenants, shared services"]
+        EPB --- HB --- TB
+    end
+    DNS --> EPA
+    DNS -.->|"failover"| EPB
+    HA <-->|"encrypted overlay"| HB
+```
+
+| Rule | Why |
 |---|---|
-| The site is an input of every stack and part of every name | The same stacks deploy a second site without collision |
-| No hand-written address: routes and admission rules come from stack outputs of the same site | Each site generates its own |
-| One `shared/planes` per site | Site B gets the same planes |
-| Short TTL on public DNS records | Failover is a DNS change |
+| The site is an input of every stack and part of every name | The same stacks deploy in several regions without collision |
+| No hand-written address: routes and admission rules come from stack outputs of the same region | Each region generates its own |
+| One `shared/planes` per region; the hubs of the regions joined by an encrypted overlay | Shared services and tenants of one region reach those of another through the planes, with the same roles and checks |
+| One entry point per region, active/passive, short TTL on the public records | Failover between regions is a DNS change, rehearsed by a drill that replays the isolation test in the other region |
 
-Planned: an entry point per site (active/passive), a failover runbook with a DNS switch, a drill that replays the isolation test on the second site. Data replication is out of scope.
+Replicating tenant data between regions belongs to the tenants and to the backup integration point.
 
 ## Sizing
 
@@ -272,11 +330,11 @@ Indicative minimum for the whole scenario, with the default flavors of the examp
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|
 | entry point | 2 | 4 | 4 GiB | 1 | 1 public |
-| `vm` tenant | 2 | 4 | 4 GiB | 1 | 1 on `svc_public` with an operator plane, none with a hub plane |
-| `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 2 (API, ingress) | 1 administration (API), 1 on `svc_public` with an operator plane |
+| `vm` tenant | 2 | 4 | 4 GiB | 1 | 1 on the publication plane with an operator plane, none with a hub plane |
+| `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with an operator plane |
 | `isolated` tenant | 1 | 1 | 1 GiB | 0 | 0 |
 | bootstrap (Cluster API management, temporary) | 1 | 2 | 4 GiB | 0 | 1 administration |
-| receiver (tests) | 1 | 2 | 2 GiB | 0 | 1 on `monitoring` with an operator plane |
+| receiver (tests) | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with an operator plane |
 | optional bastions (one per stack) | 1 each | 2 each | 2 GiB each | 0 | 1 each, administration |
 | **Total without bastions** | **12** | **23** | **35 GiB** | **4** | **2 to 5** |
 

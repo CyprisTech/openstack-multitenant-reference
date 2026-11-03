@@ -21,9 +21,9 @@ About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes fo
 ## 0. Projects
 
 - OpenTofu or Terraform ≥ 1.9, `jq`, Python 3, `ssh` and the `openstack` client.
-- In one account: a project for the **entry point**, one for the **shared services** (metrics receiver, internal services), one **per tenant** — plus a **hub** project holding the network only if you build the planes. A `clouds.yaml` entry for each with a project-scoped credential (`member`, plus `load-balancer_member`). Mind the provider's limit of projects per account. No `OS_*` variable in the shell.
-- Operator planes: the [planes contract](../reference/planes-contract.md) met by the operator (names, ranges, MTU, reserved ranges).
-- Hub planes: check that a member may share a network, with the hub's credentials — `openstack network create probe && openstack network rbac create --target-project <another project> --action access_as_shared --type network probe` must succeed; then delete both. Some clouds forbid it (the Sovereign Cloud Stack recommends it in scs-0126).
+- One region of the cloud, where every stack is deployed, and projects: one for the **entry point**, one for the **shared services** (receivers, internal services), one **per tenant** — plus a **hub** project holding the network only if you build the planes. A `clouds.yaml` entry for each with a project-scoped credential (`member`, plus `load-balancer_member`). Mind the provider's limit of projects per customer. No `OS_*` variable in the shell.
+- Operator planes: the [planes contract](../reference/planes-contract.md) met by the cloud operator (names, ranges, MTU, reserved ranges).
+- Hub planes: check that a member may share a network, with the hub's credentials — `openstack network create probe && openstack network rbac create --target-project <another project> --action access_as_shared --type network probe` must succeed; then delete both. Check also the quotas of each project and the number of projects the provider allows. Some clouds forbid it (the Sovereign Cloud Stack recommends it in scs-0126).
 - Kubernetes tenant only: build the [node image](../../images/kubernetes-node/README.md) now; it depends on nothing else.
 
 ## 1. Planes
@@ -40,12 +40,15 @@ tofu -chdir=stacks/shared/planes output -json attachments   # one plane_attachme
 Give each stack its entry, for example:
 
 ```bash
+# "edge" is the name of the entry point's attachment in the example configurations
 tofu -chdir=stacks/shared/planes output -json attachments | jq '{plane_attachment: .edge.planes}' > stacks/shared/entry-point/planes.auto.tfvars.json
 ```
 
 ## 2. Shared services
 
-Your metrics receiver (Prometheus, Mimir, VictoriaMetrics…) runs in a project of shared services and joins `monitoring` with its `plane_attachment`; every stack pushes to it, with its URL as `monitoring.receiver` ([integration points](../reference/integration-points.md#monitoring)). Your internal services join `intranet` the same way. The [test receiver](../../tests/fixtures/receiver/README.md) shows the pattern.
+The services the tenants push to come first: your metrics receiver (Prometheus, Mimir, VictoriaMetrics…) runs in a project of shared services and joins the observability plane (`monitoring`) with its `plane_attachment`; every stack pushes to it, with its URL as `monitoring.receiver` ([integration points](../reference/integration-points.md#observability-metrics)). The [test receiver](../../tests/fixtures/receiver/README.md) shows the pattern.
+
+The services that admit named consumers — internal services on `intranet` — come after the tenants, whose outputs (`intranet_sources`) they need.
 
 ## 3. Entry point
 

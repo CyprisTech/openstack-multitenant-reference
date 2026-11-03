@@ -9,13 +9,13 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 3 | [PROXY protocol](#3-proxy-protocol-end-to-end) | Client address carried end to end |
 | 4 | [Octavia topology](#4-octavia-topology) | Chosen per load balancer flavor |
 | 5 | [The shared entry point](#5-the-shared-entry-point) | Shared by the tenants that choose it; others expose themselves |
-| 6 | [One site](#6-one-site) | One site, site-ready code |
-| 7 | [Isolation on `svc_public`](#7-isolation-on-the-svc_public-plane) | Shared plane, service addresses admitting the entry point only |
+| 6 | [Regions and sites](#6-regions-and-sites) | Planes and an entry point per region, hubs joined by an overlay, failover by DNS |
+| 7 | [Isolation on the publication plane](#7-isolation-on-the-publication-plane) | Shared plane, service addresses admitting the entry point only |
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
-| 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router; routed operator planes later |
+| 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router, or routed operator planes |
 | 11 | [Administration and intranet](#11-one-network-for-administration-and-intranet) | Two roles; one network accepted with specific sources |
-| 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready, not tested |
+| 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready |
 | 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
 | 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
 | 15 | [Monitoring by push](#15-monitoring-by-push) | Agents push to a receiver; nothing connects into a tenant |
@@ -87,19 +87,19 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Choose a tenant's own address when** the tenant needs an independent failure domain, its own exposure policy, or a WAF in front of it.
 
-## 6. One site
+## 6. Regions and sites
 
-**Choice.** The reference runs in one site (one region or availability zone). The code is site-ready: the site is an input of every stack, and no address is written by hand.
+**Choice.** Each region has its own planes, hub and entry point; the hubs are joined by an encrypted overlay; the entry points fail over by DNS (active/passive).
 
-**Why.** An Octavia load balancer and its amphorae live in one site. Failover between sites needs a standby edge, a DNS switch and a tested runbook: a version of its own.
+**Why.** Neutron networks, Octavia load balancers and their amphorae live in one region: a design that spans regions must join them above Neutron. An overlay works on any OpenStack cloud, unlike provider features such as OVHcloud's vRack.
 
-**Cost.** A site outage takes the entry point down. Recovery is a cold rebuild: deploy the same stacks in another site, then change the DNS records. Stateful data (volumes, databases) is not replicated; recovering it needs a backup and restore that this repository does not provide.
+**Cost.** Failover is not instantaneous (DNS TTL), and the passive entry point and the overlay must be kept tested. Stateful data (volumes, databases) is not replicated by the reference: the tenants replicate it, or restore it through the backup integration point.
 
-**Next.** A later version adds an edge per site (active/passive), a failover runbook with a DNS switch, and a failover drill that replays the isolation test on the second site.
+**Choose active-active when** the downtime of a DNS failover is not acceptable and the tenants' data is replicated: it needs a global load balancing service outside OpenStack.
 
-## 7. Isolation on the `svc_public` plane
+## 7. Isolation on the publication plane
 
-**Choice.** The tenants' service addresses are on the shared `svc_public` plane; each admits the entry point only (load balancer sources, `edge_sources`). Instances are not on the plane.
+**Choice.** The tenants' service addresses are on the shared publication plane (`svc_public` in the scenario); each admits the entry point only (load balancer sources, `edge_sources`). Instances are not on the plane.
 
 **Why.** One plane serves every tenant: no per-tenant network between the entry point and each tenant.
 
@@ -137,9 +137,9 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 10. Where the planes come from
 
-**Choice.** A plane is described by two properties, how a tenant router joins it and whether addresses are translated ([ADR-0004](../adr/0004-planes-and-isolation.md)). Two cases are implemented: external networks of the operator joined with source NAT, and networks of a hub project shared by RBAC and joined through a transit router.
+**Choice.** A plane is described by two properties, how a tenant router joins it and whether addresses are translated ([ADR-0004](../adr/0004-planes-and-isolation.md)). Three cases follow: external networks of the cloud operator joined with source NAT, the same routed in a shared address scope, and networks of a hub project shared by RBAC and joined through a transit router.
 
-| | Operator planes, NAT | Hub planes, routed | Operator planes, routed (later) |
+| | Operator planes, NAT | Hub planes, routed | Operator planes, routed |
 |---|---|---|---|
 | Rights | the operator creates them | member role | the operator, with address scopes |
 | Tenant ranges | may overlap | unique (checked) | unique, from subnet pools |
@@ -147,7 +147,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 | Routing | none to maintain | static routes on the transit router, discovered at each apply | advertised (BGP) |
 | Limits | one floating IP per address that others must reach | about 30 attachments per plane (`max_routes`); RBAC sharing may be forbidden (scs-0126); project and RBAC quotas | needs dynamic routing towards the tenants |
 
-**Why.** Operator planes with NAT are the only option when tenants keep their own ranges and the operator has no dynamic routing; hub planes are the only option with a member role. OpenStack has no native peering between projects: the hub plays, inside one account, the role a transit gateway plays on other clouds. The closest published design, OVHcloud's landing zone, puts a firewall at the hub.
+**Why.** Operator planes with NAT are the only option when tenants keep their own ranges and the operator has no dynamic routing; hub planes are the only option with a member role. OpenStack has no native peering between projects: the hub plays, between projects within one region, the role a transit gateway plays on other clouds. The closest published design, OVHcloud's landing zone, puts a firewall at the hub.
 
 **Cost.** Two cases to test, and a stack (`shared/planes`) applied twice when a tenant joins a hub plane (sharing, then routes).
 
@@ -155,13 +155,13 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 11. One network for administration and intranet
 
-**Choice.** Administration (bastions, Kubernetes API) and intranet (internal services) are two roles. One network may carry both, provided the administration endpoints admit **specific operator addresses**, never the network range.
+**Choice.** Administration (bastions, Kubernetes API) and intranet (internal services) are two roles. One network may carry both, provided the administration endpoints admit **specific administrator addresses**, never the network range.
 
 **Why.** Many clouds have a single internal network. A tenant joining the intranet appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
 
-**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see the [test results](test-results.md)).
+**Cost.** Administrator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see the [test results](test-results.md)).
 
-**Choose two networks when** you can: the administration network then admits nobody but operators by construction.
+**Choose two networks when** you can: the administration network then admits nobody but administrators by construction.
 
 ## 12. Add-ons declared with Cluster API, not GitOps
 
@@ -171,7 +171,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** CAAPH does not correct drift: a manual change to an add-on stays until the chart values change. Release names must be fixed, or a new reconciliation installs a chart twice.
 
-**Choose GitOps (Flux or Argo CD) when** several people change the clusters: drift becomes visible and reverted. The manifests are plain YAML rendered by the stack, so a GitOps tool can reconcile them without change; this setup is not tested yet.
+**Choose GitOps (Flux or Argo CD) when** several people change the clusters: drift becomes visible and reverted. The manifests are plain YAML rendered by the stack, so a GitOps tool can reconcile them without change.
 
 ## 13. Kubelet serving certificates from the cluster CA
 
@@ -193,11 +193,11 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Choice.** Each tenant pushes its metrics to a receiver of the shared services (Prometheus remote write; OTLP for workloads that use it); nothing on the monitoring plane connects into a tenant ([ADR-0007](../adr/0007-monitoring.md)).
 
-**Why.** Pulling is how Prometheus works and stays the practice inside one network or cluster; across tenant boundaries, pushing is the common practice: the only flow is outbound from the tenant, no metrics port is open to a central collector, and no instance needs an address on the monitoring plane.
+**Why.** Pulling is how Prometheus works and stays the practice inside one network or cluster; across tenant boundaries, pushing is the common practice: the only flow is outbound from the tenant, no metrics port is open to a central server, and no instance needs an address on the observability plane.
 
 **Cost.** An agent runs in every tenant. A target that stops pushing is detected by the absence of its series, not by a failed scrape (`up`). Sources are identified by labels, which a tenant could forge: the receiver trusts what the tenants push.
 
-**Choose pulling when** the collector and the targets are in one trust domain and one network.
+**Choose pulling when** the server and its targets are in one trust domain and one network.
 
 ## 16. Routes through instance metadata
 
@@ -212,6 +212,5 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 ## Evidence
 
 The architecture is tested on a real cloud, with the findings that shaped several choices above: [test results](test-results.md).
-
 
 The module this architecture builds on is tested on a real cloud: apply, empty plan after apply, destroy. Results are in the module's [testing report](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/testing.md).

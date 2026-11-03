@@ -6,7 +6,7 @@ How a stack joins the shared planes, from the descriptor `shared/planes` outputs
 |---|---|
 | `networks` | `tenant.existing.networks`: the planes, by ID |
 | `routers` | `tenant.networks.<network>.routers`: one router per plane — a gateway in gateway mode; an interface and routes through the transit router in interface mode; the ranges pushed by DHCP in both |
-| `ports` | per instance: `floating_ip`, `extra_floating_ips`, `dns` — floating IPs of the planes in gateway mode, the instance's own address in interface mode |
+| `ports` | per instance: `floating_ip` — a floating IP of the primary plane when it translates addresses, none otherwise (at most one floating IP per address, [ADR-0006](../../docs/adr/0006-exposure.md)) |
 | `mode`, `nat`, `cidr`, `network_name` | per plane, for the stack's own rules and outputs |
 
 ```hcl
@@ -16,7 +16,7 @@ module "planes" {
   planes          = ["svc_public", "monitoring"]
   attachment      = var.plane_attachment # attachments.<name>.planes, output of shared/planes
   instances       = local.instances
-  exposure        = { primary = "svc_public", extra = ["monitoring"], dns = { plane = "monitoring", zone = "monitoring" } }
+  exposure        = { primary = "svc_public" } # a single instance as the service address
 }
 ```
 

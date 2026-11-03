@@ -1,14 +1,14 @@
 # Add a tenant
 
-A tenant is a project of the account with its own credentials, joined to the shared planes it needs through its own routers ([How a tenant joins a plane](../concepts/plane-attachment.md)). The steps are the same for every tenant type and every cloud; step 6 only applies to planes built in a hub project (interface mode).
+A tenant is a project with its own credentials, joined to the shared planes it needs through its own routers ([How a tenant joins a plane](../concepts/plane-attachment.md)). The steps are the same for every tenant type and every cloud; step 6 only applies to planes built in a hub project (interface mode).
 
 ## 1. Project and credentials
 
-Create the project in the account (provider's console or API, or cloud-baseline on a private cloud) and an application credential scoped to it, with the roles `member` and `load-balancer_member`. Add it to `clouds.yaml`. A Kubernetes tenant needs a second credential for the cluster itself ([Kubernetes tenant](../../stacks/tenants/kubernetes/README.md)).
+Create the project (provider's console or API, or cloud-baseline on a private cloud), with resources in the same region as the other projects, and an application credential scoped to it, with the roles `member` and `load-balancer_member`. Add it to `clouds.yaml`. A Kubernetes tenant needs a second credential for the cluster itself ([Kubernetes tenant](../../stacks/tenants/kubernetes/README.md)).
 
 ## 2. Type and address range
 
-Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances published through the entry point), [`isolated`](../../stacks/tenants/isolated/README.md) (no public exposure) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md).
+Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances behind one service address, published through the entry point or with their own address), [`isolated`](../../stacks/tenants/isolated/README.md) (no public exposure) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md).
 
 Choose its address range outside the planes' ranges. On hub planes (interface mode) it must also differ from every other attachment of the plane — and fall inside the plane's `tenant_ranges` aggregates, so that no shared service needs a new route. On operator planes (gateway mode), tenants may share ranges.
 

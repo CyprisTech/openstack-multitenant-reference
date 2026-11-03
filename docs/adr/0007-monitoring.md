@@ -1,4 +1,4 @@
-# ADR-0007: Monitoring as a push integration point
+# ADR-0007: Observability as a push integration point
 
 - **Status:** Proposed
 - **Date:** 2026-11-02
@@ -31,7 +31,8 @@ In `v0.2.x` the contract is pull: a central collector connects to every tenant, 
 
 - Each instance runs its exporters and **Prometheus in agent mode**, which reads them locally and pushes to the receiver. The Kubernetes tenant's Prometheus pushes the same way.
 - Series are identified by labels (site, tenant, instance), not by addresses.
-- The choice is revisited when logs become an integration point, if one agent for metrics and logs is wanted.
+- Workloads instrumented with OpenTelemetry push OTLP, which the receiver also accepts; the stand-in workload of the `isolated` tenant does.
+- Logs and audit events follow the same pattern; the agent may then be one for all three, chosen with that integration point.
 
 ### D3 — Detecting a silent target
 

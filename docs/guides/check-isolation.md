@@ -6,7 +6,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 
 - After the first deployment.
 - After every change that can open or close a flow: a new tenant, a new domain, a security group, a plane, a Kubernetes upgrade.
-- Before an audit, or when a customer asks how its isolation is verified: the output lists every flow and its result.
+- Before an audit or a review of the isolation: the output lists every flow and its result.
 
 ## Prerequisites
 
