@@ -87,7 +87,7 @@ module "cloudinit" {
 
 module "edge" {
   # Git source: works with OpenTofu and Terraform alike (registry: CyprisTech/tenant/openstack).
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.2"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.3"
 
   tenant = {
     existing = {
