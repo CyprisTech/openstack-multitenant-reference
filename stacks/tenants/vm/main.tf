@@ -1,5 +1,6 @@
-# Tenant of virtual machines: two VMs serving several domains, published on the svc_public
-# plane and reachable only from the public entry point (ADR-0001, D5 and D7).
+# Tenant of virtual machines serving several domains behind one service address (ADR-0006): its
+# load balancer, or its instance when it has only one. Published through the shared entry point,
+# or with its own public floating IP.
 #
 # The web server is a demonstration backend: nginx terminates TLS with a self-signed
 # certificate, reads the PROXY protocol v2 header sent by the entry point and answers
@@ -9,27 +10,38 @@
 locals {
   prefix = "${var.site}-web"
 
-  instances = ["${local.prefix}-1", "${local.prefix}-2"]
+  instances = [for i in range(var.instance_count) : "${local.prefix}-${i + 1}"]
+
+  # One service address (ADR-0006, D1): a load balancer in front of several instances.
+  load_balancer = var.instance_count > 1
+  public        = var.exposure == "public"
 
   # Ranges of the entry point on svc_public, from its output svc_public_sources: only they may
-  # reach the published port, and only they are trusted to send a PROXY protocol header.
+  # reach the service address.
   edge_sources = var.edge_sources
 
-  # Sources of the metrics scrapes: the collector only.
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
+  # Who connects to the instances on 443: the amphorae of the load balancer, on the web network;
+  # without one, the entry point, or anyone when the instance is exposed directly.
+  https_sources = local.load_balancer ? [var.web_cidr] : (local.public ? ["0.0.0.0/0"] : local.edge_sources)
+
+  # A PROXY protocol header comes from the entry point or from the load balancer; an instance
+  # exposed directly receives none.
+  proxy_protocol = local.load_balancer || !local.public
 
   bastion_name = "${local.prefix}-bastion"
 
   nginx_conf = <<-EOT
     server {
-        listen 443 ssl proxy_protocol default_server;
+        listen 443 ssl%{if local.proxy_protocol} proxy_protocol%{endif} default_server;
         ssl_certificate     /etc/nginx/tls/cert.pem;
         ssl_certificate_key /etc/nginx/tls/key.pem;
 
-    %{for cidr in local.edge_sources~}
+    %{if local.proxy_protocol~}
+    %{for cidr in local.https_sources~}
         set_real_ip_from ${cidr};
     %{endfor~}
         real_ip_header proxy_protocol;
+    %{endif~}
 
         location / {
             default_type text/plain;
@@ -42,13 +54,21 @@ locals {
 }
 
 # Who may reach the web instances.
+resource "terraform_data" "checks" {
+  lifecycle {
+    precondition {
+      condition     = var.exposure != "entry-point" || length(var.edge_sources) > 0
+      error_message = "exposure = \"entry-point\" needs edge_sources: output svc_public_sources of stack shared/entry-point."
+    }
+  }
+}
+
 module "admission" {
   source = "../../../modules/admission"
 
   allow = {
-    https-from-edge = { ports = [443], sources = local.edge_sources }
-    metrics         = { ports = var.monitoring.metrics_ports, sources = local.metrics_sources }
-    ssh             = { ports = [22], sources = var.admin.ssh_cidrs }
+    https = { ports = [443], sources = local.https_sources }
+    ssh   = { ports = [22], sources = var.admin.ssh_cidrs }
   }
 }
 
@@ -81,10 +101,18 @@ module "planes" {
   attachment = var.plane_attachment
   instances  = local.instances
   exposure = {
-    primary = "svc_public"
-    extra   = ["monitoring"]
-    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
+    # A single instance is the service address; behind a load balancer, instances have none.
+    primary = local.load_balancer || local.public ? null : "svc_public"
   }
+}
+
+# The metrics agent of each instance: it pushes to the receiver (ADR-0007).
+module "metrics" {
+  source   = "../../../modules/metrics-agent"
+  for_each = toset(local.instances)
+
+  receiver = var.monitoring.receiver
+  labels   = { site = var.site, tenant = "web", instance = each.key }
 }
 
 module "cloudinit" {
@@ -95,11 +123,11 @@ module "cloudinit" {
   users = {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
-  packages = ["nginx", "prometheus-node-exporter"]
+  packages = concat(["nginx"], module.metrics[each.key].packages)
 
-  write_files = {
+  write_files = merge({
     "/etc/nginx/conf.d/web.conf" = { content = local.nginx_conf }
-  }
+  }, module.metrics[each.key].write_files)
 
   # The certificate must exist before the nginx package starts the service with this
   # configuration: bootcmd runs before package installation (and at every boot, hence the test).
@@ -113,10 +141,10 @@ module "cloudinit" {
     ]
   }
 
-  runcmd = [
+  runcmd = concat([
     "rm -f /etc/nginx/sites-enabled/default",
     "systemctl restart nginx",
-  ]
+  ], module.metrics[each.key].runcmd)
 }
 
 module "web" {
@@ -124,7 +152,6 @@ module "web" {
 
   tenant = {
     existing = {
-      dns_zones = var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } }
       networks = merge({
         egress     = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
         svc_public = module.planes.networks.svc_public
@@ -159,6 +186,28 @@ module "web" {
       (local.prefix) = { policy = var.server_group_policy }
     }
 
+    load_balancers = local.load_balancer ? {
+      (local.prefix) = {
+        vip = { network = local.prefix, subnet = "main" }
+        # The service address: on svc_public (a floating IP of the plane when it translates
+        # addresses, the VIP itself otherwise), or a public floating IP.
+        floating_ip = local.public ? { pool = "egress" } : (module.planes.nat.svc_public ? { pool = "svc_public" } : null)
+        listeners = {
+          https = {
+            protocol      = "TCP", port = 443
+            allowed_cidrs = local.public ? [] : local.edge_sources
+            # Through the entry point, its PROXY header passes through; exposed directly, the
+            # load balancer adds one.
+            pool = {
+              protocol = local.public ? "PROXYV2" : "TCP"
+              members  = [for name in local.instances : "${name}.main"]
+              monitor  = { type = "TCP" }
+            }
+          }
+        }
+      }
+    } : {}
+
     instances = merge({
       for name in local.instances : name => {
         az           = var.az
@@ -173,11 +222,9 @@ module "web" {
             network         = local.prefix
             subnet          = "main"
             security_groups = ["${local.prefix}-https"]
-            # Exposure on the planes (ADR-0001, D2): floating IPs in gateway mode, the
-            # instance's own address in interface mode.
-            floating_ip        = module.planes.ports[name].floating_ip
-            extra_floating_ips = module.planes.ports[name].extra_floating_ips
-            dns                = module.planes.ports[name].dns
+            # A single instance is the service address (ADR-0006, D1): a floating IP of
+            # svc_public when the plane translates addresses, a public one with exposure "public".
+            floating_ip = !local.load_balancer && local.public ? { pool = "egress" } : module.planes.ports[name].floating_ip
           }
         }
       }

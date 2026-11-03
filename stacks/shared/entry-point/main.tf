@@ -8,9 +8,6 @@ locals {
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
   members   = [for name in local.instances : "${name}.main"]
 
-  # Traefik metrics (8082) and the metrics ports of the instances, from the collector only.
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
-
   bastion_name = "${local.prefix}-bastion"
 
 }
@@ -21,7 +18,6 @@ module "admission" {
 
   allow = {
     from-lb = { ports = [80, 443], sources = [var.edge_cidr] } # Octavia amphorae, on the edge network
-    metrics = { ports = concat([8082], var.monitoring.metrics_ports), sources = local.metrics_sources }
     ssh     = { ports = [22], sources = var.admin.ssh_cidrs }
   }
 }
@@ -47,18 +43,25 @@ module "bastion" {
 }
 
 # How the stack joins the planes (ADR-0004), from its entry of the attachments output of
-# shared/planes.
+# shared/planes. The Traefik instances have no address on the planes: they connect to the
+# tenants' service addresses (ADR-0006).
 module "planes" {
   source = "../../../modules/plane-attachment"
 
   planes     = ["svc_public", "monitoring"]
   attachment = var.plane_attachment
   instances  = local.instances
-  exposure = {
-    primary = null
-    extra   = ["monitoring"]
-    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
-  }
+}
+
+# The metrics agent of each instance, with the Traefik metrics: it pushes to the receiver
+# (ADR-0007).
+module "metrics" {
+  source   = "../../../modules/metrics-agent"
+  for_each = toset(local.instances)
+
+  receiver = var.monitoring.receiver
+  targets  = { node = ["localhost:9100"], traefik = ["localhost:8082"] }
+  labels   = { site = var.site, tenant = "edge", instance = each.key }
 }
 
 module "cloudinit" {
@@ -69,26 +72,36 @@ module "cloudinit" {
   users = {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
-  packages = ["podman", "prometheus-node-exporter"]
+  packages = concat(["podman"], module.metrics[each.key].packages)
   # A mirror error at first boot would leave the instance without its packages, silently.
   extra_config = { apt = { conf = "Acquire::Retries \"10\";\n" } }
 
-  write_files = {
+  write_files = merge({
     "/etc/traefik/traefik.yml" = {
       content = local.traefik_static
-    }
-    "/etc/traefik/dynamic.yml" = {
-      content = local.traefik_dynamic
     }
     "/etc/systemd/system/traefik.service" = {
       content = local.traefik_unit
     }
-  }
+    "/usr/local/sbin/traefik-routes" = {
+      content     = local.traefik_routes
+      permissions = "0755"
+    }
+    "/etc/systemd/system/traefik-routes.service" = {
+      content = local.traefik_routes_units["/etc/systemd/system/traefik-routes.service"]
+    }
+    "/etc/systemd/system/traefik-routes.timer" = {
+      content = local.traefik_routes_units["/etc/systemd/system/traefik-routes.timer"]
+    }
+  }, module.metrics[each.key].write_files)
 
-  runcmd = [
+  # The routes are rendered before Traefik starts, then every 10 seconds.
+  runcmd = concat([
+    "mkdir -p /etc/traefik/dynamic",
+    "/usr/local/sbin/traefik-routes",
     "systemctl daemon-reload",
-    "systemctl enable --now traefik.service",
-  ]
+    "systemctl enable --now traefik-routes.timer traefik.service",
+  ], module.metrics[each.key].runcmd)
 }
 
 module "edge" {
@@ -102,10 +115,7 @@ module "edge" {
         svc_public = module.planes.networks.svc_public
         monitoring = module.planes.networks.monitoring
       }, module.bastion.existing_networks)
-      dns_zones = merge(
-        var.public_dns == null ? {} : { public = { name = var.public_dns.zone } },
-        var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } },
-      )
+      dns_zones = var.public_dns == null ? {} : { public = { name = var.public_dns.zone } }
     }
 
     networks = merge({
@@ -143,17 +153,13 @@ module "edge" {
         boot         = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
         server_group = local.prefix
         user_data    = module.cloudinit[name].rendered
+        metadata     = local.route_metadata # the routes, updated in place (ADR-0006, D3)
         labels       = ["edge", "traefik"]
         ports = {
           main = {
             network         = local.prefix
             subnet          = "main"
             security_groups = ["${local.prefix}-proxy"]
-            # Exposure on the planes (ADR-0001, D2): floating IPs in gateway mode, the
-            # instance's own address in interface mode.
-            floating_ip        = module.planes.ports[name].floating_ip
-            extra_floating_ips = module.planes.ports[name].extra_floating_ips
-            dns                = module.planes.ports[name].dns
           }
         }
       }

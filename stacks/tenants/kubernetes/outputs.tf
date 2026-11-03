@@ -26,18 +26,10 @@ output "scripts" {
 }
 
 output "published_domains" {
-  description = "Domains served by this tenant and their backends, for the domains input of the entry point (scripts/publish-domains.sh): the platform domains to the ingress (floating IP on svc_public in gateway mode, load balancer address in interface mode)."
+  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of svc_public when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh)."
   value       = { for d in var.cluster.domains : d => { backends = ["${local.ingress_address}:443"] } }
 }
 
-output "prometheus" {
-  description = "Federation endpoint of the in-cluster Prometheus on the monitoring plane, or null when it is not exposed."
-  value = local.expose_prometheus ? {
-    address = local.prometheus_address
-    port    = 9090
-    fqdn    = local.prometheus_record ? "${local.prefix}-prometheus.${var.monitoring.dns_zone}" : null
-  } : null
-}
 
 data "openstack_networking_router_v2" "intranet" {
   count     = module.planes.nat.intranet ? 1 : 0

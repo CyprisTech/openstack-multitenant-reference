@@ -101,12 +101,14 @@ variable "traefik_image" {
 
 variable "domains" {
   description = <<-EOT
-    Public domains routed by SNI, keyed by domain name.
-    - backends: "host:port" of the backends (addresses or names resolvable from the edge network).
+    Public domains routed by SNI, keyed by domain name (ADR-0006).
+    - backends: "address:port" of the tenant's service address (its load balancer, or its only
+      instance); several only for a tenant that exposes several addresses for one domain.
     - proxy_protocol: send PROXY protocol v2 to the backends; they must be configured to accept it.
     - max_connections: simultaneous connections allowed per client address.
-    A change takes effect when the instances are replaced, one at a time: scripts/publish-domains.sh
-    does it from the published_domains outputs of the tenants (see README).
+    Delivered to the Traefik instances through their metadata, updated in place: a change takes
+    effect in seconds, without replacing an instance. scripts/publish-domains.sh fills it from the
+    published_domains outputs of the tenants.
   EOT
   type = map(object({
     backends        = list(string)
@@ -118,6 +120,20 @@ variable "domains" {
   validation {
     condition     = alltrue([for r in values(var.domains) : length(r.backends) > 0])
     error_message = "Each domain needs at least one backend."
+  }
+
+  # Nova metadata: 128 items per instance by default (quota metadata_items), 255 characters per
+  # key and per value.
+  validation {
+    condition     = length(var.domains) <= 120
+    error_message = "At most 120 domains per entry point (Nova metadata quota)."
+  }
+
+  validation {
+    condition = alltrue([
+      for d, r in var.domains : length("route-${d}") <= 255 && length(jsonencode({ b = r.backends, p = r.proxy_protocol, m = r.max_connections })) <= 255
+    ])
+    error_message = "A route does not fit in a metadata item (255 characters): fewer backends or a shorter domain."
   }
 }
 
@@ -174,20 +190,14 @@ variable "network_mtu" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the instances to the monitoring collector. On a plane with NAT, every instance
-    gets a floating IP of the monitoring plane; on an interface plane, it is reached at its own
-    address.
-    - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
-      instance is written for the collector's DNS service discovery; null writes no record.
-    - metrics_ports: ports opened to the collector (node exporter by default).
-    - collector_cidrs: addresses of the collector as seen by the instances. null opens the
-      metrics ports to the whole monitoring plane range, which includes the routers of every
-      tenant joining that plane: set it to keep tenants from scraping each other.
+    Monitoring as a push integration point (ADR-0007): each Traefik instance runs its exporters
+    and a Prometheus agent that reads them, with the Traefik metrics, and pushes to the receiver
+    through the monitoring plane. Nothing connects into the instances for their metrics.
+    - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
+      receiver_url of the receiver); null runs no agent.
   EOT
   type = object({
-    dns_zone        = optional(string)
-    metrics_ports   = optional(list(number), [9100])
-    collector_cidrs = optional(list(string))
+    receiver = optional(string)
   })
   default = {}
 }

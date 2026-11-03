@@ -18,17 +18,11 @@ locals {
   admin_is_intranet = var.admin_network == null
   admin_network     = local.admin_is_intranet ? { network = module.planes.network_name.intranet } : { network = var.admin_network.network }
 
-  expose_prometheus = length(var.monitoring.collector_cidrs) > 0
-  prometheus_record = local.expose_prometheus && var.monitoring.dns_zone != null
-
-  # Addresses of the cluster Services (ADR-0002, D5): a floating IP of the plane in gateway
-  # mode; a fixed address of the cluster network in interface mode.
-  ingress_internal    = !module.planes.nat.svc_public
-  prometheus_internal = !module.planes.nat.monitoring
-  ingress_address     = local.ingress_internal ? cidrhost(var.cluster_cidr, var.service_addresses.ingress) : openstack_networking_floatingip_v2.ingress[0].address
-  prometheus_address = !local.expose_prometheus ? "" : (
-    local.prometheus_internal ? cidrhost(var.cluster_cidr, var.service_addresses.prometheus) : openstack_networking_floatingip_v2.prometheus[0].address
-  )
+  # The service address of the tenant (ADR-0006, D1): its ingress load balancer, at a floating
+  # IP of svc_public when the plane translates addresses, at a fixed address of the cluster
+  # network otherwise.
+  ingress_internal = !module.planes.nat.svc_public
+  ingress_address  = local.ingress_internal ? cidrhost(var.cluster_cidr, var.service_addresses.ingress) : openstack_networking_floatingip_v2.ingress[0].address
 }
 
 # How the cluster network joins the planes (ADR-0004).
@@ -59,23 +53,15 @@ resource "terraform_data" "checks" {
   }
 }
 
-# Addresses of the cluster Services (ADR-0002, D5), created here rather than by the cloud
-# controller manager: they are known before the cluster exists, they are outputs of the stack
-# (the routes of the entry point and the monitoring record come from them, ADR-0001, D9), and
-# they survive the Services. The Services request them (spec.loadBalancerIP) and the cloud
+# Address of the ingress Service, created here rather than by the cloud controller manager: it
+# is known before the cluster exists, it is an output of the stack (the route of the entry point
+# comes from it), and it survives the Service. The Services request them (spec.loadBalancerIP) and the cloud
 # controller manager never deletes them (keep-floatingip).
 resource "openstack_networking_floatingip_v2" "ingress" {
   count = local.ingress_internal ? 0 : 1
 
   pool        = module.planes.network_name.svc_public
   description = "${local.prefix} ingress"
-}
-
-resource "openstack_networking_floatingip_v2" "prometheus" {
-  count = local.expose_prometheus && !local.prometheus_internal ? 1 : 0
-
-  pool        = module.planes.network_name.monitoring
-  description = "${local.prefix} prometheus"
 }
 
 module "platform" {
@@ -90,17 +76,6 @@ module "platform" {
           name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
         }
       })
-      dns_zones = local.prometheus_record ? { monitoring = { name = var.monitoring.dns_zone } } : {}
-    }
-
-    # The collector discovers the federation endpoint by DNS, like every other target (ADR-0001, D2).
-    dns = {
-      records = local.prometheus_record ? {
-        prometheus = {
-          zone    = "monitoring", name = "${local.prefix}-prometheus", type = "A"
-          records = [local.prometheus_address]
-        }
-      } : {}
     }
 
     networks = {
@@ -110,8 +85,8 @@ module "platform" {
           main = {
             cidr            = var.cluster_cidr
             dns_nameservers = var.dns_nameservers
-            # The first addresses are kept for the load balancers of the Services on interface planes.
-            allocation_pools = local.ingress_internal || local.prometheus_internal ? [{
+            # The first addresses are kept for the ingress load balancer on an interface plane.
+            allocation_pools = local.ingress_internal ? [{
               start = cidrhost(var.cluster_cidr, var.service_addresses.reserved_hosts)
               end   = cidrhost(var.cluster_cidr, -2)
             }] : []

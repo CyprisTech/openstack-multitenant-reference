@@ -41,17 +41,13 @@ variable "instances" {
 
 variable "exposure" {
   description = <<-EOT
-    How the instances are reached on the planes. In gateway mode through floating IPs of the
-    plane, in interface mode at their own address (nothing to create).
-    - primary: plane of the port's primary floating IP (published backends), or null.
-    - extra: planes of additional floating IPs (monitoring targets).
-    - dns: A record per instance, named after it, in zone (key of the stack's DNS zones),
-      for the address on plane: the floating IP in gateway mode, the fixed IP in interface mode.
+    How the instances are reached on the planes: through a floating IP of the plane when it
+    translates addresses, at their own address otherwise (nothing to create). At most one
+    floating IP per address (ADR-0006, D4).
+    - primary: plane on which each instance is a service address, or null.
   EOT
   type = object({
     primary = optional(string)
-    extra   = optional(list(string), [])
-    dns     = optional(object({ plane = string, zone = string }))
   })
   default = {}
 }

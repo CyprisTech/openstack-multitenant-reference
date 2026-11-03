@@ -47,7 +47,7 @@ variable "dns_nameservers" {
 }
 
 variable "egress_network" {
-  description = "External network giving the default route (package installation). The instances get no public address on it."
+  description = "External network giving the default route (package installation). The instances get no public address on it; with exposure = \"public\", the service address is a floating IP of this network."
   type = object({
     network = string
     subnet  = string
@@ -71,13 +71,42 @@ variable "plane_attachment" {
   }))
 }
 
+variable "instance_count" {
+  description = "Number of web instances. Above one, a load balancer is the service address (ADR-0006, D1); with one, the instance itself."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.instance_count >= 1
+    error_message = "instance_count must be at least 1."
+  }
+}
+
+variable "exposure" {
+  description = <<-EOT
+    How the service address is published (ADR-0006, D2):
+    - "entry-point": through the shared entry point (output published_domains), reachable from
+      the entry point only;
+    - "public": a floating IP of egress_network, reachable from anywhere; the shared entry point
+      is not used.
+  EOT
+  type        = string
+  default     = "entry-point"
+
+  validation {
+    condition     = contains(["entry-point", "public"], var.exposure)
+    error_message = "exposure must be \"entry-point\" or \"public\"."
+  }
+}
+
 variable "edge_sources" {
   description = <<-EOT
     Ranges the entry point connects from on svc_public, in CIDR notation: output
-    svc_public_sources of stack shared/entry-point. Only they may reach the published port and
-    send a PROXY protocol header.
+    svc_public_sources of stack shared/entry-point. Only they may reach the service address.
+    Required with exposure = "entry-point".
   EOT
   type        = list(string)
+  default     = []
 }
 
 variable "domains" {
@@ -137,20 +166,14 @@ variable "network_mtu" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the instances to the monitoring collector. On a plane with NAT, every instance
-    gets a floating IP of the monitoring plane; on an interface plane, it is reached at its own
-    address.
-    - dns_zone: zone shared with the project (name with its trailing dot) where an A record per
-      instance is written for the collector's DNS service discovery; null writes no record.
-    - metrics_ports: ports opened to the collector (node exporter by default).
-    - collector_cidrs: addresses of the collector as seen by the instances. null opens the
-      metrics ports to the whole monitoring plane range, which includes the routers of every
-      tenant joining that plane: set it to keep tenants from scraping each other.
+    Monitoring as a push integration point (ADR-0007): each instance runs its exporters and a
+    Prometheus agent that pushes to the receiver through the monitoring plane. Nothing connects
+    into the instances for their metrics.
+    - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
+      receiver_url of the receiver); null runs no agent.
   EOT
   type = object({
-    dns_zone        = optional(string)
-    metrics_ports   = optional(list(number), [9100])
-    collector_cidrs = optional(list(string))
+    receiver = optional(string)
   })
   default = {}
 }

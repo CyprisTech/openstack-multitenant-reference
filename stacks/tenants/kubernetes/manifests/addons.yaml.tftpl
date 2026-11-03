@@ -148,21 +148,16 @@
           enabled: false
         service:
           servicePort: 9090
-%{ if length(collectors) > 0 ~}
-          type: LoadBalancer
-          annotations:
-%{ if prometheus_internal ~}
-            service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
-%{ else ~}
-            loadbalancer.openstack.org/floating-network-id: "${monitoring_id}"
-            loadbalancer.openstack.org/keep-floatingip: "true"
-%{ endif ~}
-          loadBalancerIP: ${prometheus_ip}
-          # The collector only: it federates this server (ADR-0002, D5).
-          loadBalancerSourceRanges: ${jsonencode(collectors)}
-%{ else ~}
-          # No collector: not exposed (an empty list of sources would admit everyone).
           type: ClusterIP
+        global:
+          external_labels:
+            site: ${site}
+            tenant: platform
+%{ if receiver != "" ~}
+        # Pushed to the receiver of the shared services (ADR-0007); nothing connects into the
+        # cluster for its metrics.
+        remoteWrite:
+        - url: ${receiver}/api/v1/write
 %{ endif ~}
     EOT
   }

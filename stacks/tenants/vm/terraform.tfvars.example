@@ -22,6 +22,10 @@ network_mtu = 1362
 
 domains = ["site-a.example.org", "site-b.example.org"]
 
+# Two instances behind a load balancer, the service address, published through the entry point.
+instance_count = 2
+exposure       = "entry-point"
+
 # Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
 edge_sources = ["198.51.100.5/32"]
 
@@ -38,13 +42,8 @@ bastion = {
   ssh_cidrs        = ["192.0.2.0/24"]
 }
 
-# Exposure to the monitoring collector: metrics ports open to the collector's addresses only
-# (output collector_cidrs of the collector). On a plane with NAT, each instance also gets a
-# floating IP of the monitoring plane and an A record in the monitoring zone.
-monitoring = {
-  dns_zone        = "mon.site-a.example.org."
-  collector_cidrs = ["203.0.113.10/32"]
-}
+# Metrics pushed to the receiver of the shared services (output receiver_url of the receiver).
+monitoring = { receiver = "http://203.0.113.10:9090" }
 
 # How this stack joins the planes: its entry of the attachments output of stack shared/planes,
 # whether the planes are the operator's or built in a hub project. For example:

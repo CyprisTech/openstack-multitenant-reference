@@ -16,7 +16,7 @@ planes = {
 # admin_network, an external network for the API and bootstrap floating IPs.
 attachments = {
   edge             = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  collector        = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  receiver         = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
   intranet-service = { project_id = "<shared services project>", cidr = "10.35.0.0/28", planes = { intranet = "shared" } }
   web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
   isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }

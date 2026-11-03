@@ -30,7 +30,7 @@ cluster = {
   domains              = ["apps.platform.example.org"]
 }
 
-monitoring = { dns_zone = "mon.site-a.example.org.", collector_cidrs = ["203.0.113.10/32"] }
+monitoring = { receiver = "http://203.0.113.10:9090" }
 
 # Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
 edge_sources = ["198.51.100.5/32"]

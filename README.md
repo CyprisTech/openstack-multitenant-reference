@@ -6,7 +6,7 @@
 [![OpenTofu >= 1.9](https://img.shields.io/badge/OpenTofu-%3E%3D1.9-ffda18?logo=opentofu)](https://opentofu.org)
 [![Terraform >= 1.9](https://img.shields.io/badge/Terraform-%3E%3D1.9-844fba?logo=terraform)](https://www.terraform.io)
 
-Run several tenants on one OpenStack account — **one project each** — sharing a public entry point, monitoring and internal services, with every flow between them explicit and an isolation test to run after each change. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module.
+Run several tenants on one OpenStack account — **one project each** — sharing a public entry point and connected to your monitoring and internal services, with every flow between them explicit and an isolation test to run after each change. Built on the [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) module.
 
 > [!NOTE]
 > **`v0.2.1`** runs on clouds whose operator provides the shared planes (private and sovereign clouds). Public clouds, with planes built by the account holder, are in progress ([ADR-0004](docs/adr/0004-planes-and-isolation.md)).
@@ -36,8 +36,8 @@ Run several tenants on one OpenStack account — **one project each** — sharin
 The shared planes are, inside one account, the hub-and-spoke that OpenStack does not offer natively — the role a transit gateway plays on other clouds.
 
 - **A project per tenant**, with its own credentials and quotas, joined to the shared services through its own routers: nothing else crosses.
-- **One public address for every domain.** The shared entry point routes by SNI without decrypting: it never holds a tenant's TLS keys, and passes the client address to the backend.
-- **Ready for central monitoring and internal services.** Your collector reaches every tenant's metrics, tenants never reach each other's; internal services are reachable only by the tenants allowed to use them ([integration points](docs/reference/integration-points.md)).
+- **One public address for many domains.** The shared entry point routes by SNI to each tenant's service address without decrypting: it never holds a tenant's TLS keys, passes the client address, and takes a new domain in seconds. A tenant may instead expose itself with its own address.
+- **Ready for your monitoring and internal services.** Every tenant pushes its metrics to your receiver, and nothing connects into a tenant; internal services are reachable only by the tenants allowed to use them ([integration points](docs/reference/integration-points.md)).
 - **Kubernetes as a tenant type**: a cluster in a tenant project, created with Cluster API, published, monitored and administered like any tenant — useful on clouds without a managed Kubernetes offer.
 - **An isolation test** that checks every flow, allowed and denied, to run after every change and to show customers or auditors how isolation is verified ([check the isolation](docs/guides/check-isolation.md)).
 
@@ -81,26 +81,26 @@ flowchart LR
     end
     subgraph YOURS["Your services"]
         direction TB
-        C["Monitoring collector"]
+        C["Metrics receiver"]
         S["Internal services"]
         A["Operators"]
     end
     U -->|"HTTPS"| EP
-    EP -->|"svc_public plane<br/>PROXY v2"| TENANTS
-    C -.->|"monitoring plane"| TENANTS
+    EP -->|"svc_public plane<br/>PROXY v2, to each service address"| TENANTS
+    TENANTS -->|"monitoring plane · push"| C
     TENANTS -->|"intranet plane"| S
     A -.->|"administration · your addresses only<br/>bastions · Kubernetes API"| TENANTS
 ```
 
-Each stack has its own state and its own `clouds.yaml` entry, and finds the other stacks' objects by name. Topology, flows and decisions: [architecture](docs/concepts/architecture.md) and [ADRs](docs/adr/README.md).
+Each stack has its own state and its own `clouds.yaml` entry; what it needs from another stack is an output of that stack, passed as an input ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)). Topology, flows and decisions: [architecture](docs/concepts/architecture.md) and [ADRs](docs/adr/README.md).
 
 | Stack | What it creates |
 |---|---|
 | [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the operator's external networks, or creates private networks in the hub project (network only), shared by RBAC and joined through a transit router; generates the routes of every attachment |
-| [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | Octavia in TCP on 80 and 443 in front of two Traefik instances on different hosts, routing by SNI, client address in PROXY v2 |
-| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Instances serving domains through the entry point, reachable from it only |
+| [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | Octavia in TCP on 80 and 443 in front of two Traefik instances on different hosts, routing by SNI to the tenants' service addresses, client address in PROXY v2, routes updated in place |
+| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Instances behind a load balancer, the tenant's service address, published through the entry point or with its own public address |
 | [`stacks/tenants/isolated`](stacks/tenants/isolated/README.md) | A workload with no public address, no Internet and no path to other tenants |
-| [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | A Kubernetes cluster with Cluster API (node image: [`images/kubernetes-node`](images/kubernetes-node/README.md)): ingress through the entry point, metrics on the monitoring plane, API on the administration network |
+| [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | A Kubernetes cluster with Cluster API (node image: [`images/kubernetes-node`](images/kubernetes-node/README.md)): ingress through the entry point, metrics pushed to your receiver, API on the administration network |
 
 Every stack can add a bastion for administration, reachable only from your addresses.
 
@@ -109,7 +109,7 @@ Every stack can add a bastion for administration, reachable only from your addre
 - [Getting started](docs/getting-started/README.md): one path for every cloud; only the configuration of the planes differs. About 20 minutes with the entry point and a `vm` tenant.
 
 <details>
-<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-10-31)</summary>
+<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-03)</summary>
 
 ```console
 $ for d in site-a.example.org site-b.example.org apps.platform.example.org; do
@@ -117,55 +117,43 @@ $ for d in site-a.example.org site-b.example.org apps.platform.example.org; do
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
-from                   to                                                    port  expected actual  
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
+from                   to                                                    port  expected actual
 test runner            entry point (public IP)                                443  open     open     ok
 test runner            entry point (public IP)                                 80  open     open     ok
-test runner            web, published address 10.21.0.15                      443  closed   closed   ok
-test runner            web, published address 10.21.0.38                      443  closed   closed   ok
-edge t1-edge-1         web, published address 10.21.0.15                      443  open     open     ok
-edge t1-edge-1         web, published address 10.21.0.38                      443  open     open     ok
-collector              t1-edge-1 (monitoring 10.20.0.35)                     9100  open     open     ok
-collector              t1-edge-1 (monitoring 10.20.0.35)                     8082  open     open     ok
-collector              t1-edge-2 (monitoring 10.20.0.190)                    9100  open     open     ok
-collector              t1-edge-2 (monitoring 10.20.0.190)                    8082  open     open     ok
-collector              t1-isolated-1 (monitoring 10.22.0.175)                9100  open     open     ok
-collector              t1-web-1 (monitoring 10.21.0.15)                      9100  open     open     ok
-collector              t1-web-2 (monitoring 10.21.0.38)                      9100  open     open     ok
-edge t1-edge-1         t1-isolated-1 (monitoring 10.22.0.175)                9100  closed   closed   ok
-edge t1-edge-1         t1-web-1 (monitoring 10.21.0.15)                      9100  closed   closed   ok
-edge t1-edge-1         t1-web-2 (monitoring 10.21.0.38)                      9100  closed   closed   ok
-web t1-web-1           t1-edge-1 (monitoring 10.20.0.35)                     9100  closed   closed   ok
-web t1-web-1           t1-edge-2 (monitoring 10.20.0.190)                    9100  closed   closed   ok
-web t1-web-1           t1-isolated-1 (monitoring 10.22.0.175)                9100  closed   closed   ok
-web t1-web-1           edge t1-edge-1 (private 10.20.0.35)                    443  closed   closed   ok
-isolated t1-isolated-1 web, published address 10.21.0.15                      443  closed   closed   ok
-isolated t1-isolated-1 web, published address 10.21.0.38                      443  closed   closed   ok
-isolated t1-isolated-1 t1-edge-1 (monitoring 10.20.0.35)                     9100  closed   closed   ok
-isolated t1-isolated-1 t1-edge-2 (monitoring 10.20.0.190)                    9100  closed   closed   ok
-isolated t1-isolated-1 t1-web-1 (monitoring 10.21.0.15)                      9100  closed   closed   ok
-isolated t1-isolated-1 t1-web-2 (monitoring 10.21.0.38)                      9100  closed   closed   ok
-web t1-web-1           isolated t1-isolated-1 (private 10.22.0.175)          9100  closed   closed   ok
-isolated t1-isolated-1 web t1-web-1 (private 10.21.0.15)                      443  closed   closed   ok
+test runner            web service address 10.21.0.90                         443  closed   closed   ok
+edge t1-edge-1         web service address 10.21.0.90                         443  open     open     ok
+edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
+isolated t1-isolated-1 web service address 10.21.0.90                         443  closed   closed   ok
+web t1-web-1           edge t1-edge-1 (private 10.20.0.46)                    443  closed   closed   ok
+edge t1-edge-1         receiver 10.34.0.12                                   9090  open     open     ok
+web t1-web-1           receiver 10.34.0.12                                   9090  open     open     ok
+isolated t1-isolated-1 receiver 10.34.0.12                                   9090  open     open     ok
+receiver               t1-edge-1 metrics (private 10.20.0.46)                9100  closed   closed   ok
+receiver               t1-web-1 metrics (private 10.21.0.144)                9100  closed   closed   ok
+receiver               t1-isolated-1 metrics (private 10.22.0.127)           9100  closed   closed   ok
+receiver               series pushed by edge                                    -  yes      yes      ok
+receiver               series pushed by web                                     -  yes      yes      ok
+receiver               series pushed by isolated                                -  yes      yes      ok
+web t1-web-1           isolated t1-isolated-1 (private 10.22.0.127)            22  closed   closed   ok
+isolated t1-isolated-1 web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
 isolated t1-isolated-1 Internet (192.0.2.1)                                     443  closed   closed   ok
-platform Services      ingress and Prometheus on the stack addresses            -  yes      yes      ok
+platform Service       ingress on the stack address                             -  yes      yes      ok
 edge t1-edge-1         platform ingress 10.24.0.10                            443  open     open     ok
 test runner            platform ingress 10.24.0.10                            443  closed   closed   ok
 web t1-web-1           platform ingress 10.24.0.10                            443  closed   closed   ok
 isolated t1-isolated-1 platform ingress 10.24.0.10                            443  closed   closed   ok
-collector              platform Prometheus 10.24.0.11                        9090  open     open     ok
-edge t1-edge-1         platform Prometheus 10.24.0.11                        9090  closed   closed   ok
-web t1-web-1           platform Prometheus 10.24.0.11                        9090  closed   closed   ok
-isolated t1-isolated-1 platform Prometheus 10.24.0.11                        9090  closed   closed   ok
-test runner (operator) platform Kubernetes API 198.51.100.1                  6443  open     open     ok
-platform pod           edge bastion 198.51.100.2 (SSH)                         22  closed   closed   ok
+platform pod           receiver 10.34.0.12                                   9090  open     open     ok
+receiver               series pushed by platform                                -  yes      yes      ok
+test runner (operator) platform Kubernetes API 198.51.100.1                   6443  open     open     ok
+platform pod           edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
 platform pod           web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
 platform pod           isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
-platform pod           intranet service 198.51.100.3                         8080  open     open     ok
-web t1-web-1           intranet service 198.51.100.3                         8080  closed   closed   ok
-isolated t1-isolated-1 intranet service 198.51.100.3                         8080  closed   closed   ok
+platform pod           intranet service 198.51.100.3                          8080  open     open     ok
+web t1-web-1           intranet service 198.51.100.3                          8080  closed   closed   ok
+isolated t1-isolated-1 intranet service 198.51.100.3                          8080  closed   closed   ok
 
-45/45 rows as expected
+33/33 rows as expected
 ```
 
 </details>
@@ -185,8 +173,9 @@ isolated t1-isolated-1 intranet service 198.51.100.3                         808
 This is a reference, not an operated platform. Before production, plan for:
 
 - **backups** of the tenants' volumes and of each Kubernetes cluster (Velero, etcd snapshots work unchanged);
-- **central logs and alerting**, next to the metrics collector;
-- **single sign-on and audit** of the administration access;
+- **central logs, audit and alerting**: integration points like monitoring, with your tools ([ADR-0003](docs/adr/0003-scope-and-boundary.md), D4);
+- **single sign-on** for the administration access (your identity provider, or the provider's IAM);
+- **certificates** of the published domains, obtained by each tenant with ACME DNS-01 on its zone;
 - **several sites**, if one is not enough: the code takes the site as an input, failover is not provided;
 - **capacity per compute host**: the entry point instances are in anti-affinity, a replacement needs room on another host than the other's.
 
@@ -206,28 +195,31 @@ This is a reference, not an operated platform. Before production, plan for:
 | **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [plane bindings](docs/specs/plane-bindings.md) (superseded) |
-| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [collector](tests/fixtures/collector/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) · [two floating IPs on a port](tests/integration/dual-floating-ip/README.md) |
+| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) · [two floating IPs on a port](tests/integration/dual-floating-ip/README.md) (behind the monitoring design of v0.2, superseded) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
 ## Status and requirements
 
 | Part | Status |
 |---|---|
-| Entry point, `vm` and `isolated` tenants, bastions, monitoring integration | delivered, tested |
-| Kubernetes tenant: creation, ingress, federation, hardening, teardown | delivered, tested; a few requests are lost while a node is drained ([test results](docs/concepts/test-results.md#platform-hardening-and-first-day-2-operation-2026-10-28)) |
+| Entry point, `vm` and `isolated` tenants, bastions | delivered, tested |
+| Service addresses, exposure per tenant, routes updated in place ([ADR-0006](docs/adr/0006-exposure.md)) | delivered, tested in both plane modes |
+| Monitoring pushed to your receiver ([ADR-0007](docs/adr/0007-monitoring.md)) | delivered, tested in both plane modes |
+| Kubernetes tenant: creation, ingress, push of its metrics, hardening, teardown | delivered, tested; a few requests are lost while a node is drained ([test results](docs/concepts/test-results.md#platform-hardening-and-first-day-2-operation-2026-10-28)) |
 | Kubernetes tenant: upgrade, scaling, credential rotation | next |
-| Shared planes built by the account holder (interface mode, transit routers) | delivered, tested on the reference private cloud with one project per stack; not yet on a public cloud |
+| Planes built by the account holder (hub planes, transit routers) | delivered, tested on the reference private cloud with one project per stack; not yet on a public cloud |
+| Certificates of the published domains (ACME DNS-01) | next |
 
-Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, in both plane modes: apply, empty plan after apply, HTTPS end to end, isolation test (45/45), destroy without leftover. Not yet tested on a public OpenStack cloud: the interface mode relies on Neutron policies (network sharing by members, the network owner's view of its ports) to check there. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest ([test results](docs/concepts/test-results.md)).
+Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, in both plane modes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, isolation test (33/33), destroy without leftover. Not yet tested on a public OpenStack cloud: hub planes rely on Neutron policies (network sharing by members, the network owner's view of its ports) to check there. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest ([test results](docs/concepts/test-results.md)).
 
 | Component | Requirement |
 |---|---|
 | OpenTofu or Terraform | >= 1.9 |
 | Provider `terraform-provider-openstack/openstack` | `~> 3.2` |
 | Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), pinned in every stack (the release adding router interfaces and routes) |
-| OpenStack | Keystone v3, Nova, Glance, Octavia; Neutron with routers and **several floating IPs on one port** (from different external networks: one per plane); Cinder for boot volumes and Designate for the monitoring and public DNS records, both optional |
+| OpenStack | Keystone v3, Nova (metadata service), Glance, Octavia (amphora); Neutron with routers, and network sharing by RBAC for hub planes; Cinder for boot volumes and Designate for the public records and the ACME DNS-01 challenges, both optional |
 | Credentials | One project per tenant and per shared service, plus the hub project in interface mode; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
-| Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges, DNS zone). Shared private planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |
+| Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges). Hub planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |
 
 Quotas per project: [sizing](docs/concepts/architecture.md#sizing).
 

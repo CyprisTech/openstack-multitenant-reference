@@ -1,9 +1,10 @@
 # Tenant "isolated": a workload with no public exposure and no path to the other tenants
-# (ADR-0001, D5). Its network has a single router, to the monitoring plane: the collector
-# reaches the instance through it, and it reaches nothing but the monitoring plane.
+# (ADR-0003, D3). Its network has a single router, to the monitoring plane: the workload pushes
+# its metrics to the receiver through it (ADR-0007), and reaches nothing else.
 #
-# The workload is a stand-in: a metrics endpoint served by the Python standard library,
-# so that the instance needs no package and no Internet access.
+# The workload is a stand-in with no package and no Internet access: it pushes one metric in
+# OTLP (JSON over HTTP, Python standard library), which the receiver accepts as well as remote
+# write.
 
 locals {
   prefix   = "${var.site}-isolated"
@@ -11,16 +12,37 @@ locals {
 
   bastion_name = "${local.prefix}-bastion"
 
-  # Sources of the metrics scrapes: the collector only.
-  metrics_sources = coalesce(var.monitoring.collector_cidrs, [module.planes.cidr.monitoring])
+  pusher = <<-EOT
+    #!/usr/bin/env python3
+    # Pushes isolated_up = 1 every 30 seconds to the receiver (OTLP, JSON over HTTP).
+    import json, sys, time, urllib.request
 
-  metrics_unit = <<-EOT
+    URL = sys.argv[1].rstrip("/") + "/api/v1/otlp/v1/metrics"
+    ATTRIBUTES = {"service.name": "isolated", "service.instance.id": "${local.instance}",
+                  "site": "${var.site}", "tenant": "isolated"}
+
+    while True:
+        body = {"resourceMetrics": [{
+            "resource": {"attributes": [{"key": k, "value": {"stringValue": v}} for k, v in ATTRIBUTES.items()]},
+            "scopeMetrics": [{"metrics": [{"name": "isolated_up", "gauge": {
+                "dataPoints": [{"asDouble": 1, "timeUnixNano": str(time.time_ns())}]}}]}],
+        }]}
+        request = urllib.request.Request(URL, data=json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(request, timeout=10).read()
+        except Exception as e:
+            print(f"push failed: {e}", file=sys.stderr, flush=True)
+        time.sleep(30)
+  EOT
+
+  pusher_unit = <<-EOT
     [Unit]
-    Description=Stand-in metrics endpoint
+    Description=Stand-in workload: pushes its metric to the receiver
     After=network-online.target
 
     [Service]
-    ExecStart=/usr/bin/python3 -m http.server ${var.monitoring.metrics_ports[0]} --directory /srv/metrics
+    ExecStart=/usr/bin/python3 /usr/local/bin/push-metrics ${coalesce(var.monitoring.receiver, "none")}
     Restart=always
     DynamicUser=yes
 
@@ -37,20 +59,13 @@ module "planes" {
   planes          = ["monitoring"]
   attachment      = var.plane_attachment
   default_gateway = "monitoring"
-  instances       = [local.instance]
-  exposure = {
-    primary = "monitoring"
-    dns     = var.monitoring.dns_zone == null ? null : { plane = "monitoring", zone = "monitoring" }
-  }
 }
 
-# Who may reach the instance.
 module "admission" {
   source = "../../../modules/admission"
 
   allow = {
-    metrics = { ports = var.monitoring.metrics_ports, sources = local.metrics_sources }
-    ssh     = { ports = [22], sources = var.admin.ssh_cidrs }
+    ssh = { ports = [22], sources = var.admin.ssh_cidrs }
   }
 }
 
@@ -83,17 +98,13 @@ module "cloudinit" {
     for login, keys in var.admin.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
 
-  write_files = {
-    "/srv/metrics/metrics" = {
-      content = "# Stand-in metrics of the isolated workload\nisolated_up 1\n"
-    }
-    "/etc/systemd/system/metrics.service" = {
-      content = local.metrics_unit
-    }
+  write_files = var.monitoring.receiver == null ? {} : {
+    "/usr/local/bin/push-metrics"              = { content = local.pusher, permissions = "0755" }
+    "/etc/systemd/system/push-metrics.service" = { content = local.pusher_unit }
   }
-  runcmd = [
+  runcmd = var.monitoring.receiver == null ? [] : [
     "systemctl daemon-reload",
-    "systemctl enable --now metrics.service",
+    "systemctl enable --now push-metrics.service",
   ]
 }
 
@@ -102,8 +113,7 @@ module "isolated" {
 
   tenant = {
     existing = {
-      dns_zones = var.monitoring.dns_zone == null ? {} : { monitoring = { name = var.monitoring.dns_zone } }
-      networks  = merge(module.planes.networks, module.bastion.existing_networks)
+      networks = merge(module.planes.networks, module.bastion.existing_networks)
     }
 
     networks = merge({
@@ -117,7 +127,7 @@ module "isolated" {
 
     security_groups = merge({
       "${local.prefix}-workload" = {
-        description = "Isolated workload: metrics from the collector only, SSH from the bastion"
+        description = "Isolated workload: SSH from the bastion only"
         rules       = merge(module.admission.rules, module.bastion.ssh_rules)
       }
     }, module.bastion.security_groups)
@@ -135,10 +145,6 @@ module "isolated" {
             network         = local.prefix
             subnet          = "main"
             security_groups = ["${local.prefix}-workload"]
-            # Exposure to the monitoring collector (ADR-0001, D2): the only published address.
-            floating_ip        = module.planes.ports[local.instance].floating_ip
-            extra_floating_ips = module.planes.ports[local.instance].extra_floating_ips
-            dns                = module.planes.ports[local.instance].dns
           }
         }
       }

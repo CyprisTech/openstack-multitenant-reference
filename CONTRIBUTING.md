@@ -18,7 +18,7 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 | `stacks/shared/entry-point` | The shared public entry point |
 | `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
 | `tests/isolation` | The isolation test |
-| `tests/fixtures/collector`, `tests/fixtures/intranet-service` | Stand-ins for your platform services, used by the isolation test |
+| `tests/fixtures/receiver`, `tests/fixtures/intranet-service` | Stand-ins for your platform services, used by the tests and the isolation test |
 | `tests/integration/dual-floating-ip` | One-off test behind the monitoring design (two floating IPs on one port) |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
@@ -41,8 +41,7 @@ Run the same checks as CI before pushing. They need no cloud and no credentials:
 
 ```bash
 tofu fmt -check -recursive                     # or: terraform fmt -check -recursive
-for d in stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated \
-         tests/fixtures/collector tests/integration/dual-floating-ip; do
+for d in stacks/shared/* stacks/tenants/* tests/fixtures/* modules/* tests/integration/*; do
   tofu -chdir="$d" init -backend=false -input=false && tofu -chdir="$d" validate
 done
 tflint --init
@@ -62,7 +61,7 @@ CI only validates the code. Every change to a stack is also tested by the mainta
 
 1. **Apply**, then **plan again: the plan after apply must be empty.**
 2. Functional checks of the change (for example HTTPS through the entry point, the rolling replacement of the edge instances).
-3. **The isolation test.** [`tests/isolation/check.py`](tests/isolation/README.md) reads the outputs of the deployed stacks and of the [test collector](tests/fixtures/collector/README.md), opens TCP connections from inside each tenant (through its bastion), from the collector and from the machine running the test, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the domains of `web` published on the entry point, and the collector's `collector_cidrs` given to the stacks as `monitoring.collector_cidrs`.
+3. **The isolation test.** [`tests/isolation/check.py`](tests/isolation/README.md) reads the outputs of the deployed stacks and of the [test receiver](tests/fixtures/receiver/README.md), opens TCP connections from inside each tenant and the receiver (through their bastions) and from the machine running the test, asks the receiver which tenants pushed metrics, and compares each result with the expected one. It exits with status 1 if any row differs; a probe that cannot run is an error, never `closed`. It needs the stacks applied **with bastions**, the domains of `vm` published on the entry point, and the receiver's `receiver_url` given to the stacks as `monitoring.receiver`.
 4. **Destroy**, and check that nothing is left (instances, load balancers, floating IPs, DNS records).
 
 Use a dedicated, disposable project and project-scoped credentials (an application credential with the `member` role, plus `load-balancer_member` if your Octavia policy requires it). These tests create real resources and may cost money on a public cloud. Contributors are not required to run them; if you do, attach a summary without addresses or names to the pull request.

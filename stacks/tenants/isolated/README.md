@@ -1,13 +1,13 @@
 # Tenant type `isolated`
 
-A workload with no public exposure and no path to the other tenants ([ADR-0001](../../../docs/adr/0001-reference-architecture.md), D5):
+A workload with no public exposure and no path to the other tenants ([ADR-0003](../../../docs/adr/0003-scope-and-boundary.md), D3):
 
-- one network whose **only router** joins the monitoring plane: it carries the instance's floating IP on that plane and the replies to the collector;
+- one network whose **only router** joins the monitoring plane, its default gateway;
 - no egress network, no route to `svc_public` or to the Internet;
-- metrics open to the collector only (`monitoring.collector_cidrs`), with an A record in the monitoring zone for DNS service discovery;
+- the workload pushes its metrics to your receiver through the monitoring plane (`monitoring.receiver`); nothing connects into the tenant;
 - an optional bastion for administration.
 
-The workload is a stand-in: a metrics endpoint served by the Python standard library, so that the instance needs no package and no Internet access.
+The workload is a stand-in with no package and no Internet access: a Python standard-library service that pushes one metric (`isolated_up`) in OTLP, JSON over HTTP, which the receiver accepts next to remote write.
 
 ## Usage
 
@@ -17,9 +17,9 @@ tofu init
 tofu apply
 ```
 
-## Why the metrics are open to the collector only
+## Why the tenant reaches the receiver only
 
-Every tenant that joins the monitoring plane does so through a router with source NAT: seen from the plane, all tenants have addresses in the plane range. Opening the metrics ports to the whole range would let any tenant scrape any other. `monitoring.collector_cidrs` restricts them to the collector's addresses; with `null`, the whole plane range is admitted.
+Its router is its only way out, and the only ranges routed through it are the monitoring plane's and the shared services routed on that plane: the receiver. Every flow is outbound; the security group of the instance admits SSH from its bastion only.
 
 ## Inputs and outputs
 
@@ -56,7 +56,7 @@ Every tenant that joins the monitoring plane does so through a router with sourc
 | boot\_volume\_size | Size in GiB of a root volume created from the image; null boots from the flavor's local disk. | `number` | `null` | no |
 | dns\_nameservers | DNS resolvers of the web network, reachable through its routes. | `list(string)` | `[]` | no |
 | isolated\_cidr | Range of the isolated network. With operator planes it may overlap the ranges of other tenants; on an interface plane it must not (shared/planes checks it). | `string` | `"10.22.0.0/24"` | no |
-| monitoring | Exposure of the instance to the monitoring collector (ADR-0001, D2): a floating IP of the<br/>monitoring plane in gateway mode, its own address in interface mode.<br/>- dns\_zone: zone shared with the project (name with its trailing dot) where an A record per<br/>  instance is written for the collector's DNS service discovery; null writes no record.<br/>- metrics\_ports: ports opened to the collector (node exporter by default).<br/>- collector\_cidrs: addresses of the collector as seen by the instances. null opens the<br/>  metrics ports to the whole monitoring plane range, which includes the routers of every<br/>  tenant joining that plane: set it to keep tenants from scraping each other. | <pre>object({<br/>    dns_zone        = optional(string)<br/>    metrics_ports   = optional(list(number), [9100])<br/>    collector_cidrs = optional(list(string))<br/>  })</pre> | `{}` | no |
+| monitoring | Monitoring as a push integration point (ADR-0007): the workload pushes its metrics to the<br/>receiver through the monitoring plane, its only way out. Nothing connects into the tenant.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null pushes nothing. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes they join (planes contract): a larger value creates a<br/>path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator<br/>enables it. null keeps the cloud default. | `number` | `null` | no |
 
 ### Outputs
@@ -65,5 +65,4 @@ Every tenant that joins the monitoring plane does so through a router with sourc
 | ---- | ----------- |
 | bastion | Floating IP of the bastion on the administration network, or null. |
 | instances | Isolated instance and its private address. |
-| monitoring\_targets | Instance exposed to the monitoring collector: its address on the monitoring plane (floating IP in gateway mode, own address in interface mode) and DNS name (or null). |
 <!-- END_TF_DOCS -->

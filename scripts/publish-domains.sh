@@ -2,14 +2,13 @@
 # Publish the domains of the tenants on the public entry point (stack shared/entry-point).
 #
 # Collects the `published_domains` output of every applied stack under stacks/tenants, writes them
-# to stacks/shared/entry-point/domains.auto.tfvars.json and, when they changed, replaces the entry point
-# instances one at a time: the routing of Traefik is written by cloud-init, and the load balancer keeps a healthy
-# member while the other instance is replaced.
+# to stacks/shared/entry-point/domains.auto.tfvars.json and, when they changed, applies the entry
+# point. The routes reach the Traefik instances through their metadata, updated in place: no
+# instance is replaced, and they take effect within seconds (ADR-0006, D3).
 #
 #     OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh [--tool tofu|terraform] [--allow-empty]
 #
-# Needs jq and Python 3 with openstacksdk (to wait for the load balancer members). Safe to run
-# again after a failure: an interrupted publication is resumed.
+# Needs jq.
 set -euo pipefail
 
 tool=tofu
@@ -26,7 +25,6 @@ done
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 edge="${root}/stacks/shared/entry-point"
 domains_file="${edge}/domains.auto.tfvars.json"
-pending="${edge}/.domains-publication-pending"
 
 # 1. Domains of the applied tenant stacks. A stack that does not publish domains, or is not
 #    deployed, is skipped; a deployed stack whose state lacks the output stops the script (its
@@ -47,61 +45,19 @@ for stack in "${root}"/stacks/tenants/*/; do
 done
 new=$(jq '{domains: .}' <<<"${domains}")
 
-# An empty publication would replace the instances with a configuration routing nothing.
+# An empty publication would withdraw every domain from the entry point.
 if [[ "${allow_empty}" != true && "$(jq 'length' <<<"${domains}")" == 0 && -f "${domains_file}" \
       && "$(jq '.domains | length' "${domains_file}")" != 0 ]]; then
   echo "no domain found, while domains are published: refusing to remove them all (--allow-empty to force)" >&2
   exit 1
 fi
 
-if [[ ! -f "${pending}" && -f "${domains_file}" ]] && diff -q <(jq -S . "${domains_file}") <(jq -S . <<<"${new}") >/dev/null; then
+if [[ -f "${domains_file}" ]] && diff -q <(jq -S . "${domains_file}") <(jq -S . <<<"${new}") >/dev/null; then
   echo "domains unchanged: nothing to do"
   exit 0
 fi
-touch "${pending}"
 echo "${new}" > "${domains_file}"
 
-# 2. Replace the entry point instances one at a time. An instance whose members are not ONLINE is
-#    replaced first: it serves nothing. A healthy instance is replaced only while every other
-#    instance is healthy, so that the load balancer always keeps a member.
-lb_id=$("${tool}" -chdir="${edge}" output -json load_balancer | jq -r .id)
-instances=$("${tool}" -chdir="${edge}" output -json instances)   # name => address on the edge network
-
-# Health of each instance: "healthy" when all its members, in every pool, are ONLINE.
-health() {
-  python3 - "${lb_id}" "${instances}" <<'PY'
-import json, sys, openstack
-conn = openstack.connect(cloud=None)  # OS_CLOUD
-lb, instances = sys.argv[1], json.loads(sys.argv[2])
-status = {}
-for p in conn.load_balancer.pools(loadbalancer_id=lb):
-    for m in conn.load_balancer.members(p):
-        status.setdefault(m.address, []).append(m.operating_status)
-for name, ip in instances.items():
-    s = status.get(ip, [])
-    print(name, "healthy" if s and all(x == "ONLINE" for x in s) else "unhealthy")
-PY
-}
-
-wait_healthy() {  # $1: instance name; 10 minutes at most
-  for _ in $(seq 60); do
-    health | grep -qx "$1 healthy" && return 0
-    sleep 10
-  done
-  echo "$1: load balancer members not ONLINE after 10 minutes (check cloud-init on the instance)" >&2
-  return 1
-}
-
-order=$(health | sort -k2,2r | awk '{print $1}')   # unhealthy first
-for instance in ${order}; do
-  if health | grep -qx "${instance} healthy" && health | grep -v "^${instance} " | grep -q unhealthy; then
-    echo "refusing to replace ${instance}: it is the only healthy instance; fix the others first" >&2
-    exit 1
-  fi
-  echo "replacing ${instance}"
-  "${tool}" -chdir="${edge}" apply -auto-approve -input=false \
-    -replace="module.edge.module.instance[\"${instance}\"].openstack_compute_instance_v2.this"
-  wait_healthy "${instance}"
-done
-rm -f "${pending}"
+# 2. Apply the entry point: its instances' metadata is updated in place.
+"${tool}" -chdir="${edge}" apply -auto-approve -input=false
 echo "domains published: $(jq -r '.domains | keys | join(", ")' <<<"${new}")"

@@ -13,7 +13,7 @@ planes = {
 # planes: role of the attachment on each plane it joins ("shared" service or "tenant").
 attachments = {
   edge      = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  collector = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
+  receiver  = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
   web       = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
   isolated  = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
 }

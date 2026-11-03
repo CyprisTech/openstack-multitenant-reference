@@ -1,6 +1,6 @@
 # Test procedure
 
-Every step of a full test cycle, with the checkpoint that must pass before the next step and the duration measured on the reference test cloud. Each stack runs in its own project, as in production ([ADR-0003](../adr/0003-scope-and-boundary.md)), and the cycle runs in either plane mode: **gateway** (planes provided by the operator) or **interface** (shared private planes of a hub project, with transit routers). The results of each cycle are in [test results](../concepts/test-results.md); the [getting started](../getting-started/README.md) is the short version.
+Every step of a full test cycle, with the checkpoint that must pass before the next step and the duration measured on the reference test cloud. Each stack runs in its own project, as in production ([ADR-0003](../adr/0003-scope-and-boundary.md)), and the cycle runs in either plane mode: **gateway** (planes provided by the operator, with address translation) or **interface** (planes built in a hub project, with transit routers). The results of each cycle are in [test results](../concepts/test-results.md); the [getting started](../getting-started/README.md) is the short version.
 
 Run everything from a machine that is an administration source of the stacks (`admin.sources`, `bastion.ssh_cidrs`), with a `clouds.yaml` entry per project and **no `OS_*` variable in the shell**.
 
@@ -9,12 +9,12 @@ Run everything from a machine that is an administration source of the stacks (`a
 ```mermaid
 flowchart LR
     P["0. Projects<br/>and prerequisites"] --> H["1. Planes"]
-    H --> C["2. Collector"]
+    H --> C["2. Receiver"]
     C --> E["3. Entry point"]
     E --> T["4. vm · isolated<br/>kubernetes"]
     T --> K["5. Cluster"]
     K --> I["6. Intranet service"]
-    I --> R["7. Transit routes<br/>(interface)"]
+    I --> R["7. Planes again<br/>(transit routes)"]
     R --> PB["8. Publish"]
     PB --> A["9. Acceptance"]
     A -.-> D["10. Teardown"]
@@ -23,25 +23,25 @@ flowchart LR
 | Project | Stacks | Role on the planes |
 |---|---|---|
 | hub (interface mode) | `shared/planes` | owns the planes and their transit routers; no instance. With operator planes, `shared/planes` runs with the shared services' credentials and only adopts them |
-| shared services | `tests/fixtures/collector`, `tests/fixtures/intranet-service` | `shared` on `monitoring`, `shared` on `intranet` |
+| shared services | `tests/fixtures/receiver`, `tests/fixtures/intranet-service` | `shared` on `monitoring`, `shared` on `intranet` |
 | entry point | `shared/entry-point` | `shared` on `svc_public`, `tenant` on `monitoring` |
 | one per tenant | `tenants/vm`, `tenants/isolated`, `tenants/kubernetes` | `tenant` |
 
-| Step | Measured (2026-10-31) |
+| Step | Measured (2026-11-02, interface mode) |
 |---|---|
-| 1. Planes | 10 s |
-| 2. Collector | 1 min |
-| 3. Entry point | 3 to 4 min |
-| 4. `vm`, `isolated`, `kubernetes` | 1 to 2.5 min each, up to 10 min when DNS is slow |
-| 5. Cluster (`create-cluster.sh`, add-ons included) | 17 to 19 min |
+| 1. Planes | 16 s |
+| 2. Receiver | 1 min 15 s |
+| 3. Entry point | 3 to 10 min (Octavia) |
+| 4. `vm` (with its load balancer), `isolated`, `kubernetes` | 1 to 4 min each |
+| 5. Cluster (`create-cluster.sh`, add-ons included) | 18 min |
 | 6. Intranet service | 1 min |
-| 7. Transit routes (interface mode) | 5 s |
-| 8. Domain publication (two entry point instances replaced) | 4 min |
+| 7. Planes again | 7 s |
+| 8. Domain publication | 19 s, the routes answering 13 s later |
 | 9. Acceptance | 3 min |
-| **Total, steps 1 to 9** | **about 40 minutes** without incident |
-| 10. Teardown | 11 min: 7 for the cluster, 4 for the stacks |
+| **Total, steps 1 to 9** | **about 45 minutes** without incident |
+| 10. Teardown | about 10 min: 5 to 7 for the cluster, the rest for the stacks |
 
-Expected results are short extracts of the cycle of 2026-10-31 (interface mode); addresses outside the private ranges of the example are documentation addresses.
+Expected results are short extracts of the cycle of 2026-11-02 (interface mode); addresses outside the private ranges of the example are documentation addresses.
 
 ### Inputs between stacks
 
@@ -51,7 +51,7 @@ No stack reads an object of another project: each passes what the next ones need
 |---|---|---|
 | `cloud` | every stack | the project's `clouds.yaml` entry |
 | `plane_attachment` | every attached stack | `tofu -chdir=stacks/shared/planes output -json attachments \| jq .<name>.planes` |
-| `monitoring.collector_cidrs` | entry point, `vm`, `isolated`, `kubernetes` | output `collector_cidrs` of the collector |
+| `monitoring.receiver` | entry point, `vm`, `isolated`, `kubernetes` | output `receiver_url` of the receiver |
 | `edge_sources` | `vm`, `kubernetes` | output `svc_public_sources` of the entry point |
 | `allowed_sources` | intranet service | output `intranet_sources` of `kubernetes` |
 
@@ -60,7 +60,7 @@ No stack reads an object of another project: each passes what the next ones need
 | Check | How | Expected |
 |---|---|---|
 | Projects and credentials | one project per row of the table above; an application credential `member` + `load-balancer_member` each, plus one for the cluster in the Kubernetes project | `openstack token issue` works for every `clouds.yaml` entry |
-| DNS zones | the monitoring zone shared with every project that writes monitoring records (entry point, tenants, shared services); the public zone with the entry point's project | `openstack zone list` from each project shows them |
+| DNS zones (optional) | the public zone with the entry point's project | `openstack zone list` from that project shows it |
 | Quotas | `openstack quota show` per project | Kubernetes project: 25 security groups, 200 rules (the cloud controller manager creates its own); hub: one RBAC policy per attachment and interface plane |
 | Node image | [images/kubernetes-node](../../images/kubernetes-node/README.md), shared with the Kubernetes project and accepted there | private image `ubuntu-2404-kube-<version>` visible from the Kubernetes project |
 | Your address | the address the cloud sees for you | in `admin.sources` and `bastion.ssh_cidrs` of every stack |
@@ -86,18 +86,18 @@ $ openstack network show t1-svc-public                               # from a pr
 No Network found for t1-svc-public
 ```
 
-## 2. Collector
+## 2. Receiver
 
-Create it before the stacks that admit it: they need its `collector_cidrs`.
+Create it before the stacks that push to it: they need its `receiver_url`.
 
 ```bash
-cd tests/fixtures/collector && tofu init && tofu apply && tofu plan -detailed-exitcode
-tofu output -json collector_cidrs   # gateway: its router's address; interface: its range
+cd tests/fixtures/receiver && tofu init && tofu apply && tofu plan -detailed-exitcode
+tofu output -raw receiver_url   # with NAT: a floating IP of monitoring; interface: its own address
 ```
 
 ```console
-$ tofu output -json collector_cidrs
-["10.34.0.0/28"]
+$ tofu output -raw receiver_url
+http://10.34.0.12:9090
 ```
 
 ## 3. Entry point
@@ -151,7 +151,7 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
 | 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicated release proxies after the move happen intermittently; see [test results](../concepts/test-results.md#one-shot-rebuild-2026-10-29) before deleting any (deleting one uninstalls the release) |
-| Services on the stack's addresses | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` and `tofu output prometheus` | gateway: floating IPs of the planes; interface: fixed addresses of the cluster network (internal load balancers). Another address means the requested one was not available |
+| ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of `svc_public`; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
 
 ```console
 $ kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[-1].type,VERSION:.status.nodeInfo.kubeletVersion
@@ -171,9 +171,8 @@ openstack-cloud-controller-manager-platform-nzwqf  platform  True   deployed
 prometheus-platform-hpz6g                          platform  True   deployed
 traefik-platform-vsj99                             platform  True   deployed
 $ kubectl get svc -A --field-selector spec.type=LoadBalancer
-NAMESPACE   NAME               TYPE          EXTERNAL-IP  PORT(S)
-monitoring  prometheus-server  LoadBalancer  10.24.0.11   9090:32072/TCP
-traefik     traefik            LoadBalancer  10.24.0.10   80:31592/TCP,443:30520/TCP
+NAMESPACE   NAME      TYPE           EXTERNAL-IP   PORT(S)
+traefik     traefik   LoadBalancer   10.24.0.10    80:32745/TCP,443:31426/TCP
 ```
 
 Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` removes the bootstrap instance; set it back to `true` before teardown.
@@ -186,13 +185,13 @@ cd tests/fixtures/intranet-service && tofu init && tofu apply && tofu plan -deta
 
 Its `allowed_sources` is the `intranet_sources` output of the Kubernetes tenant, so it comes after step 4.
 
-## 7. Transit routes (interface mode only)
+## 7. Planes again
 
 ```bash
 cd stacks/shared/planes && tofu apply && tofu output -json transit
 ```
 
-`shared/planes` discovers the address Neutron gave each attached router and adds one route per attachment on each transit router. Checkpoint: every attachment appears in `transit.<plane>.routes`; plan afterwards empty. Until this step, the shared services cannot reach the tenants.
+On hub planes, `shared/planes` discovers the address Neutron gave each attached router and adds one route per attachment on each transit router. Checkpoint: every attachment appears in `transit.<plane>.routes`; plan afterwards empty. Until this step, the shared services cannot answer the tenants: the agents' pushes time out, and they retry. On operator planes, nothing changes.
 
 ```console
 $ tofu output -json transit
@@ -200,19 +199,19 @@ $ tofu output -json transit
   "monitoring": {
     "address": "172.31.1.1",
     "routes": {
-      "collector": "10.34.0.0/28 via 172.31.1.179",
-      "edge": "10.20.0.0/24 via 172.31.1.109",
-      "isolated": "10.22.0.0/24 via 172.31.1.86",
-      "platform": "10.24.0.0/24 via 172.31.1.181",
-      "web": "10.21.0.0/24 via 172.31.1.246"
+      "edge": "10.20.0.0/24 via 172.31.1.254",
+      "isolated": "10.22.0.0/24 via 172.31.1.252",
+      "platform": "10.24.0.0/24 via 172.31.1.162",
+      "receiver": "10.34.0.0/28 via 172.31.1.197",
+      "web": "10.21.0.0/24 via 172.31.1.52"
     }
   },
   "svc_public": {
     "address": "172.31.0.1",
     "routes": {
-      "edge": "10.20.0.0/24 via 172.31.0.14",
-      "platform": "10.24.0.0/24 via 172.31.0.211",
-      "web": "10.21.0.0/24 via 172.31.0.78"
+      "edge": "10.20.0.0/24 via 172.31.0.9",
+      "platform": "10.24.0.0/24 via 172.31.0.246",
+      "web": "10.21.0.0/24 via 172.31.0.190"
     }
   }
 }
@@ -226,7 +225,8 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 
 | Checkpoint | If it fails |
 |---|---|
-| "domains published" and every member `ONLINE` | the script replaces unhealthy instances first and refuses to replace the last healthy one: fix the unhealthy instance (step 3), then run it again; it resumes |
+| "domains published"; the apply changes the two Traefik instances in place (`0 added, 2 changed, 0 destroyed`) | an instance replaced means its static configuration changed: that is a separate change |
+| the routes on each instance, within seconds | `cat /etc/traefik/dynamic/routes.yml` (through the bastion); `journalctl -u traefik-routes` | the timer leaves the routes untouched when the metadata service does not answer or answers fewer routes than announced |
 | it stops: "deployed but its state has no published_domains output" | apply that tenant, then run it again |
 | it stops: "refusing to remove them all" | a tenant is missing (not deployed, wrong directory); `--allow-empty` only to withdraw every domain on purpose |
 
@@ -238,6 +238,8 @@ domains from vm: site-a.example.org, site-b.example.org
 domains published: apps.platform.example.org, site-a.example.org, site-b.example.org
 ```
 
+Publication under load, measured: a new domain added while a client sends two requests per second to another — the apply takes 19 s, the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails.
+
 ## 9. Acceptance
 
 ```bash
@@ -246,25 +248,30 @@ LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .f
 for d in site-a.example.org site-b.example.org apps.platform.example.org; do
   for i in $(seq 12); do curl -sk --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
 done
-python3 tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
+python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --platform-kubeconfig platform.kubeconfig
 ```
+
+Wait until the ingress Service has its address and the agents have pushed once (30 s) before the acceptance.
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS through the entry point | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (45 with the Kubernetes tenant) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| isolation test | every row as expected (33 with the Kubernetes tenant) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
 from                   to                                                    port  expected actual
+edge t1-edge-1         web service address 10.21.0.90                         443  open     open     ok
+edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
 ...
-isolated t1-isolated-1 web t1-web-1 (private 10.21.0.15)                      443  closed   closed   ok
+receiver               t1-web-1 metrics (private 10.21.0.144)                9100  closed   closed   ok
+receiver               series pushed by web                                     -  yes      yes      ok
 ...
-45/45 rows as expected
+33/33 rows as expected
 ```
 
 ### Hostile route (interface mode)
@@ -287,7 +294,7 @@ tofu -chdir=stacks/tenants/isolated apply   # back to normal
 9100 closed
 ```
 
-Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only the entry point, the collector and the operators.
+Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only its load balancer, its bastion and the operators.
 
 ## 10. Teardown
 
@@ -299,7 +306,7 @@ tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
 for s in tests/fixtures/intranet-service stacks/tenants/kubernetes stacks/tenants/isolated \
-         stacks/tenants/vm stacks/shared/entry-point tests/fixtures/collector stacks/shared/planes; do
+         stacks/tenants/vm stacks/shared/entry-point tests/fixtures/receiver stacks/shared/planes; do
   tofu -chdir=$s destroy -auto-approve
 done
 ```

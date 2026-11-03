@@ -55,11 +55,11 @@ variable "attachments" {
     - cidr: range of the attachment's network. Must not overlap a plane, nor another
       attachment of the same interface plane.
     - planes: the planes it joins, each with its role on that plane:
-      - "shared": a shared service of the plane (the entry point on svc_public, the collector
-        on monitoring, an internal service on intranet). It reaches the tenants and the other
+      - "shared": a shared service of the plane (the entry point on svc_public, the metrics
+        receiver on monitoring, an internal service on intranet). It reaches the tenants and the other
         shared services of the plane, and they reach it.
-      - "tenant": a workload, or a target of a shared service (the entry point is a monitored
-        target on monitoring). It reaches the shared services of the plane only.
+      - "tenant": a workload, or a client of the shared services (the entry point pushes its
+        metrics on monitoring). It reaches the shared services of the plane only.
   EOT
   type = map(object({
     project_id = string

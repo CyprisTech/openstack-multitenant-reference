@@ -26,7 +26,7 @@ flowchart LR
 ```
 
 - **Leaving the tenant**, traffic is translated to the address of the router's gateway (`enable_snat` is true by default, and only an admin can turn it off). A target on the plane sees the router, shared by the whole tenant.
-- **With a floating IP of the plane**, an instance enters and leaves with its own stable address: a 1:1 translation. The architecture gives a floating IP of the plane to every instance that must be reachable or identifiable on it (published backends, metrics targets).
+- **With a floating IP of the plane**, an address enters and leaves as its own stable address: a 1:1 translation. The architecture gives one only to what others must reach on the plane: a tenant's service address on `svc_public`, the receiver on `monitoring`. At most one floating IP per address ([ADR-0006](../adr/0006-exposure.md), D4).
 - **No return route is needed**: the target answers the router's or the floating IP's address, which is on the plane.
 - **Tenant ranges may overlap**: they are never seen on the plane.
 
@@ -42,10 +42,10 @@ flowchart LR
     RW --> V["VM 10.21.0.15"]
 ```
 
-- **No translation**: the target sees the real address of the instance, in its tenant network. Admission rules name the entry point's or the collector's range.
-- **No floating IP**: floating IPs only exist on external networks. Services published on the plane (a Kubernetes ingress, a federated Prometheus) use internal load balancers at fixed addresses of the tenant network.
+- **No translation**: the target sees the real address of the instance, in its tenant network. Admission rules name the entry point's range, or the tenant ranges routed to the receiver.
+- **No floating IP**: floating IPs only exist on external networks. A service address on the plane is the load balancer's own address (a `vm` tenant's, a Kubernetes ingress at a fixed address of the cluster network).
 - **One fixed address per plane: the transit router's.** A project cannot choose its address on a network it does not own (Neutron policy `create_port:fixed_ips:ip_address`), so each attached router takes an address from Neutron; the hub, owner of the plane, places the transit router where it wants.
-- **Routes of the attached routers, known in advance**, all through the transit router. Each attachment has a **role per plane**: `shared` (the entry point on `svc_public`, the collector on `monitoring`) or `tenant` (a workload, or a target such as the entry point on `monitoring`). A tenant routes to the shared services of the plane; a shared service routes to the other shared services and to the tenants, through aggregates of their ranges when given. **Never between two tenants.** The routes reach the instances by DHCP, at lease renewal.
+- **Routes of the attached routers, known in advance**, all through the transit router. Each attachment has a **role per plane**: `shared` (the entry point on `svc_public`, the receiver on `monitoring`) or `tenant` (a workload, or a client of the shared services, such as the entry point pushing its metrics on `monitoring`). A tenant routes to the shared services of the plane; a shared service routes to the other shared services and to the tenants, through aggregates of their ranges when given. **Never between two tenants.** The routes reach the instances by DHCP, at lease renewal.
 - **Routes of the transit router, discovered.** The plane's owner sees every port on it: at each apply, `shared/planes` finds the address of each attached router and routes the attachment's range to it. OpenStack has no route propagation between projects: this apply is where it happens.
 - **Adding a tenant**: apply `shared/planes` (RBAC policy), the tenant's stack, then `shared/planes` again (route on the transit router). No shared service is applied again when the tenant's range is inside the aggregates.
 - **Tenant ranges must not overlap**, with each other or with the planes; `shared/planes` checks it.
@@ -53,7 +53,7 @@ flowchart LR
 
 ## What isolates tenants, in both modes
 
-The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point, the collector or the operators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
+The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the operators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
 
 ## The alternative not used: ports of the instances on the planes
 
@@ -74,6 +74,6 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 
 | Cloud | Planes are | Mode |
 |---|---|---|
-| Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for identifiable instances |
+| Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
 | Public, planes built by the account holder | private networks shared by RBAC | 2 — interface, through the hub's transit router |
-| Private, operator allows `enable_snat = false` | external networks | 1 without translation: real addresses, but return routes on the plane side; possible, not provided |
+| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; later, with cloud-baseline ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |

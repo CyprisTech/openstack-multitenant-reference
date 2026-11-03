@@ -22,7 +22,7 @@ env:
     stacks/tenants/vm
     stacks/tenants/isolated
     stacks/tenants/kubernetes
-    tests/fixtures/collector
+    tests/fixtures/receiver
     tests/fixtures/intranet-service
     tests/integration/dual-floating-ip
 

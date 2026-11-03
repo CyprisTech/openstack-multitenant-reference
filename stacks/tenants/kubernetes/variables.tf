@@ -85,14 +85,12 @@ variable "edge_sources" {
 
 variable "service_addresses" {
   description = <<-EOT
-    Host numbers, in the cluster network, of the load balancers of the cluster Services on
-    interface planes: ingress (svc_public) and prometheus (monitoring). Neutron does not
-    allocate the first addresses of the cluster network to anything else (reserved below
-    reserved_hosts), so these addresses are known before the cluster exists.
+    Host numbers, in the cluster network, of the load balancer of the ingress on an interface
+    plane. Neutron does not allocate the first addresses of the cluster network to anything else
+    (reserved below reserved_hosts), so this address is known before the cluster exists.
   EOT
   type = object({
     ingress        = optional(number, 10)
-    prometheus     = optional(number, 11)
     reserved_hosts = optional(number, 32)
   })
   default = {}
@@ -171,16 +169,14 @@ variable "cluster" {
 
 variable "monitoring" {
   description = <<-EOT
-    Exposure of the in-cluster Prometheus to the collector (ADR-0002, D5): a load balancer whose
-    VIP gets a floating IP of the monitoring plane, admitted from collector_cidrs only.
-    - collector_cidrs: addresses of the collector as seen by the platform. An empty list keeps
-      Prometheus inside the cluster (no load balancer, no floating IP).
-    - dns_zone: zone shared with the project (name with its trailing dot) where the A record
-      <site>-platform-prometheus is written for the collector's DNS service discovery; null
-      writes no record.
+    Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to
+    the receiver through the monitoring plane (remote write). Nothing connects into the cluster
+    for its metrics.
+    - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
+      receiver_url of the receiver); null keeps the metrics in the cluster.
   EOT
   type = object({
-    collector_cidrs = list(string)
-    dns_zone        = optional(string)
+    receiver = optional(string)
   })
+  default = {}
 }

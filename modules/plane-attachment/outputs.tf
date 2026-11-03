@@ -38,20 +38,10 @@ output "routers" {
 }
 
 output "ports" {
-  description = "Exposure of each instance's port, keyed by instance: floating_ip, extra_floating_ips and dns attributes of the tenant model."
+  description = "Exposure of each instance's port, keyed by instance: the floating_ip attribute of the tenant model (a floating IP of the primary plane when it translates addresses, null otherwise)."
   value = {
     for name in var.instances : name => {
-      floating_ip = var.exposure.primary != null && try(local.nat[var.exposure.primary], false) ? {
-        pool = var.exposure.primary
-        dns  = try(var.exposure.dns.plane, null) == var.exposure.primary ? [{ name = name, zone = var.exposure.dns.zone }] : []
-      } : null
-      extra_floating_ips = {
-        for p in var.exposure.extra : p => {
-          pool = p
-          dns  = try(var.exposure.dns.plane, null) == p ? [{ name = name, zone = var.exposure.dns.zone }] : []
-        } if local.nat[p]
-      }
-      dns = var.exposure.dns != null && !try(local.nat[var.exposure.dns.plane], true) ? [{ name = name, zone = var.exposure.dns.zone }] : []
+      floating_ip = var.exposure.primary != null && try(local.nat[var.exposure.primary], false) ? { pool = var.exposure.primary } : null
     }
   }
 }

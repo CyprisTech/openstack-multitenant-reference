@@ -33,12 +33,8 @@ bastion = {
   ssh_cidrs        = ["192.0.2.0/24"]
 }
 
-# Exposure to the monitoring collector: a floating IP of the monitoring plane per instance, an
-# A record in the monitoring zone, metrics ports open to the collector's addresses only.
-monitoring = {
-  dns_zone        = "mon.site-a.example.org."
-  collector_cidrs = ["203.0.113.10/32"]
-}
+# Metrics pushed to the receiver of the shared services (output receiver_url of the receiver).
+monitoring = { receiver = "http://203.0.113.10:9090" }
 
 # How this stack joins the planes: its entry of the attachments output of stack shared/planes,
 # whether the planes are the operator's or built in a hub project. For example:

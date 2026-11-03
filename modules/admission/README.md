@@ -7,9 +7,8 @@ module "admission" {
   source = "../../../modules/admission"
 
   allow = {
-    https-from-edge = { ports = [443], sources = local.edge_sources }
-    metrics         = { ports = [9100], sources = var.monitoring.collector_cidrs }
-    ssh             = { ports = [22], sources = var.admin.ssh_cidrs }
+    https = { ports = [443], sources = [var.web_cidr] }   # the tenant's load balancer
+    ssh   = { ports = [22], sources = var.admin.ssh_cidrs }
   }
 }
 ```
@@ -27,7 +26,7 @@ module "admission" {
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| allow | Who may reach the instances, keyed by a name for the flow (https-from-edge, metrics, ssh):<br/>TCP ports and the source ranges admitted on each of them. | <pre>map(object({<br/>    ports   = list(number)<br/>    sources = list(string)<br/>  }))</pre> | n/a | yes |
+| allow | Who may reach the instances, keyed by a name for the flow (https, ssh):<br/>TCP ports and the source ranges admitted on each of them. | <pre>map(object({<br/>    ports   = list(number)<br/>    sources = list(string)<br/>  }))</pre> | n/a | yes |
 
 ### Outputs
 

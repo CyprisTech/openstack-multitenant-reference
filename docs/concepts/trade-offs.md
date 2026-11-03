@@ -1,6 +1,6 @@
 # Trade-offs
 
-Every choice of this architecture has a cost. This document states each one: what was chosen, why, what it costs, and when the alternative is the better choice. The decisions themselves are recorded in [ADR-0001](../adr/0001-reference-architecture.md).
+Every choice of this architecture has a cost. This document states each one: what was chosen, why, what it costs, and when the alternative is the better choice. The decisions themselves are recorded in the [ADRs](../adr/README.md).
 
 | # | Topic | Choice |
 |---|---|---|
@@ -8,16 +8,18 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 2 | [Health monitors](#2-health-monitors) | TCP checks on the Traefik port |
 | 3 | [PROXY protocol](#3-proxy-protocol-end-to-end) | Client address carried end to end |
 | 4 | [Octavia topology](#4-octavia-topology) | Chosen per load balancer flavor |
-| 5 | [The edge as a shared dependency](#5-the-edge-as-a-shared-dependency) | One entry point for every domain |
-| 6 | [One site in v1](#6-one-site-in-v1) | One site, site-ready code |
-| 7 | [Isolation on `svc_public`](#7-isolation-on-the-svc_public-plane) | Shared plane, isolation by security groups |
+| 5 | [The shared entry point](#5-the-shared-entry-point) | Shared by the tenants that choose it; others expose themselves |
+| 6 | [One site](#6-one-site) | One site, site-ready code |
+| 7 | [Isolation on `svc_public`](#7-isolation-on-the-svc_public-plane) | Shared plane, service addresses admitting the entry point only |
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
-| 10 | [Layer 10](#10-layer-10-provided-by-the-operator) | Provided by the operator until cloud-baseline |
+| 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router; routed operator planes later |
 | 11 | [Administration and intranet](#11-one-network-for-administration-and-intranet) | Two roles; one network accepted with specific sources |
 | 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready, not tested |
 | 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
 | 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
+| 15 | [Monitoring by push](#15-monitoring-by-push) | Agents push to a receiver; nothing connects into a tenant |
+| 16 | [Routes through instance metadata](#16-routes-through-instance-metadata) | Updated in place, read by a timer |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -28,7 +30,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 **Cost.**
 
 - No L7 features at the edge: no path or header routing, no WAF, no HTTP rate limiting, no HTTP access log. The edge can only limit connections.
-- Each backend manages its own certificates. HTTP-01 challenges do not reach a backend through an edge that redirects port 80: backends use DNS-01 or TLS-ALPN-01 (which works through passthrough because it is answered inside the TLS handshake), or the edge routes `/.well-known/acme-challenge/` per domain on port 80.
+- Each tenant manages its own certificates. The reference uses ACME DNS-01 challenges on the tenant's own zone ([ADR-0006](../adr/0006-exposure.md), D5): they work with several instances and for wildcards, and ask nothing of the entry point, whose port 80 only redirects to HTTPS.
 - Clients that send no SNI cannot be routed.
 - If a backend enables Encrypted Client Hello, the edge only sees the outer, public name and can no longer route on the real one.
 
@@ -50,13 +52,13 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 ## 3. PROXY protocol end to end
 
-**Choice.** Octavia adds a PROXY header towards Traefik; Traefik sends PROXY protocol v2 to the backends. **Exactly one header reaches each backend.** When the backend is itself behind a load balancer (the `platform` ingress), that load balancer passes the entry point's header through instead of adding its own (TCP pools, no `proxy-protocol` annotation), and the Service uses `externalTrafficPolicy: Local` so that Traefik sees the load balancer, a trusted peer.
+**Choice.** Octavia adds a PROXY header towards Traefik; Traefik sends PROXY protocol v2 to the tenant's service address. **Exactly one header reaches each backend.** The tenant's load balancer passes the entry point's header through instead of adding its own (TCP pools; on Kubernetes, no `proxy-protocol` annotation), and the backends trust the header from the load balancer's addresses only. On Kubernetes, the Service uses `externalTrafficPolicy: Local` so that Traefik sees the load balancer, a trusted peer.
 
 **Why.** Without it, every backend sees the edge address as the client. Logs, rate limits and allow lists on the backends need the real client address, and TLS passthrough leaves no `X-Forwarded-For` header to carry it.
 
-**Cost.** Every hop must agree. A backend that does not expect the header fails every connection, and a backend that accepts it from untrusted sources lets clients forge their address. Traefik only trusts the header from the load balancer subnet (`trustedIPs`), and each backend must do the same with the edge addresses.
+**Cost.** Every hop must agree. A backend that does not expect the header fails every connection, and a backend that accepts it from untrusted sources lets clients forge their address. Traefik only trusts the header from its load balancer's network (`trustedIPs`), and each backend only from its own load balancer's.
 
-The `platform` case adds two costs: a second header breaks the TLS handshake within milliseconds (seen in the tests), and with `externalTrafficPolicy: Local` only the nodes running Traefik receive traffic, so Traefik runs on several nodes.
+The Kubernetes case adds two costs: a second header breaks the TLS handshake within milliseconds (seen in the tests), and with `externalTrafficPolicy: Local` only the nodes running Traefik receive traffic, so Traefik runs on several nodes.
 
 **Alternative.** No PROXY protocol: simpler, but client addresses are lost.
 
@@ -73,49 +75,47 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 | Single amphora | Octavia rebuilds the amphora: minutes of outage | One amphora VM |
 | Active/standby | VRRP failover between two amphorae: seconds | Two amphora VMs |
 
-**Recommendation.** Active/standby for the public edge when the cloud offers it: every domain depends on that load balancer (see 5).
+**Recommendation.** Active/standby for the entry point when the cloud offers it: every domain published through it depends on that load balancer (see 5).
 
-## 5. The edge as a shared dependency
+## 5. The shared entry point
 
-**Choice.** One entry point for every domain of every tenant.
+**Choice.** One entry point for the domains of every tenant that chooses it; a tenant may instead expose its service address with its own public floating IP ([ADR-0006](../adr/0006-exposure.md), D2).
 
-**Why.** One public address, one place for connection limits and access logs, one component to harden and monitor.
+**Why.** Many domains behind one public IPv4 address and one load balancer, with TLS kept by each tenant: the need of a host with many small customers, where an address and a load balancer per tenant cost more than the service.
 
-**Cost.** Its failure or misconfiguration affects every tenant at once. Mitigations: two Traefik replicas on different hosts, an active/standby load balancer, routes kept as version-controlled configuration.
+**Cost.** Its failure or misconfiguration affects every tenant published through it. Mitigations: two Traefik replicas on different hosts, an active/standby load balancer, routes kept as version-controlled configuration and delivered without replacing instances. It is not the usual design across projects, where each project exposes itself with its own load balancer.
 
-**Alternative.** One load balancer per tenant, each with its own public address.
+**Choose a tenant's own address when** the tenant needs an independent failure domain, its own exposure policy, or a WAF in front of it.
 
-**Choose it when** tenants need independent failure domains or different exposure policies more than they need a single entry point.
+## 6. One site
 
-## 6. One site in v1
-
-**Choice.** Version 1 runs in one site (one region or availability zone). The code is site-ready: the site is an input of every stack, and no address is written by hand.
+**Choice.** The reference runs in one site (one region or availability zone). The code is site-ready: the site is an input of every stack, and no address is written by hand.
 
 **Why.** An Octavia load balancer and its amphorae live in one site. Failover between sites needs a standby edge, a DNS switch and a tested runbook: a version of its own.
 
-**Cost.** In v1, a site outage takes the entry point down. Recovery is a cold rebuild: deploy the same stacks in another site, then change the DNS records. Stateful data (volumes, databases) is not replicated; recovering it needs a backup and restore that this repository does not provide.
+**Cost.** A site outage takes the entry point down. Recovery is a cold rebuild: deploy the same stacks in another site, then change the DNS records. Stateful data (volumes, databases) is not replicated; recovering it needs a backup and restore that this repository does not provide.
 
-**Next.** A later version adds an edge per site (active/passive), a failover runbook with a DNS switch, and a failover drill that replays the reachability matrix on the second site.
+**Next.** A later version adds an edge per site (active/passive), a failover runbook with a DNS switch, and a failover drill that replays the isolation test on the second site.
 
 ## 7. Isolation on the `svc_public` plane
 
-**Choice.** Backends of several tenants are published on the shared `svc_public` plane; security groups admit only the edge.
+**Choice.** The tenants' service addresses are on the shared `svc_public` plane; each admits the entry point only (load balancer sources, `edge_sources`). Instances are not on the plane.
 
-**Why.** One plane serves every tenant: no per-tenant network between the edge and each backend.
+**Why.** One plane serves every tenant: no per-tenant network between the entry point and each tenant.
 
-**Cost.** At the network level, every project attached to `svc_public` can reach every backend published on it. Isolation rests on security groups alone, without defence in depth. The rules must match the address the backend actually sees: the edge floating IPs on `svc_public`, or the edge router gateway address when the edge reaches the plane through SNAT. A mistake in one rule exposes a backend to every tenant on the plane.
+**Cost.** At the network level, every project attached to `svc_public` can reach every service address on it: isolation rests on the load balancers' sources and the security groups, without a firewall in between. The sources must match the address the service actually sees: the entry point's router address on a plane with address translation, its own addresses on a routed plane (output `svc_public_sources`).
 
-**Alternative.** A dedicated transit network between the edge and each tenant.
+**Alternative.** A firewall at the hub, between the plane and the tenants (OVHcloud's landing zone does so), or a dedicated transit network per tenant.
 
-**Choose it when** the tenants do not trust each other: it adds a network and a router per tenant, but a wrong security group rule no longer opens a path.
+**Choose it when** the tenants do not trust each other and you can run a firewall in high availability: a wrong rule on one tenant no longer opens a path.
 
 ## 8. Tenant-owned security groups or a central catalogue
 
-**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option of layer 10.
+**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option, with cloud-baseline.
 
 **Why.** It works on any cloud, with one project or many, and needs no admin rights. Rules between tenants use CIDRs because `remote_group_id` only works inside one project.
 
-**Cost.** Common rules (SSH from an administration network, metrics scraping) are repeated in every tenant and can drift.
+**Cost.** Common rules (SSH from an administration network) are repeated in every tenant and can drift.
 
 **Alternative.** A central catalogue of security groups owned by the operator and shared with the projects by RBAC.
 
@@ -135,15 +135,23 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Choose it when** your cloud offers one and its versions and options suit you: you give up control for less to operate.
 
-## 10. Layer 10 provided by the operator
+## 10. Where the planes come from
 
-**Choice.** Until cloud-baseline (module v0.2), the shared planes are created by the operator and adopted by name.
+**Choice.** A plane is described by two properties, how a tenant router joins it and whether addresses are translated ([ADR-0004](../adr/0004-planes-and-isolation.md)). Two cases are implemented: external networks of the operator joined with source NAT, and networks of a hub project shared by RBAC and joined through a transit router.
 
-**Why.** It matches the primary audience, who consume a cloud they do not administer, and it lets layers 20 and 30 exist before cloud-baseline.
+| | Operator planes, NAT | Hub planes, routed | Operator planes, routed (later) |
+|---|---|---|---|
+| Rights | the operator creates them | member role | the operator, with address scopes |
+| Tenant ranges | may overlap | unique (checked) | unique, from subnet pools |
+| A tenant is seen at | its router's address; floating IPs for service addresses | its own addresses | its own addresses |
+| Routing | none to maintain | static routes on the transit router, discovered at each apply | advertised (BGP) |
+| Limits | one floating IP per address that others must reach | about 30 attachments per plane (`max_routes`); RBAC sharing may be forbidden (scs-0126); project and RBAC quotas | needs dynamic routing towards the tenants |
 
-**Cost.** The repository cannot build its own prerequisites: the [layer 10 contract](../reference/planes-contract.md) must be met by hand.
+**Why.** Operator planes with NAT are the only option when tenants keep their own ranges and the operator has no dynamic routing; hub planes are the only option with a member role. OpenStack has no native peering between projects: the hub plays, inside one account, the role a transit gateway plays on other clouds. The closest published design, OVHcloud's landing zone, puts a firewall at the hub.
 
-**Next.** cloud-baseline adds `stacks/10-shared-planes` without changing layers 20 and 30.
+**Cost.** Two cases to test, and a stack (`shared/planes`) applied twice when a tenant joins a hub plane (sharing, then routes).
+
+**Choose routed operator planes when** you run the cloud, coordinate the addressing and advertise the tenant ranges: no translation, no static routes.
 
 ## 11. One network for administration and intranet
 
@@ -151,7 +159,7 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** Many clouds have a single internal network. A tenant joining the intranet appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
 
-**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see [testing.md](test-results.md)).
+**Cost.** Operator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see the [test results](test-results.md)).
 
 **Choose two networks when** you can: the administration network then admits nobody but operators by construction.
 
@@ -181,9 +189,29 @@ The `platform` case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** None at run time: cloud-init grows the root partition to the disk each machine gets.
 
+## 15. Monitoring by push
+
+**Choice.** Each tenant pushes its metrics to a receiver of the shared services (Prometheus remote write; OTLP for workloads that use it); nothing on the monitoring plane connects into a tenant ([ADR-0007](../adr/0007-monitoring.md)).
+
+**Why.** Pulling is how Prometheus works and stays the practice inside one network or cluster; across tenant boundaries, pushing is the common practice: the only flow is outbound from the tenant, no metrics port is open to a central collector, and no instance needs an address on the monitoring plane.
+
+**Cost.** An agent runs in every tenant. A target that stops pushing is detected by the absence of its series, not by a failed scrape (`up`). Sources are identified by labels, which a tenant could forge: the receiver trusts what the tenants push.
+
+**Choose pulling when** the collector and the targets are in one trust domain and one network.
+
+## 16. Routes through instance metadata
+
+**Choice.** The entry point's routes are metadata items of its instances, updated in place by OpenTofu or Terraform; a timer on each instance renders them into Traefik's dynamic configuration ([ADR-0006](../adr/0006-exposure.md), D3).
+
+**Why.** Publishing a domain is the most frequent change of a host; replacing the instances for each one was slow (5 to 8 minutes) and lost requests. The metadata service needs neither SSH from the deployer nor another service, and exists on every OpenStack cloud.
+
+**Cost.** About 120 domains per entry point (Nova quota `metadata_items`); a delay of seconds before a change is applied; routes are readable by the project's members (they hold no secret).
+
+**Choose object storage or a key-value store when** the cloud has one and the number of domains exceeds the metadata quota.
+
 ## Evidence
 
-The architecture is tested on a real cloud, with the findings that shaped several choices above: [testing.md](test-results.md).
+The architecture is tested on a real cloud, with the findings that shaped several choices above: [test results](test-results.md).
 
 
 The module this architecture builds on is tested on a real cloud: apply, empty plan after apply, destroy. Results are in the module's [testing report](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/testing.md).

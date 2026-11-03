@@ -14,8 +14,8 @@ A company, a public body or a software vendor running several applications or te
 |---|---|
 | Needs | Isolate applications or teams from each other; share a few common services (entry point, monitoring, internal services); no administrator rights |
 | What is hard | No external network of one's own and no routing without address translation; network sharing between projects may be forbidden (scs-0126 recommends it); a limit of projects per account (3 by default at Cleura) and of RBAC policies; every load balancer and public address is billed; providers differ (Octavia, Designate, flavors) |
-| Proven | One project per tenant; planes built in a hub project with member credentials only (interface mode, transit router); isolation test; a tenant added without touching the others |
-| Planned | Tests on a public cloud; a preflight check (RBAC sharing allowed, quotas, project count); monitoring as a push integration point; availability zones |
+| Proven | One project per tenant; planes built in a hub project with member credentials only (interface mode, transit router); isolation test; a tenant added without touching the others; monitoring pushed to a receiver, nothing connecting into a tenant |
+| Planned | Tests on a public cloud; a preflight check (RBAC sharing allowed, quotas, project count); availability zones |
 | Not covered | Several accounts or regions joined together (an encrypted overlay is a later direction); connection to on-premises networks; single sign-on across projects (the provider's IAM) |
 
 ### B. Hosting provider or managed-services company
@@ -26,8 +26,8 @@ One project per customer, many customers, many domains: the case of a host runni
 |---|---|
 | Needs | Isolation that can be shown to a customer or an auditor; many domains on few public IPv4 addresses; onboarding a customer without touching the others |
 | What is hard | The cost of a public address and a load balancer per customer; the customers' TLS certificates; publishing a domain without an outage; billing per customer; backing up the customers' data |
-| Proven | Shared entry point routing by SNI without decrypting, client address kept (PROXY v2); isolation test to rerun and show |
-| Planned | One service address per domain, the entry point never sees the customers' instances; domains published without replacing the entry point; certificates of the published domains; exposure through the shared entry point or through the customer's own load balancer, per tenant ([ADR-0006](../adr/0006-exposure.md)) |
+| Proven | Shared entry point routing by SNI to each tenant's service address without decrypting, client address kept (PROXY v2); a domain published in seconds without replacing anything nor losing a request; a tenant exposed with its own address instead (`exposure = "public"`); isolation test to rerun and show |
+| Planned | Certificates of the published domains (ACME DNS-01 in the tenants) |
 | Not covered | Backups of the customers' data (an integration point, the tool is yours); self-service onboarding and billing (level 1); WAF and DDoS protection |
 
 ## Secondary profile
@@ -53,8 +53,8 @@ Kubernetes is a tenant type of the reference ([ADR-0003](../adr/0003-scope-and-b
 | | |
 |---|---|
 | What is hard | Cluster API and moving its management into the cluster; building the node image; the cloud controller manager and Octavia; the CNI's MTU; a clean teardown |
-| Proven | Self-managed cluster, ClusterClass, node image built with image-builder, Cilium with its MTU, Gateway API ingress, creation and teardown scripted with measured durations |
-| Planned | Kubernetes upgrade, scaling, credential rotation; metrics pushed by the cluster's Prometheus; a cluster for shared services ([spec](../specs/kubernetes-shared-services.md)) |
+| Proven | Self-managed cluster, ClusterClass, node image built with image-builder, Cilium with its MTU, Gateway API ingress, metrics pushed by the cluster's Prometheus, creation and teardown scripted with measured durations |
+| Planned | Kubernetes upgrade, scaling, credential rotation; a cluster for shared services ([spec](../specs/kubernetes-shared-services.md)) |
 | Not covered | Clusters on demand; multi-tenancy inside a cluster; application GitOps |
 
 ## The reader
@@ -79,9 +79,9 @@ A customer, a peer or a recruiter judging whether the design holds. Looks for de
 | Isolation between tenants, proven | ● | ● | ● | proven |
 | Planes built with a member role | ● | ○ | | proven on a private cloud with member credentials; public cloud planned |
 | Planes provided by the operator | | ○ | ● | proven (gateway mode); routed mode planned |
-| One entry point for many domains | ○ | ● | | proven; service addresses and live routes planned |
+| One entry point for many domains | ○ | ● | | proven, with service addresses and routes updated in place |
 | Certificates of the published domains | ○ | ● | | planned |
-| Monitoring across tenants | ● | ● | ○ | integration point: pull proven, push planned |
+| Monitoring across tenants | ● | ● | ○ | integration point, push: proven |
 | Availability zones, sites, recovery of the architecture | ● | ● | ○ | planned |
 | Egress, DNS, time, mirrors, IPv6 | ● | ● | ● | planned |
 | Logs, audit, backups of tenant data, secrets | ● | ● | ○ | integration points, planned |

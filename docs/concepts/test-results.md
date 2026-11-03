@@ -1,6 +1,8 @@
-# Testing
+# Test results
 
 Each stack is tested on a real OpenStack cloud before it is merged: **apply → empty plan after apply → destroy**, plus functional checks. Until 2026-10-29 the scenario ran in one test project; since 2026-10-31, each stack runs in its own project ([ADR-0003](../adr/0003-scope-and-boundary.md)), in both plane modes.
+
+The sections are kept in date order. **The ones before 2026-11-02 describe earlier designs** — numbered layers, a collector scraping the tenants through floating IPs of the monitoring plane, an entry point routing to the tenants' instances and replaced at each publication — and stay as the history of the findings that led to the current design ([ADR-0006](../adr/0006-exposure.md), [ADR-0007](../adr/0007-monitoring.md)). The current state is the last section.
 
 ## Environment
 
@@ -251,3 +253,21 @@ Findings:
 3. **Renaming an attachment on the same project** fails the first apply of `shared/planes` (`DuplicateRbacPolicy`: the new policy is created before the old one is deleted); a second apply completes it. Documented in the stack's README.
 4. **Duplicate release proxies after `clusterctl move`** came back once (cloud controller manager and Traefik), without visible effect; none in the two other cycles. Still open, for the Kubernetes day-to-day work.
 5. **Routes pushed by DHCP reach the instances at lease renewal.** With `tenant_ranges` set from the start, the entry point's routes never change when a tenant is added; changing the aggregates later needs a lease renewal on the instances.
+
+### Service addresses, routes through metadata, monitoring by push (2026-11-02)
+
+The design of [ADR-0006](../adr/0006-exposure.md) and [ADR-0007](../adr/0007-monitoring.md), from empty projects, each stack in its own project, in both plane modes, following the [test procedure](../reference/test-procedure.md). The `vm` tenant behind its load balancer, the receiver (`tests/fixtures/receiver`, Prometheus 3.15.1) in the shared services project.
+
+| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
+|---|---|---|---|---|---|
+| Interface mode (hub planes) | planes 16 s, receiver 75 s, entry point 9 min 36 s, `vm` 3 min 42 s, `isolated` 70 s, Kubernetes stack 84 s, cluster 18 min 8 s, planes again 7 s | ✅ 36/36, client address preserved | ✅ **33/33** | ✅ closed on 443, 22, 9100 | ✅ empty (7 stacks) |
+| Gateway mode (operator planes, NAT) | planes 2 s, receiver 2 min 12 s, entry point 3 min 15 s, `vm` 3 min 5 s, `isolated` 2 min 42 s, Kubernetes stack 1 min 56 s, cluster 17 min 27 s | ✅ 36/36, client address preserved | ✅ **33/33** | — (no transit router) | ✅ empty (7 stacks) |
+
+Teardown (interface mode): cluster 4 min 19 s, stacks 4 min 51 s; no leftover in any project.
+
+Findings:
+
+1. **Publishing a domain no longer replaces anything.** A new domain added while a client sends two requests per second to another: the entry point's apply changes its two instances in place (19 s), the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails. Before, a publication took 5 to 8 minutes and lost requests (8 of 179 on 2026-10-29).
+2. **Every tenant pushes, nothing connects in.** The receiver holds series from the entry point, `vm`, `isolated` (OTLP from the stand-in workload) and the Kubernetes tenant (remote write), labelled `site`, `tenant`, `instance`; from the receiver, the metrics ports of the tenants are closed. On hub planes, the pushes time out until `shared/planes` is applied again after the tenants (step 7 of the procedure): the agents retry, nothing is lost but the delay.
+3. **The isolation test must wait** for the ingress Service's address and for the first push (30 s) after the publication; the procedure says so.
+

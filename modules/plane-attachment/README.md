@@ -38,7 +38,7 @@ The other building blocks: [`bastion`](../bastion/README.md), [`admission`](../a
 | attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes), keyed by plane: one descriptor per plane, whatever provides it. | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
 | planes | Planes the stack joins, keyed by name (svc\_public, monitoring, intranet). | `list(string)` | n/a | yes |
 | default\_gateway | Plane whose router is the default gateway of the stack's network (a tenant with no other way out), or null. Its range needs no route pushed by DHCP. | `string` | `null` | no |
-| exposure | How the instances are reached on the planes. In gateway mode through floating IPs of the<br/>plane, in interface mode at their own address (nothing to create).<br/>- primary: plane of the port's primary floating IP (published backends), or null.<br/>- extra: planes of additional floating IPs (monitoring targets).<br/>- dns: A record per instance, named after it, in zone (key of the stack's DNS zones),<br/>  for the address on plane: the floating IP in gateway mode, the fixed IP in interface mode. | <pre>object({<br/>    primary = optional(string)<br/>    extra   = optional(list(string), [])<br/>    dns     = optional(object({ plane = string, zone = string }))<br/>  })</pre> | `{}` | no |
+| exposure | How the instances are reached on the planes: through a floating IP of the plane when it<br/>translates addresses, at their own address otherwise (nothing to create). At most one<br/>floating IP per address (ADR-0006, D4).<br/>- primary: plane on which each instance is a service address, or null. | <pre>object({<br/>    primary = optional(string)<br/>  })</pre> | `{}` | no |
 | instances | Instances whose ports are exposed on the planes (see exposure). | `list(string)` | `[]` | no |
 | internal\_subnet | Key of the subnet the plane routers are attached to, in the stack's network. | `string` | `"main"` | no |
 
@@ -51,6 +51,6 @@ The other building blocks: [`bastion`](../bastion/README.md), [`admission`](../a
 | nat | Per plane: true when the instances are reached through floating IPs of the plane, false at their own addresses. |
 | network\_name | Name of each plane's network (a floating IP pool, for nat planes). |
 | networks | Planes to adopt, for tenant.existing.networks, by ID. |
-| ports | Exposure of each instance's port, keyed by instance: floating\_ip, extra\_floating\_ips and dns attributes of the tenant model. |
+| ports | Exposure of each instance's port, keyed by instance: the floating\_ip attribute of the tenant model (a floating IP of the primary plane when it translates addresses, null otherwise). |
 | routers | One router per plane, keyed by the plane name with dashes (svc-public, monitoring), for tenant.networks.<network>.routers. |
 <!-- END_TF_DOCS -->

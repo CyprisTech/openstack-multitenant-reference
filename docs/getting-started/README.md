@@ -21,7 +21,7 @@ About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes fo
 ## 0. Projects
 
 - OpenTofu or Terraform ≥ 1.9, `jq`, Python 3, `ssh` and the `openstack` client.
-- In one account: a project for the **entry point**, one for the **shared services** (collector, internal services), one **per tenant** — plus a **hub** project holding the network only if you build the planes. A `clouds.yaml` entry for each with a project-scoped credential (`member`, plus `load-balancer_member`). Mind the provider's limit of projects per account. No `OS_*` variable in the shell.
+- In one account: a project for the **entry point**, one for the **shared services** (metrics receiver, internal services), one **per tenant** — plus a **hub** project holding the network only if you build the planes. A `clouds.yaml` entry for each with a project-scoped credential (`member`, plus `load-balancer_member`). Mind the provider's limit of projects per account. No `OS_*` variable in the shell.
 - Operator planes: the [planes contract](../reference/planes-contract.md) met by the operator (names, ranges, MTU, reserved ranges).
 - Hub planes: check that a member may share a network, with the hub's credentials — `openstack network create probe && openstack network rbac create --target-project <another project> --action access_as_shared --type network probe` must succeed; then delete both. Some clouds forbid it (the Sovereign Cloud Stack recommends it in scs-0126).
 - Kubernetes tenant only: build the [node image](../../images/kubernetes-node/README.md) now; it depends on nothing else.
@@ -45,7 +45,7 @@ tofu -chdir=stacks/shared/planes output -json attachments | jq '{plane_attachmen
 
 ## 2. Shared services
 
-Your collector joins `monitoring` with its `plane_attachment`; the tenants admit its `collector_cidrs` on their metrics ports. The [test collector](../../tests/fixtures/collector/README.md) shows the pattern.
+Your metrics receiver (Prometheus, Mimir, VictoriaMetrics…) runs in a project of shared services and joins `monitoring` with its `plane_attachment`; every stack pushes to it, with its URL as `monitoring.receiver` ([integration points](../reference/integration-points.md#monitoring)). Your internal services join `intranet` the same way. The [test receiver](../../tests/fixtures/receiver/README.md) shows the pattern.
 
 ## 3. Entry point
 
@@ -57,7 +57,7 @@ tofu -chdir=stacks/shared/entry-point output -json svc_public_sources   # edge_s
 
 ## 4. Tenants
 
-Independent of each other, each in its own project, with its `plane_attachment`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. From the root of the repository:
+Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
 
 ```bash
 for t in vm isolated; do
@@ -66,7 +66,7 @@ for t in vm isolated; do
 done
 ```
 
-Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On hub planes its ingress and Prometheus get internal load balancers at fixed addresses; the Kubernetes API and the bootstrap instance need floating IPs on an external network (`admin_network`).
+Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On hub planes its ingress gets an internal load balancer at a fixed address; the Kubernetes API and the bootstrap instance need floating IPs on an external network (`admin_network`).
 
 ## 5. Planes again (hub only)
 
@@ -74,7 +74,7 @@ Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On h
 tofu -chdir=stacks/shared/planes apply && tofu -chdir=stacks/shared/planes output -json transit
 ```
 
-The hub discovers the address of each attached router and routes to it. Until then, the entry point and the collector cannot reach the tenants.
+The hub discovers the address of each attached router and routes to it. Until then, the entry point cannot reach the tenants' service addresses, and the receiver cannot answer their pushes.
 
 ## 6. Publish the domains
 
@@ -82,7 +82,7 @@ The hub discovers the address of each attached router and routes to it. Until th
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 
-It gathers the `published_domains` output of every tenant and replaces the entry point instances one at a time ([publish a domain](../guides/publish-a-domain.md)).
+It gathers the `published_domains` output of every tenant and applies the entry point: its instances read the routes from their metadata within seconds, none is replaced ([publish a domain](../guides/publish-a-domain.md)).
 
 ## 7. Check
 

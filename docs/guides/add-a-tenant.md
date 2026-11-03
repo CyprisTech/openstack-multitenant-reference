@@ -36,7 +36,7 @@ Each tenant has its own working directory or state key. Set:
 | the tenant range (`web_cidr`, `isolated_cidr`, `cluster_cidr`) | step 2 |
 | `plane_attachment` | the tenant's entry of the `attachments` output of `shared/planes` (step 3) |
 | `edge_sources` (`vm`, `kubernetes`) | output `svc_public_sources` of the entry point |
-| `monitoring.collector_cidrs` | output `collector_cidrs` of your collector |
+| `monitoring.receiver` | the URL of your metrics receiver (output `receiver_url` of the test receiver) |
 
 No stack reads an object of another project: what the tenant needs from the shared services comes from their outputs.
 

@@ -27,12 +27,3 @@ output "bastion" {
   value       = var.bastion != null ? module.edge.instances[local.bastion_name].ports["admin"].floating_ip : null
 }
 
-output "monitoring_targets" {
-  description = "Instances exposed to the monitoring collector: floating IP on the monitoring plane and DNS name (or null)."
-  value = {
-    for name in local.instances : name => {
-      address = !module.planes.nat.monitoring ? module.edge.instances[name].ports["main"].ip : module.edge.instances[name].ports["main"].floating_ips["monitoring"]
-      fqdn    = var.monitoring.dns_zone == null ? null : "${name}.${var.monitoring.dns_zone}"
-    }
-  }
-}

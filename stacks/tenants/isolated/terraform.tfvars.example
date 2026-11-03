@@ -11,11 +11,8 @@ boot_volume_size = 8 # null with a flavor that has a local disk
 # Smallest of the tenant overlay MTU and the plane MTUs (planes contract).
 network_mtu = 1362
 
-# Metrics ports open to the collector's addresses only (output collector_cidrs of the collector).
-monitoring = {
-  dns_zone        = "mon.site-a.example.org."
-  collector_cidrs = ["203.0.113.10/32"]
-}
+# Metrics pushed to the receiver of the shared services (output receiver_url of the receiver).
+monitoring = { receiver = "http://203.0.113.10:9090" }
 
 # SSH users, created on the bastion and on the instance.
 admin = {
