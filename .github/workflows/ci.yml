@@ -24,7 +24,6 @@ env:
     stacks/tenants/kubernetes
     tests/fixtures/receiver
     tests/fixtures/intranet-service
-    tests/integration/dual-floating-ip
 
 jobs:
   validate:

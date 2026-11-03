@@ -19,7 +19,6 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 | `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
 | `tests/isolation` | The isolation test |
 | `tests/fixtures/receiver`, `tests/fixtures/intranet-service` | Stand-ins for your platform services, used by the tests and the isolation test |
-| `tests/integration/dual-floating-ip` | One-off test behind the monitoring design (two floating IPs on one port) |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
 Every directory under `stacks/` and `tests/integration/` is a root configuration with its own state. The repository adds no Terraform module of its own: everything runs on [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), pinned by tag.

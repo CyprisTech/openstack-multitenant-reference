@@ -90,7 +90,7 @@ module "bastion" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.4"
 
   hostname       = local.instance
   package_update = false # no Internet access by design
@@ -109,7 +109,7 @@ module "cloudinit" {
 }
 
 module "isolated" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
 
   tenant = {
     existing = {

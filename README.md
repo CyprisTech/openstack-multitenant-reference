@@ -195,7 +195,7 @@ This is a reference, not an operated platform. Before production, plan for:
 | **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · Specs: [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [plane bindings](docs/specs/plane-bindings.md) (superseded) |
-| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) · [two floating IPs on a port](tests/integration/dual-floating-ip/README.md) (behind the monitoring design of v0.2, superseded) |
+| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
 ## Status and requirements
@@ -216,7 +216,7 @@ Tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amph
 |---|---|
 | OpenTofu or Terraform | >= 1.9 |
 | Provider `terraform-provider-openstack/openstack` | `~> 3.2` |
-| Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), pinned in every stack (the release adding router interfaces and routes) |
+| Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.1.4`, pinned in every stack |
 | OpenStack | Keystone v3, Nova (metadata service), Glance, Octavia (amphora); Neutron with routers, and network sharing by RBAC for hub planes; Cinder for boot volumes and Designate for the public records and the ACME DNS-01 challenges, both optional |
 | Credentials | One project per tenant and per shared service, plus the hub project in interface mode; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
 | Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges). Hub planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |

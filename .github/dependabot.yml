@@ -11,6 +11,5 @@ updates:
       - /stacks/tenants/vm
       - /stacks/tenants/isolated
       - /tests/fixtures/receiver
-      - /tests/integration/dual-floating-ip
     schedule:
       interval: weekly

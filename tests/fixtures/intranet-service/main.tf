@@ -77,7 +77,7 @@ module "admission" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.4"
 
   hostname       = local.name
   package_update = false
@@ -104,7 +104,7 @@ module "cloudinit" {
 }
 
 module "service" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
 
   tenant = {
     existing = {

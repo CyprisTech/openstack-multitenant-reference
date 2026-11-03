@@ -144,7 +144,7 @@ module "bastion" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.4"
 
   hostname     = local.name
   users        = { for login, keys in var.users : login => { ssh_authorized_keys = keys, sudo = true } }
@@ -158,7 +158,7 @@ module "cloudinit" {
 }
 
 module "receiver" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
 
   tenant = {
     existing = {

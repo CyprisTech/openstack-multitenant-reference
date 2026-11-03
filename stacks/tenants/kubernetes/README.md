@@ -94,9 +94,9 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.3 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
 | planes | ../../../modules/plane-attachment | n/a |
-| platform | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | 84c898b5d5036296a7cd3496a54e0721ccbc4936 |
+| platform | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
 
 ### Resources
 

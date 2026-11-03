@@ -65,8 +65,8 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.3 |
-| edge | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | 84c898b5d5036296a7cd3496a54e0721ccbc4936 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
+| edge | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
 | metrics | ../../../modules/metrics-agent | n/a |
 | planes | ../../../modules/plane-attachment | n/a |
 

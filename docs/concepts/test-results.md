@@ -48,7 +48,7 @@ Findings:
 
 ### Two floating IPs on one port (2026-10-27)
 
-Test configuration: [`tests/integration/dual-floating-ip`](../../tests/integration/dual-floating-ip/README.md). Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
+Test configuration: `tests/integration/dual-floating-ip`, removed in `v0.3.0` with the design it served. Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
 
 | Check | Result |
 |---|---|

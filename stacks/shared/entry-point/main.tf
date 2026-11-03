@@ -65,7 +65,7 @@ module "metrics" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.3"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.4"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -106,7 +106,7 @@ module "cloudinit" {
 
 module "edge" {
   # Git source: works with OpenTofu and Terraform alike (registry: CyprisTech/tenant/openstack).
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=84c898b5d5036296a7cd3496a54e0721ccbc4936"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
 
   tenant = {
     existing = {
