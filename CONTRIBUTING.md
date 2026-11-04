@@ -61,6 +61,8 @@ gitleaks git --no-banner --redact
 
 ## Testing on a real cloud
 
+**Test policy.** A change that adds a flow, a plane or a tenant type adds the matching rows to the isolation test, with the expected result; a fix of a finding adds the check that would have caught it.
+
 CI only validates the code. Every change to a stack is also tested by the maintainers on a real OpenStack cloud before it is merged, and the results are recorded in the [test results](docs/concepts/test-results.md):
 
 1. **Apply**, then **plan again: the plan after apply must be empty.**
