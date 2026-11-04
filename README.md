@@ -5,8 +5,8 @@
 [![Latest release](https://img.shields.io/github/v/release/CyprisTech/openstack-multitenant-reference?sort=semver)](https://github.com/CyprisTech/openstack-multitenant-reference/releases)
 [![OpenTofu >= 1.9](https://img.shields.io/badge/OpenTofu-%3E%3D1.9-ffda18?logo=opentofu)](https://opentofu.org)
 [![Terraform >= 1.9](https://img.shields.io/badge/Terraform-%3E%3D1.9-844fba?logo=terraform)](https://www.terraform.io)
-[![Tested on OpenStack 2025.1](https://img.shields.io/badge/tested_on-OpenStack_2025.1_(Epoxy)-red)](docs/concepts/test-results.md)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/CyprisTech/openstack-multitenant-reference/badge)](https://scorecard.dev/viewer/?uri=github.com/CyprisTech/openstack-multitenant-reference)
+[![Tested on OpenStack 2025.1](https://img.shields.io/badge/Tested%20on-OpenStack%202025.1%20(Epoxy)-red)](docs/concepts/test-results.md)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/CyprisTech/openstack-multitenant-reference?label=OpenSSF%20Scorecard)](https://scorecard.dev/viewer/?uri=github.com/CyprisTech/openstack-multitenant-reference)
 
 A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules.
 
