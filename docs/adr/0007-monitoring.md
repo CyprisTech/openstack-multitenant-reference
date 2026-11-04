@@ -1,6 +1,6 @@
 # ADR-0007: Observability as a push integration point
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented in v0.3.0); supersedes [ADR-0001](0001-reference-architecture.md) D2 and [ADR-0002](0002-platform-kubernetes.md) D5 for monitoring
 - **Date:** 2026-11-02
 - **Deciders:** Gregory Gabrielian
 - **Supersedes, once accepted:** [ADR-0001](0001-reference-architecture.md) D2 for monitoring (a floating IP of `monitoring` per instance, targets discovered by DNS); [ADR-0002](0002-platform-kubernetes.md) D5 for monitoring (federation of the cluster's Prometheus through a load balancer)

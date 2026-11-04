@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- ADR-0003 to ADR-0007 accepted; ADR-0001 and ADR-0002 superseded in part by ADR-0006 and ADR-0007.
+
 ## [0.3.0] - 2026-11-04
 
 One project per tenant and per shared service, deployed in one region of a cloud: the shared planes can be built with a member role on a public cloud, every stack runs in its own project, and the repository is reorganised by role. Tenants are exposed by service addresses, domains are published in seconds without replacing anything, and monitoring becomes a push integration point. **Breaking**: paths, some inputs and the monitoring contract (migration notes below).

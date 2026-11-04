@@ -1,6 +1,6 @@
 # ADR-0006: Exposure of the tenants
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented in v0.3.0); supersedes [ADR-0001](0001-reference-architecture.md) D2 for publication and D8 for the delivery of routes
 - **Date:** 2026-11-02
 - **Deciders:** Gregory Gabrielian
 - **Supersedes, once accepted:** [ADR-0001](0001-reference-architecture.md) D2 for publication (a floating IP of the plane on every published instance) and D8 for the delivery of the routes. ADR-0001 D3 (one public entry point, SNI passthrough, PROXY protocol) is kept, with its purpose stated.

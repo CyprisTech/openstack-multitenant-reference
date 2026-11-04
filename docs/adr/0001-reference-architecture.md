@@ -1,6 +1,6 @@
 # ADR-0001: Scope and structure of the reference architecture
 
-- **Status:** Accepted (implemented in v0.1.0); D1 refined by [ADR-0003](0003-scope-and-boundary.md) (scope) and [ADR-0005](0005-stacks-contracts-and-access.md) (layout, contracts between stacks); D2 and D7 refined by [ADR-0004](0004-planes-and-isolation.md) (planes provided without the operator, security model); D4 refined by [ADR-0002](0002-platform-kubernetes.md): the cluster credential is created by the operator, not by Terraform, and the cluster security groups are managed by CAPO
+- **Status:** Accepted (implemented in v0.1.0); D1 refined by [ADR-0003](0003-scope-and-boundary.md) (scope) and [ADR-0005](0005-stacks-contracts-and-access.md) (layout, contracts between stacks); D2 and D7 refined by [ADR-0004](0004-planes-and-isolation.md) (planes provided without the operator, security model); D4 refined by [ADR-0002](0002-platform-kubernetes.md): the cluster credential is created by the operator, not by Terraform, and the cluster security groups are managed by CAPO. Superseded in part by [ADR-0006](0006-exposure.md) (D2 for publication, D8 for the delivery of routes) and [ADR-0007](0007-monitoring.md) (D2 for monitoring)
 - **Date:** 2026-10-27
 - **Deciders:** Gregory Gabrielian
 
