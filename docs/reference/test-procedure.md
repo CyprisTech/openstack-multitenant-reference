@@ -150,7 +150,7 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 |---|---|---|
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
-| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicated release proxies after the move happen intermittently; see [test results](../concepts/test-results.md#one-shot-rebuild-2026-10-29) before deleting any (deleting one uninstalls the release) |
+| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicated release proxies after the move happen intermittently; see [test results](../concepts/test-results.md#history) (One-shot rebuild, 2026-10-29) before deleting any (deleting one uninstalls the release) |
 | ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of `svc_public`; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
 
 ```console
