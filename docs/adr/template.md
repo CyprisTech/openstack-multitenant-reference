@@ -2,7 +2,7 @@
 
 - **Status:** Proposed | Accepted | Superseded by ADR-NNNN
 - **Date:** YYYY-MM-DD
-- **Deciders:** names
+- **Deciders:** maintainers
 - **Refines / Supersedes:** ADRs and decisions concerned, if any
 
 ## Context

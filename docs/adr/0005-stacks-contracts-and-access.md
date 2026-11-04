@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (implemented in v0.3.0)
 - **Date:** 2026-11-02 (from ADR-0003 D3 of 2026-10-30 and decisions taken in the reviews of 2026-10-30 and 2026-10-31)
-- **Deciders:** Gregory Gabrielian
+- **Deciders:** maintainers
 - **Refines:** [ADR-0001](0001-reference-architecture.md) D1 (layers, stacks found by name); [ADR-0002](0002-platform-kubernetes.md) D6 (administration and intranet)
 
 ## Context

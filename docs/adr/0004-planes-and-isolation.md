@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (implemented in v0.3.0)
 - **Date:** 2026-11-02 (from ADR-0003 D2 of 2026-10-30, revised after the reviews of 2026-10-31)
-- **Deciders:** Gregory Gabrielian
+- **Deciders:** maintainers
 - **Refines:** [ADR-0001](0001-reference-architecture.md) D2 (planes provided by the operator only) and D7 (security groups)
 
 ## Context
