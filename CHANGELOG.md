@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- README badges: tested OpenStack release, OpenSSF Scorecard; OpenSSF Scorecard workflow (weekly and on every push to `main`).
 - ADR-0003 to ADR-0007 accepted; ADR-0001 and ADR-0002 superseded in part by ADR-0006 and ADR-0007.
 
 ## [0.3.0] - 2026-11-04
