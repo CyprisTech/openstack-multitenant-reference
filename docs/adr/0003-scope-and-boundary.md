@@ -1,6 +1,6 @@
 # ADR-0003: Scope, audience and boundary of the reference
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented in v0.3.0)
 - **Date:** 2026-10-30, split on 2026-11-02 into ADR-0003 to ADR-0007
 - **Deciders:** Gregory Gabrielian
 - **Refines:** [ADR-0001](0001-reference-architecture.md) D1 (scope) and D5 (scenario); [ADR-0002](0002-platform-kubernetes.md) (Kubernetes becomes a tenant type)
