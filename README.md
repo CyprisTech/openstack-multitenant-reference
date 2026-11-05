@@ -234,7 +234,7 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 |---|---|---|
 | `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
 | **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | in progress |
-| `v0.4` | Certificates of the published domains; Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | |
+| `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | |
 | `v0.5` | Availability zones; recovery of the architecture | |
 | `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with `cloud-baseline`) | |
 | `v0.7` | Observability: logs and audit; backups of tenant data; secrets; a GitOps pipeline | |

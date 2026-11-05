@@ -13,6 +13,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | [0005](0005-stacks-contracts-and-access.md) | Stacks, contracts between them, and access | Accepted |
 | [0006](0006-exposure.md) | Exposure of the tenants | Accepted; supersedes 0001 D2 for publication and D8 for the delivery of routes |
 | [0007](0007-monitoring.md) | Observability as a push integration point | Accepted; supersedes 0001 D2 and 0002 D5 for monitoring |
+| [0008](0008-tenant-certificates.md) | Certificates of the tenants | Proposed; refines 0006 D5 |
 
 ## Writing an ADR
 
