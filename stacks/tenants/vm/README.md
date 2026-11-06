@@ -16,6 +16,32 @@ The web server is a demonstration backend: nginx terminates TLS, accepts the PRO
 
 The tenant joins the internal services plane when its entry of the `shared/planes` attachments has it, for instance to reach the organisation's certificate authority; its `internal_sources` output gives the addresses the services of that plane must admit.
 
+```mermaid
+flowchart LR
+    EP["entry point"] --> PUB[["publication plane"]]
+    PUB --> SA["service address<br/>load balancer, or the instance"]
+    SA --> VM["instances<br/>nginx terminates TLS · lego"]
+    VM -->|"metrics"| MON[["observability plane"]]
+    MON --> RCV["receiver"]
+    VM -->|"ACME, DNS-01 updates<br/>optional"| INT[["internal services plane"]]
+    INT --> CA["certificate authority, DNS"]
+    VM -->|"default route"| EG["egress network<br/>packages, public ACME"]
+    ADM(["Administrators"]) -->|"SSH"| BA["bastion<br/>optional"]
+    BA --> VM
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class SA,VM,BA tenant
+    class PUB,MON,INT plane
+    class EP,RCV,CA,EG other
+    class ADM outside
+```
+
+Arrows show who opens the connection. With `exposure = "public"`, the service address gets a public floating IP instead of the entry point. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+
 ## Usage
 
 ```bash

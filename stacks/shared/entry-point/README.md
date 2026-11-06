@@ -9,6 +9,31 @@ One public address for the domains of the tenants that choose it ([ADR-0006](../
 - routers to the publication and observability planes, with their routes pushed by DHCP;
 - metrics pushed to your receiver by a Prometheus agent on each instance (node exporter and Traefik metrics, `monitoring.receiver`); nothing connects into the instances.
 
+```mermaid
+flowchart LR
+    U(["Internet clients"]) -->|"TCP 80, 443"| LB["load balancer<br/>public floating IP"]
+    LB -->|"PROXY protocol"| TF["Traefik × 2<br/>server group"]
+    MD["instance metadata<br/>routes, one item per domain"] -.->|"read every 10 s"| TF
+    TF -->|"SNI, TLS passthrough"| PUB[["publication plane"]]
+    PUB --> SA["service addresses<br/>of the tenants"]
+    TF -->|"metrics"| MON[["observability plane"]]
+    MON --> RCV["receiver"]
+    ADM(["Administrators"]) -->|"SSH"| BA["bastion<br/>optional"]
+    BA --> TF
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class LB,TF,BA,MD shared
+    class PUB,MON plane
+    class SA,RCV other
+    class U,ADM outside
+```
+
+Arrows show who opens the connection. TLS ends in the tenants: Traefik routes by name and holds no key. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+
 ## Usage
 
 ```bash

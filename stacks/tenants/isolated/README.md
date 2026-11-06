@@ -9,6 +9,27 @@ A workload with no public exposure and no path to the other tenants ([ADR-0003](
 
 The workload is a stand-in with no package and no Internet access: a Python standard-library service that pushes one metric (`isolated_up`) in OTLP, JSON over HTTP, which the receiver accepts next to remote write.
 
+```mermaid
+flowchart LR
+    W["workload<br/>no egress, no publication"] -->|"metrics, OTLP"| R["router<br/>default gateway"]
+    R --> MON[["observability plane"]]
+    MON --> RCV["receiver"]
+    ADM(["Administrators"]) -->|"SSH"| BA["bastion<br/>optional"]
+    BA --> W
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class W,R,BA tenant
+    class MON plane
+    class RCV other
+    class ADM outside
+```
+
+Arrows show who opens the connection. The router to the observability plane is the tenant's only way out. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+
 ## Usage
 
 ```bash

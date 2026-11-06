@@ -1,15 +1,69 @@
 # Stack `shared/planes`
 
-The shared planes ([ADR-0004](../../../docs/adr/0004-planes-and-isolation.md); [How a tenant joins a plane](../../../docs/concepts/plane-attachment.md)). The single source of the planes' description for every other stack, whatever provides the planes. Applied before the other stacks and again after an attachment joins or leaves: with the credentials of the **hub** project when it builds planes, of any project (the shared services') when it only adopts the operator's. The hub project holds the network only: the planes, their RBAC policies and their transit routers. Shared services (entry point, receivers, internal services) run in their own projects, attached with the role `shared`.
+The single description of the shared planes, read by every other stack whatever provides the planes ([ADR-0004](../../../docs/adr/0004-planes-and-isolation.md); [How a tenant joins a plane](../../../docs/concepts/plane-attachment.md)).
 
-| Plane mode | What this stack does | How an attached router joins |
-|---|---|---|
-| `gateway` | Adopts the operator's external network by name; creates nothing | Its gateway (source NAT, floating IPs) |
-| `interface` | Creates a private network in the hub project (no DHCP), shares it with every attached project by RBAC (`access_as_shared`), and creates a **transit router** on it at the plane's first address, its gateway | An interface (address given by Neutron) and routes through the transit router |
+- **When:** before the other stacks, and again after an attachment joins or leaves.
+- **With which credentials:** those of the **hub** project when it builds planes; those of any project, such as the shared services', when it only adopts the operator's.
+- **What the hub project holds:** the network only — the planes, their RBAC policies and their transit routers. Shared services (entry point, receivers, internal services) run in their own projects, attached with the role `shared`.
+
+## Two kinds of plane
+
+A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. An operator plane is used with or without address translation (`nat` in the attachments output).
+
+
+```mermaid
+flowchart LR
+    subgraph NAT["Operator plane, with NAT · mode gateway, nat true"]
+        direction TB
+        P1[["external network of the operator<br/>adopted by name"]]
+        R1["router of an attached project<br/>gateway port: source NAT, floating IPs"]
+        R1 --- P1
+    end
+    subgraph RT["Operator plane, routed · mode gateway, nat false"]
+        direction TB
+        P2[["external network of the operator<br/>in a shared address scope"]]
+        R2["router of an attached project<br/>gateway port: real addresses, BGP"]
+        R2 --- P2
+    end
+    subgraph HUB["Hub plane · mode interface, nat false"]
+        direction TB
+        P3[["network of the hub project, by RBAC<br/>transit router at its first address"]]
+        R3["router of an attached project<br/>interface port: routes via the transit router"]
+        R3 --- P3
+    end
+    NAT ~~~ RT ~~~ HUB
+
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class P1,P2,P3 plane
+    class R1,R2,R3 other
+```
+
+- **Operator plane, with NAT.** The stack adopts the operator's external network by name and creates nothing. An attached router joins with its gateway port: source NAT, floating IPs.
+- **Operator plane, routed.** Adopted the same way, without translation. The operator puts the tenants' ranges in the plane's address scope (subnet pools) and advertises them (BGP): tenants reach the plane at their real addresses.
+- **Hub plane.** The stack creates, in the hub project, a private network without DHCP, shares it with every attached project by RBAC (`access_as_shared`), and puts a **transit router** at its first address. An attached router joins with an interface port, with routes through the transit router.
+
+Lines show attachments, not connections. Dashed boxes: the routers of the stacks that attach; grey: planes.
 
 ## The transit router
 
-On an interface plane, attached routers never route to each other directly: every route goes through the transit router, the hub-and-spoke a transit gateway provides on other clouds.
+On a hub plane, attached routers never route to each other directly: every route goes through the transit router, the hub-and-spoke a transit gateway provides on other clouds.
+
+```mermaid
+flowchart LR
+    TR(("transit router<br/>hub project, first<br/>address of the plane"))
+    S1["entry point router<br/>role shared"] --- TR
+    S2["receiver router<br/>role shared"] --- TR
+    TR --- T1["tenant A router<br/>role tenant"]
+    TR --- T2["tenant B router<br/>role tenant"]
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class TR shared
+    class S1,S2,T1,T2 other
+```
+
+Lines are routes through the transit router: a tenant reaches the shared services of the plane, a shared service reaches the tenants and the other shared services. Two tenants have no route to each other.
 
 - **Roles are per plane.** Each attachment declares its role on every plane it joins: `shared` (the entry point on `publication`, the metrics receiver on `observability`, an internal service on `internal`) or `tenant` (a workload, or a client of the shared services: the entry point pushes its metrics on `observability`).
 - **Routes of the attached routers** (output `attachments.<name>.planes.<plane>.routes`), known before the attachment exists: a tenant reaches the shared services of the plane; a shared service reaches the other shared services and the tenants of the plane — through the plane's `tenant_ranges` aggregates when given.
@@ -32,7 +86,7 @@ To rename an attachment, remove it and apply, then add it under its new name and
 ## Checks and limits
 
 - The hub project is not an attachment: it holds the network only.
-- Planes do not overlap each other nor any attachment ([`modules/range-overlaps`](../../../modules/range-overlaps/README.md)); attachments sharing an interface plane do not overlap (on gateway planes they may, being never seen); every plane of an attachment is declared; an attachment has a single router interface on a plane.
+- Planes do not overlap each other nor any attachment ([`modules/range-overlaps`](../../../modules/range-overlaps/README.md)); attachments sharing a hub plane do not overlap (on an operator plane with NAT they may, being never seen); every plane of an attachment is declared; an attachment has a single router interface on a plane.
 
 - Neutron caps the routes of a router (`max_routes`, 30 by default): the transit router of a plane routes to about 30 attachments.
 - Discovery relies on the default Neutron policy that lets a network's owner read the ports on it; check it on each cloud.
