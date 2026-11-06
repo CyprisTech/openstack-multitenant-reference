@@ -11,6 +11,8 @@
 
 A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules.
 
+![Architecture overview: shared services and tenants, each in its own project, meet on shared networks (planes); arrows show who opens each connection](docs/images/architecture-overview.png)
+
 **Read:** [why](#why) and the [design areas](#design-areas) to evaluate it, [getting started](#getting-started) to deploy it, the [ADRs](docs/adr/README.md) for the reasoning.
 
 ## Contents
@@ -71,31 +73,7 @@ The design areas of a landing zone, and the answer of this reference to each. Th
 
 ## How it fits together
 
-```mermaid
-flowchart TB
-    U(["Internet"]) --> EP["Entry point<br/><i>shared service</i>"]
-    EP --> PUB[["publication plane"]]
-    PUB --> TEN
-
-    TEN["<b>Tenants</b><br/>one project each<br/>web applications, Kubernetes,<br/>isolated workloads"]
-
-    ADM(["Administrators"]) -.->|"administration network"| TEN
-    TEN --> OBS[["observability plane"]]
-    TEN --> INT[["internal services plane"]]
-    OBS --> RCV["Receivers: metrics, logs, audit<br/><i>shared service</i>"]
-    INT --> SVC["Registry, directory…<br/><i>shared services</i>"]
-
-    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
-    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
-    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
-    class EP,RCV,SVC shared
-    class PUB,OBS,INT plane
-    class TEN tenant
-    class U,ADM outside
-```
-
-Arrows show who opens the connection: the entry point reaches the tenants through the publication plane, the tenants push to the receivers and call the internal services through the other planes, and nothing on a plane opens a connection into a tenant. Each tenant joins only the planes it needs, and tenants never reach each other. Blue: shared services, each in its own project; grey: planes; orange: tenants. The planes shown are those of the reference scenario.
+The [overview](#openstack-multitenant-reference) at the top shows how the parts fit together. Arrows show who opens the connection: the entry point reaches the tenants' service addresses through the publication plane, the tenants push to the receivers and call the internal services through the other planes, and nothing on a plane opens a connection into a tenant. Each tenant joins only the planes it needs. The planes shown are those of the reference scenario; the [architecture](docs/concepts/architecture.md) details each part.
 
 ## What the repository contains
 
