@@ -13,7 +13,7 @@ The [Kubernetes tenant](../../stacks/tenants/kubernetes/README.md) cannot do it 
 |---|---|---|
 | publication | the ingress, reached by the entry point | the entry point only, PROXY v2 header expected |
 | observability | the cluster's Prometheus pushes to the receiver | nothing comes in |
-| internal services | the cluster consumes internal services | nothing comes in; `intranet_sources` describes the cluster as a client |
+| internal services | the cluster consumes internal services | nothing comes in; `internal_sources` describes the cluster as a client |
 
 No other tenant can reach a service of the cluster: nothing is exposed on the internal services plane, and tenants have no route to each other on the publication plane.
 
@@ -32,7 +32,7 @@ Out of scope: tenant workloads in the same cluster (a `shared` attachment reache
 
 ### 1. Role per plane (configuration only)
 
-The cluster's attachment in `shared/planes` takes the role `shared` on the planes where it offers services: for example `shared` on the internal services and observability planes, `tenant` on the publication plane. With the plane names of the scenario ([README](../../README.md#what-the-repository-contains)): `{ intranet = "shared", monitoring = "shared", svc_public = "tenant" }`. The transit router then routes the plane's tenants to the cluster and back. No change to `shared/planes`.
+The cluster's attachment in `shared/planes` takes the role `shared` on the planes where it offers services: for example `shared` on the internal services and observability planes, `tenant` on the publication plane. With the plane keys of the scenario ([README](../../README.md#what-the-repository-contains)): `{ internal = "shared", observability = "shared", publication = "tenant" }`. The transit router then routes the plane's tenants to the cluster and back. No change to `shared/planes`.
 
 ### 2. Exposed services, generic
 
@@ -40,10 +40,10 @@ The hard-coded ingress Service on the publication plane becomes one instance of 
 
 ```hcl
 exposed_services = {
-  ingress    = { plane = "svc_public", ports = [80, 443], sources = "edge" }        # today's ingress
-  receiver   = { plane = "monitoring", ports = [9090], sources = "tenants" }         # metrics receiver
-  internal   = { plane = "intranet",   ports = [443],  sources = ["10.21.0.0/16"] } # internal Traefik entry
-  postgres   = { plane = "intranet",   ports = [5432], sources = ["10.21.4.0/24"] }
+  ingress    = { plane = "publication",   ports = [80, 443], sources = "edge" }        # today's ingress
+  receiver   = { plane = "observability", ports = [9090], sources = "tenants" }         # metrics receiver
+  internal   = { plane = "internal",      ports = [443],  sources = ["10.21.0.0/16"] } # internal Traefik entry
+  postgres   = { plane = "internal",      ports = [5432], sources = ["10.21.4.0/24"] }
 }
 ```
 
@@ -55,8 +55,8 @@ A second Traefik entry point and Service on the plane where HTTP services are of
 
 ### 4. Sources, in both directions
 
-- **Consumers → cluster.** `sources` lists the consumers' addresses: their range on an interface plane, their router's gateway address on an operator plane (each consumer's `<plane>_sources` output).
-- **Cluster → consumers.** New outputs `<plane>_sources`: the cluster range on an interface plane, its router's address on an operator plane, for the consumers' admission rules when the cluster calls them. Monitoring needs none: the tenants push to the receiver ([ADR-0007](../adr/0007-monitoring.md)).
+- **Consumers → cluster.** `sources` lists the consumers' addresses: their range on a plane without NAT, their router's gateway address on a plane with NAT (each consumer's `<plane>_sources` output).
+- **Cluster → consumers.** New outputs `<plane>_sources`: the cluster range on a plane without NAT, its router's address on a plane with NAT, for the consumers' admission rules when the cluster calls them. Monitoring needs none: the tenants push to the receiver ([ADR-0007](../adr/0007-monitoring.md)).
 
 ### 5. Consumers join the plane
 

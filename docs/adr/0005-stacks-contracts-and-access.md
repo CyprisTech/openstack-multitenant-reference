@@ -3,7 +3,7 @@
 - **Status:** Accepted (implemented in v0.3.0)
 - **Date:** 2026-11-02 (from ADR-0003 D3 of 2026-10-30 and decisions taken in the reviews of 2026-10-30 and 2026-10-31)
 - **Deciders:** maintainers
-- **Refines:** [ADR-0001](0001-reference-architecture.md) D1 (layers, stacks found by name); [ADR-0002](0002-platform-kubernetes.md) D6 (administration and intranet)
+- **Refines:** [ADR-0001](0001-reference-architecture.md) D1 (layers, stacks found by name); [ADR-0002](0002-platform-kubernetes.md) D6 (administration and internal services)
 
 ## Context
 
@@ -40,7 +40,7 @@ scripts/                    domain publication
 
 ### D3 — Contracts are outputs passed as inputs
 
-- **No stack reads an object of another project.** What a stack needs from another is an output of the latter, passed as an input: the `plane_attachment` of each stack from `shared/planes`; the entry point's source addresses (`svc_public_sources`) for the tenants' admission rules; the published domains of each tenant (`published_domains`) for the entry point; the Kubernetes tenant's intranet sources (`intranet_sources`) for an internal service.
+- **No stack reads an object of another project.** What a stack needs from another is an output of the latter, passed as an input: the `plane_attachment` of each stack from `shared/planes`; the entry point's source addresses (`publication_sources`) for the tenants' admission rules; the published domains of each tenant (`published_domains`) for the entry point; the Kubernetes tenant's internal sources (`internal_sources`) for an internal service.
 - **`shared/planes` is the single description of the planes** ([ADR-0004](0004-planes-and-isolation.md)): `plane_attachment` is the only plane input of the other stacks.
 - The order of application follows the contracts: planes, shared services, entry point, tenants, planes again on `interface` planes, domains published.
 
@@ -59,7 +59,7 @@ The building blocks of one tenant (network, instances, load balancers, DNS) come
 
 ### D5 — Administration paths
 
-- **Two roles, administration and intranet** (ADR-0002, D6). Administration endpoints — a stack's bastion, the Kubernetes API — admit **named administrator addresses only**, never the range of a plane. Recommended: a dedicated administration network; accepted: one network for both roles, with restricted sources.
+- **Two roles, administration and internal services** (ADR-0002, D6). Administration endpoints — a stack's bastion, the Kubernetes API — admit **named administrator addresses only**, never the range of a plane. Recommended: a dedicated administration network; accepted: one network for both roles, with restricted sources.
 - **Instances admit SSH from their stack's bastion and from named administrator addresses only**, none by default. An administrator reaches an instance through the bastion of its stack, the bastion through the administration network.
 - Single sign-on to these endpoints, and the audit of administration access, are level 1 and 3 ([ADR-0003](0003-scope-and-boundary.md), D4).
 

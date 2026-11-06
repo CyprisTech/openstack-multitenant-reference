@@ -5,19 +5,19 @@ site  = "site-a"
 
 planes = {
   # Public cloud: a private network of the hub project, shared with the attached projects by RBAC.
-  svc_public = { mode = "interface", cidr = "172.31.0.0/24" }
+  publication = { mode = "interface", cidr = "172.31.0.0/24" }
   # Private cloud: an external network provided by the operator, adopted by name.
-  monitoring = { mode = "gateway", cidr = "203.0.113.0/24", network = "monitoring", subnet = "monitoring" }
+  observability = { mode = "gateway", cidr = "203.0.113.0/24", network = "monitoring", subnet = "monitoring" }
 }
 
 # planes: role of the attachment on each plane it joins ("shared" service or "tenant").
 attachments = {
-  edge      = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  receiver  = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
-  web       = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
-  isolated  = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
+  edge     = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
+  receiver = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
+  web      = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant" } }
+  isolated = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
 }
 
 # Per plane, aggregates of the tenant ranges, routed by the shared services through the transit
 # router: adding a tenant inside them changes no shared service.
-tenant_ranges = { svc_public = ["10.21.0.0/16", "10.22.0.0/15"] }
+tenant_ranges = { publication = ["10.21.0.0/16", "10.22.0.0/15"] }

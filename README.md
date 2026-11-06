@@ -85,11 +85,11 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 
 The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
 
-| Purpose | Plane in the scenario |
+| Purpose | Key in `shared/planes` |
 |---|---|
-| Publication: the entry point reaches the tenants' service addresses | `svc_public` |
-| Observability: every project pushes its metrics, logs and audit events | `monitoring` |
-| Internal services offered to some tenants | `intranet` |
+| Publication: the entry point reaches the tenants' service addresses | `publication` |
+| Observability: every project pushes its metrics, logs and audit events | `observability` |
+| Internal services offered to some tenants | `internal` |
 
 Another plane or shared service is declared in `shared/planes`; the stacks that join it name it in their call to [`modules/plane-attachment`](modules/plane-attachment/README.md). Each stack has its own state and `clouds.yaml` entry ([architecture](docs/concepts/architecture.md)).
 
@@ -165,9 +165,9 @@ test runner (administrator) platform Kubernetes API 198.51.100.1              64
 platform pod           edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
 platform pod           web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
 platform pod           isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
-platform pod           intranet service 198.51.100.3                          8080  open     open     ok
-web t1-web-1           intranet service 198.51.100.3                          8080  closed   closed   ok
-isolated t1-isolated-1 intranet service 198.51.100.3                          8080  closed   closed   ok
+platform pod           internal service 198.51.100.3                          8080  open     open     ok
+web t1-web-1           internal service 198.51.100.3                          8080  closed   closed   ok
+isolated t1-isolated-1 internal service 198.51.100.3                          8080  closed   closed   ok
 
 33/33 rows as expected
 ```
@@ -203,7 +203,7 @@ This is a reference, not an operated platform. What stays yours:
 | **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md): [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md) |
-| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |
+| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [internal service](tests/fixtures/internal-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
 ## Status

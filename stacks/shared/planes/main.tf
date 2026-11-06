@@ -16,7 +16,7 @@ locals {
   # the plane, chosen by the hub (a project cannot choose its address on a network it does not own).
   transit_ip = { for k, p in local.interface_planes : k => cidrhost(p.cidr, 1) }
 
-  # One entry per attachment and interface plane.
+  # One entry per attachment and hub plane.
   joins = merge([
     for ak, a in var.attachments : {
       for pk in keys(a.planes) : "${ak}/${pk}" => { attachment = ak, plane = pk, project_id = a.project_id }
@@ -140,8 +140,8 @@ resource "openstack_networking_router_route_v2" "transit" {
 
 # 5. Checks --------------------------------------------------------------------------------------
 
-# Planes overlap nothing; attachments of an interface plane do not overlap each other (on
-# operator planes they may: they are never seen there).
+# Planes overlap nothing; attachments of a hub plane do not overlap each other (on
+# planes with NAT they may: they are never seen there).
 module "overlaps" {
   source = "../../../modules/range-overlaps"
 

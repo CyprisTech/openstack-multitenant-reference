@@ -5,28 +5,28 @@ cloud = "hub"
 site  = "site-a"
 
 planes = {
-  svc_public = { mode = "interface", cidr = "172.31.0.0/24", mtu = 1362 }
-  monitoring = { mode = "interface", cidr = "172.31.1.0/24", mtu = 1362 }
-  intranet   = { mode = "interface", cidr = "172.31.2.0/24", mtu = 1362 }
+  publication   = { mode = "interface", cidr = "172.31.0.0/24", mtu = 1362 }
+  observability = { mode = "interface", cidr = "172.31.1.0/24", mtu = 1362 }
+  internal      = { mode = "interface", cidr = "172.31.2.0/24", mtu = 1362 }
 }
 
-# Every project joining the planes, with its role on each one. On interface planes, ranges must
+# Every project joining the planes, with its role on each one. On hub planes, ranges must
 # not overlap: tenants are seen at their own addresses.
-# The Kubernetes tenant joins the intranet; as this plane gives no floating IPs, its stack needs
+# The Kubernetes tenant joins the internal services plane; as this plane gives no floating IPs, its stack needs
 # admin_network, an external network for the API and bootstrap floating IPs.
 attachments = {
-  edge             = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
-  receiver         = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
-  intranet-service = { project_id = "<shared services project>", cidr = "10.35.0.0/28", planes = { intranet = "shared" } }
-  acme             = { project_id = "<shared services project>", cidr = "10.37.0.0/28", planes = { intranet = "shared" } }
-  web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
-  isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
-  platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
+  edge             = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
+  receiver         = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
+  internal-service = { project_id = "<shared services project>", cidr = "10.35.0.0/28", planes = { internal = "shared" } }
+  acme             = { project_id = "<shared services project>", cidr = "10.37.0.0/28", planes = { internal = "shared" } }
+  web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
+  isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
+  platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
 }
 
 # The shared services route these aggregates: a new tenant inside them changes no shared service.
 tenant_ranges = {
-  svc_public = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
-  monitoring = ["10.20.0.0/14", "10.24.0.0/14"]
-  intranet   = ["10.20.0.0/14", "10.24.0.0/14"]
+  publication   = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
+  observability = ["10.20.0.0/14", "10.24.0.0/14"]
+  internal      = ["10.20.0.0/14", "10.24.0.0/14"]
 }

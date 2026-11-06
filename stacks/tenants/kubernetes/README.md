@@ -1,10 +1,10 @@
 # Tenant type `kubernetes`
 
-A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on `svc_public` behind the entry point, pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
+A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on the publication plane behind the entry point, pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
 
 | Created by | What |
 |---|---|
-| this stack (Terraform) | cluster network and its routers (egress, `svc_public`, `monitoring`, `intranet`, optional administration network), server groups, bootstrap instance, address of the ingress (`svc_public`) — a floating IP of the plane when it translates addresses, a fixed address of the cluster network otherwise |
+| this stack (Terraform) | cluster network and its routers (egress, publication, observability and internal services planes, optional administration network), server groups, bootstrap instance, address of the ingress (publication plane) — a floating IP of the plane when it translates addresses, a fixed address of the cluster network otherwise |
 | `create-cluster.sh` on the bootstrap instance | kind, Cluster API with CAPO, ORC and CAAPH, then the cluster: 3 control-plane nodes behind the API load balancer, workers, add-ons |
 | the add-ons (CAAPH) | Cilium, OpenStack cloud controller manager, Cinder CSI, metrics-server, kubelet-csr-approver, Traefik (Gateway API) behind a load balancer that takes the address prepared by this stack, and Prometheus, which pushes to the receiver (remote write) |
 
@@ -12,7 +12,7 @@ Every version is pinned in [`cluster.tf`](cluster.tf).
 
 ## Prerequisites
 
-- The shared entry point (`stacks/shared/entry-point`) applied for the same site: the ingress admits its `svc_public_sources` only, given as `edge_sources`.
+- The shared entry point (`stacks/shared/entry-point`) applied for the same site: the ingress admits its `publication_sources` only, given as `edge_sources`.
 - The node image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md).
 - An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project. Created by an administrator, never by OpenTofu or Terraform (ADR-0002, D1):
 
@@ -49,8 +49,8 @@ The ingress Service requests this address (`loadBalancerIP`) and keeps it when i
 
 ### Who reaches what
 
-- The ingress admits the entry point only, by the `edge_sources` input (output `svc_public_sources` of the entry point).
-- The internal services admit the cluster by its `intranet_sources` output.
+- The ingress admits the entry point only, by the `edge_sources` input (output `publication_sources` of the entry point).
+- The internal services admit the cluster by its `internal_sources` output.
 - The cluster's Prometheus pushes to the receiver given as `monitoring.receiver`, with the labels `site`, `tenant` and `instance`.
 
 ### Certificates
@@ -68,7 +68,7 @@ With `certificates` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)),
 kubectl apply -f demo/whoami.yaml
 curl -k --resolve apps.platform.example.org:443:<public IP of the entry point> https://apps.platform.example.org/
 
-# Isolation test with the Kubernetes rows; needs tests/fixtures/receiver and tests/fixtures/intranet-service
+# Isolation test with the Kubernetes rows; needs tests/fixtures/receiver and tests/fixtures/internal-service
 tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
 ```
 
@@ -123,7 +123,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | ---- | ---- |
 | [openstack_networking_floatingip_v2.ingress](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/networking_floatingip_v2) | resource |
 | [terraform_data.checks](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
-| [openstack_networking_router_v2.intranet](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
+| [openstack_networking_router_v2.internal](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
 
 ### Inputs
 
@@ -133,19 +133,19 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | az | Availability zone of the bootstrap instance and of the cluster machines. | `string` | n/a | yes |
 | cloud | Entry of clouds.yaml used by this stack (the platform project). | `string` | n/a | yes |
 | cluster | The Kubernetes cluster created by Cluster API.<br/>- node\_image: name of the image built by images/kubernetes-node.<br/>- kubernetes\_version: must match the node image.<br/>- control\_plane\_count: 3 for a highly available control plane.<br/>- control\_plane\_root\_volume\_size, worker\_root\_volume\_size: GiB of the root volume of each<br/>  machine (container images, ephemeral storage, logs, and etcd on the control plane). They<br/>  must not be smaller than the virtual size of the node image.<br/>- domains: domains served by the ingress and published through the entry point.<br/>- pod\_cidr, service\_cidr: must not overlap the cluster network nor the planes. | <pre>object({<br/>    name                           = optional(string, "platform")<br/>    node_image                     = string<br/>    kubernetes_version             = optional(string, "v1.36.5")<br/>    control_plane_flavor           = string<br/>    worker_flavor                  = string<br/>    control_plane_count            = optional(number, 3)<br/>    worker_count                   = optional(number, 2)<br/>    control_plane_root_volume_size = optional(number, 30)<br/>    worker_root_volume_size        = optional(number, 40)<br/>    domains                        = optional(list(string), ["apps.example.org"])<br/>    pod_cidr                       = optional(string, "10.244.0.0/16")<br/>    service_cidr                   = optional(string, "10.96.0.0/12")<br/>  })</pre> | n/a | yes |
-| edge\_sources | Ranges the entry point connects from on svc\_public: output svc\_public\_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header. | `list(string)` | n/a | yes |
+| edge\_sources | Ranges the entry point connects from on publication: output publication\_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header. | `list(string)` | n/a | yes |
 | egress\_network | External network giving the default route (packages, container images). The cluster gets no public address on it. | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | Flavor name of the bootstrap instance (kind runs there: 2 vCPU and 4 GiB at least). | `string` | n/a | yes |
 | image | Image name of the bootstrap instance (an Ubuntu LTS cloud image). | `string` | n/a | yes |
 | plane\_attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),<br/>keyed by plane: how its router joins each plane and how its instances are seen there,<br/>whatever provides the plane (the operator, or a hub project). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
 | site | Short site name; must match the site of the entry point (stack shared/entry-point). | `string` | n/a | yes |
-| admin\_network | Administration network carrying the floating IPs of the Kubernetes API and of the bootstrap<br/>instance (ADR-0002, D6). null uses the intranet plane for this role, which requires an<br/>operator intranet plane (gateway mode): then admin.sources must be specific addresses, never<br/>the range of the intranet. | `object({ network = string, subnet = string, cidr = string })` | `null` | no |
+| admin\_network | Administration network carrying the floating IPs of the Kubernetes API and of the bootstrap<br/>instance (ADR-0002, D6). null uses the internal services plane for this role, which requires an<br/>operator plane (gateway mode): then admin.sources must be specific addresses, never the range<br/>of the plane. | `object({ network = string, subnet = string, cidr = string })` | `null` | no |
 | boot\_volume\_size | Size in GiB of the root volume of the bootstrap instance; null boots from the flavor's local disk. | `number` | `null` | no |
 | bootstrap | Create the bootstrap instance. Set to false once the cluster manages itself (ADR-0002, D3); set back to true before tearing the cluster down. | `bool` | `true` | no |
 | certificates | Certificates of the domains of the cluster (ADR-0008): cert-manager obtains and renews them<br/>through the ACME DNS-01 challenge, from any ACME directory (Let's Encrypt, or the<br/>organisation's authority), and writes the secret of the ingress listener. null runs the<br/>demonstration mode: a self-signed certificate, with a warning at every plan.<br/>- directory\_url, ca\_bundle (PEM, for an authority that is not publicly trusted), email.<br/>- dns.provider "rfc2136" with dns.settings nameserver ("host:port"), tsig\_key\_name,<br/>  tsig\_algorithm, tsig\_secret: the stack writes the TSIG secret in the cert-manager<br/>  namespace. Any other provider: dns.solver, a cert-manager dns01 solver, whose credentials<br/>  Secret you create in the cert-manager namespace.<br/>- dns.resolvers: name servers ("host:port") cert-manager checks the TXT record on; empty<br/>  uses the cluster's resolvers.<br/>The settings reach the cluster through the bootstrap instance's user data, readable by the<br/>members of the project: give a key restricted to the \_acme-challenge records of the domains. | <pre>object({<br/>    directory_url = string<br/>    ca_bundle     = optional(string)<br/>    email         = string<br/>    dns = object({<br/>      provider  = string<br/>      settings  = optional(map(string), {})<br/>      solver    = optional(any)<br/>      resolvers = optional(list(string), [])<br/>    })<br/>  })</pre> | `null` | no |
 | cluster\_cidr | Range of the cluster network (nodes, load balancer VIPs, bootstrap instance). | `string` | `"10.24.0.0/24"` | no |
 | dns\_nameservers | DNS resolvers of the cluster network, reachable through its routes. They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images. | `list(string)` | `[]` | no |
-| monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the monitoring plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
+| monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |
 | service\_addresses | Host numbers, in the cluster network, of the load balancer of the ingress on an interface<br/>plane. Neutron does not allocate the first addresses of the cluster network to anything else<br/>(reserved below reserved\_hosts), so this address is known before the cluster exists. | <pre>object({<br/>    ingress        = optional(number, 10)<br/>    reserved_hosts = optional(number, 32)<br/>  })</pre> | `{}` | no |
 
@@ -155,8 +155,8 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | ---- | ----------- |
 | bootstrap | Floating IP of the bootstrap instance on the administration network, or null once it is removed. |
 | edge\_sources | Addresses of the entry point admitted by the ingress load balancer. |
-| intranet\_sources | Addresses the cluster reaches the intranet from, for the services of the intranet (allowed\_sources): its router's gateway address on an operator plane, the cluster range on an interface plane. |
+| internal\_sources | Addresses the cluster reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
-| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of svc\_public when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh). |
+| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh). |
 | scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
 <!-- END_TF_DOCS -->

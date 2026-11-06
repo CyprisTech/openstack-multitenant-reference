@@ -23,7 +23,7 @@ env:
     stacks/tenants/isolated
     stacks/tenants/kubernetes
     tests/fixtures/receiver
-    tests/fixtures/intranet-service
+    tests/fixtures/internal-service
     tests/fixtures/acme
 
 jobs:

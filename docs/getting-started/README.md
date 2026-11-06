@@ -46,16 +46,16 @@ tofu -chdir=stacks/shared/planes output -json attachments | jq '{plane_attachmen
 
 ## 2. Shared services
 
-The services the tenants push to come first: your metrics receiver (Prometheus, Mimir, VictoriaMetrics…) runs in a project of shared services and joins the observability plane (`monitoring`) with its `plane_attachment`; every stack pushes to it, with its URL as `monitoring.receiver` ([integration points](../reference/integration-points.md#observability-metrics)). The [test receiver](../../tests/fixtures/receiver/README.md) shows the pattern.
+The services the tenants push to come first: your metrics receiver (Prometheus, Mimir, VictoriaMetrics…) runs in a project of shared services and joins the observability plane with its `plane_attachment`; every stack pushes to it, with its URL as `monitoring.receiver` ([integration points](../reference/integration-points.md#observability-metrics)). The [test receiver](../../tests/fixtures/receiver/README.md) shows the pattern.
 
-The services that admit named consumers — internal services on `intranet` — come after the tenants, whose outputs (`intranet_sources`) they need.
+The services that admit named consumers — internal services — come after the tenants, whose outputs (`internal_sources`) they need.
 
 ## 3. Entry point
 
 ```bash
 cp stacks/shared/entry-point/terraform.tfvars.example stacks/shared/entry-point/terraform.tfvars   # adapt
 tofu -chdir=stacks/shared/entry-point init && tofu -chdir=stacks/shared/entry-point apply
-tofu -chdir=stacks/shared/entry-point output -json svc_public_sources   # edge_sources of the tenants
+tofu -chdir=stacks/shared/entry-point output -json publication_sources   # edge_sources of the tenants
 ```
 
 ## 4. Tenants

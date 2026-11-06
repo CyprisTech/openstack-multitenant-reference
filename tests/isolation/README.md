@@ -13,7 +13,7 @@
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
   --user ops --key ~/.ssh/id_ed25519 \
-  [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service]
+  [--platform-kubeconfig platform.kubeconfig --internal-service tests/fixtures/internal-service]
 ```
 
 Each row prints the source, the destination, the port, the expected and the actual result. A probe that cannot run (SSH failure) is reported as an error, never as `closed`.

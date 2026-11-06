@@ -15,8 +15,8 @@ variable "site" {
 
 variable "planes" {
   description = <<-EOT
-    Shared planes, any number, keyed by name (in the reference scenario: svc_public,
-    monitoring, intranet).
+    Shared planes, any number, keyed by name (in the reference scenario: publication,
+    observability, internal).
     - mode "gateway": an external network provided by the cloud operator, adopted by name
       (network, subnet). Tenant routers join it with their gateway; nothing is created here.
     - mode "interface": a private network created in the hub project and shared with the
@@ -40,7 +40,7 @@ variable "planes" {
 
   validation {
     condition     = alltrue([for p in values(var.planes) : p.mode == "interface" ? true : p.network != null && p.subnet != null])
-    error_message = "A gateway plane needs the network and subnet names of the operator's external network."
+    error_message = "An operator plane (mode gateway) needs the network and subnet names of the operator's external network."
   }
 
   validation {
@@ -54,13 +54,13 @@ variable "attachments" {
     Projects joining the planes, keyed by name.
     - project_id: project of the attachment (the target of the RBAC policies).
     - cidr: range of the attachment's network. Must not overlap a plane, nor another
-      attachment of the same interface plane.
+      attachment of the same hub plane.
     - planes: the planes it joins, each with its role on that plane:
-      - "shared": a shared service of the plane (the entry point on svc_public, the metrics
-        receiver on monitoring, an internal service on intranet). It reaches the tenants and the other
+      - "shared": a shared service of the plane (the entry point on publication, the metrics
+        receiver on observability, an internal service on internal). It reaches the tenants and the other
         shared services of the plane, and they reach it.
       - "tenant": a workload, or a client of the shared services (the entry point pushes its
-        metrics on monitoring). It reaches the shared services of the plane only.
+        metrics on observability). It reaches the shared services of the plane only.
   EOT
   type = map(object({
     project_id = string
@@ -86,7 +86,7 @@ variable "attachments" {
 
 variable "tenant_ranges" {
   description = <<-EOT
-    Per interface plane, aggregates covering the ranges of its tenants, routed by the shared
+    Per hub plane, aggregates covering the ranges of its tenants, routed by the shared
     services through the transit router: adding a tenant inside them changes no shared service.
     A plane absent here: the shared services get one route per tenant of the plane.
   EOT

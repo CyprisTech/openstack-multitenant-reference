@@ -7,7 +7,7 @@
 
 ## Context
 
-Tenants reach the shared services through **planes**, any number, each with its own purpose; in the reference scenario, `svc_public` for publication, `monitoring` for observability, `intranet` for internal services. In `v0.2.x` every plane is an external network of the cloud operator, joined by each tenant router through its gateway with source NAT. On a public cloud, a member of the projects cannot create external networks: the architecture could not be deployed there.
+Tenants reach the shared services through **planes**, any number, each with its own purpose; in the reference scenario, publication, observability and internal services. In `v0.2.x` every plane is an external network of the cloud operator, joined by each tenant router through its gateway with source NAT. On a public cloud, a member of the projects cannot create external networks: the architecture could not be deployed there.
 
 OpenStack has no native peering or transit gateway between projects. With a member role, sharing a network by RBAC and static routes are the only means; with admin rights, address scopes route projects without translation. The closest published design is OVHcloud's hub-and-spoke landing zone (a transit network and a firewall at the hub, with static routes to each spoke).
 
@@ -43,7 +43,7 @@ Three cases follow:
 ### D2 — Hub and transit router (`interface` planes)
 
 - The hub project creates each plane, shares it with the attached projects (`access_as_shared`) and holds a **transit router at the plane's first address**, its gateway. A project cannot choose its address on a network it does not own (Neutron policy `create_port:fixed_ips:ip_address`): the attached routers take an address from Neutron, the transit router is the only fixed address on the plane.
-- **Roles per plane.** Each attachment declares, on each plane it joins, the role `shared` (it provides a service to the plane: in the scenario, the entry point on `svc_public`, a receiver on `monitoring`) or `tenant`. A tenant routes to the shared services of the plane; a shared service routes to the other shared services and to the tenants, through aggregates of their ranges when given. All routes go through the transit router and are known before the attachment exists. **Never between two tenants.**
+- **Roles per plane.** Each attachment declares, on each plane it joins, the role `shared` (it provides a service to the plane: in the scenario, the entry point on the publication plane, a receiver on the observability plane) or `tenant`. A tenant routes to the shared services of the plane; a shared service routes to the other shared services and to the tenants, through aggregates of their ranges when given. All routes go through the transit router and are known before the attachment exists. **Never between two tenants.**
 - **Discovery.** The plane's owner sees every port on it: at each apply, `shared/planes` finds the address of each attached router, identified by its subnet range, and routes the attachment's range to it. OpenStack has no route propagation between projects: this apply is where it happens.
 - **Limits**, documented: `max_routes` (30 by default) caps a transit router at about 30 attachments per plane; network sharing by members may be forbidden by the cloud (the Sovereign Cloud Stack draft standard scs-0126 recommends it), and the providers limit the projects and RBAC policies of each customer. The getting started checks them before the first apply.
 

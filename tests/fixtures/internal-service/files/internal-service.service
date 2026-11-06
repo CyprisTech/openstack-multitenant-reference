@@ -1,5 +1,5 @@
 [Unit]
-Description=Intranet demonstration service
+Description=Internal demonstration service
 After=network-online.target
 
 [Service]

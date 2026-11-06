@@ -97,7 +97,7 @@
           # (spec.loadBalancerIP) is published by the entry point through the transit router.
           service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
 %{ else ~}
-          loadbalancer.openstack.org/floating-network-id: "${svc_public_id}"
+          loadbalancer.openstack.org/floating-network-id: "${publication_network_id}"
           # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
           # Service is deleted.
           loadbalancer.openstack.org/keep-floatingip: "true"

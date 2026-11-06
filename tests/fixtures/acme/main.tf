@@ -16,10 +16,10 @@ locals {
   boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
 
   # Who may query and update the DNS and use the ACME directory: on a plane with NAT, the tenants'
-  # routers, seen at their gateway address on the plane; on an interface plane, the ranges routed
+  # routers, seen at their gateway address on the plane; on a plane without NAT, the ranges routed
   # to the authority.
-  sources = module.planes.nat.intranet ? [module.planes.cidr.intranet] : [
-    for r in var.plane_attachment.intranet.routes : r.destination
+  sources = module.planes.nat.internal ? [module.planes.cidr.internal] : [
+    for r in var.plane_attachment.internal.routes : r.destination
   ]
 
   # Knot: one TSIG key per tenant, allowed to update only the TXT records _acme-challenge.<its names>.
@@ -33,7 +33,7 @@ locals {
   # step-ca: the root comes from this stack; the intermediate and the ACME provisioner are created
   # at first boot. The server certificate must name the address the tenants use: on a plane with
   # NAT, the floating IP, read from the metadata service once it is associated.
-  step_init = templatefile("${path.module}/files/step-ca-init.sh.tftpl", { nat = module.planes.nat.intranet })
+  step_init = templatefile("${path.module}/files/step-ca-init.sh.tftpl", { nat = module.planes.nat.internal })
 }
 
 resource "random_bytes" "tsig" {
@@ -57,10 +57,10 @@ resource "tls_self_signed_cert" "root" {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["intranet"]
+  planes     = ["internal"]
   attachment = var.plane_attachment
   instances  = [local.name]
-  exposure   = { primary = "intranet" }
+  exposure   = { primary = "internal" }
 }
 
 module "admission" {
@@ -165,6 +165,6 @@ module "authority" {
 }
 
 locals {
-  address = module.planes.nat.intranet ? module.authority.instances[local.name].ports["main"].floating_ip : module.authority.instances[local.name].ports["main"].ip
+  address = module.planes.nat.internal ? module.authority.instances[local.name].ports["main"].floating_ip : module.authority.instances[local.name].ports["main"].ip
 }
 

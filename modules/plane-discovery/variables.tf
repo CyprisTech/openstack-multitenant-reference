@@ -4,7 +4,7 @@ variable "hub_project_id" {
 }
 
 variable "planes" {
-  description = "Interface planes, keyed by plane: the range of their subnet in the hub project (unique there)."
+  description = "Hub planes, keyed by plane: the range of their subnet in the hub project (unique there)."
   type        = map(string)
 }
 

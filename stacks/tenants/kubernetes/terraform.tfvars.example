@@ -8,9 +8,9 @@ flavor           = "m1.medium-nodisk" # bootstrap instance: kind runs there
 boot_volume_size = 20
 
 egress_network = { network = "public", subnet = "public" }
-# admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the intranet
+# admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the internal services plane
 
-network_mtu     = 1362
+network_mtu = 1362
 # Must resolve the cloud API endpoints (an intranet resolver when they are internal names).
 dns_nameservers = ["192.0.2.53"]
 
@@ -27,12 +27,12 @@ cluster = {
   # Root disks: container images, ephemeral storage, logs, etcd. Defaults 30 and 40 GiB.
   # control_plane_root_volume_size = 30
   # worker_root_volume_size        = 40
-  domains              = ["apps.platform.example.org"]
+  domains = ["apps.platform.example.org"]
 }
 
 monitoring = { receiver = "http://203.0.113.10:9090" }
 
-# Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
+# Ranges the entry point connects from: output publication_sources of stack shared/entry-point.
 edge_sources = ["198.51.100.5/32"]
 
 # How this stack joins the planes: its entry of the attachments output of stack shared/planes,

@@ -6,7 +6,7 @@ One public address for the domains of the tenants that choose it ([ADR-0006](../
 - two Traefik instances on plain VMs, in a server group (anti-affinity), Traefik running as a Podman container started by systemd;
 - routes by **SNI with TLS passthrough** to each tenant's **service address**, PROXY protocol v2 with the client address;
 - routes delivered as **instance metadata**, updated in place: a timer on each instance renders them into Traefik's dynamic configuration within seconds;
-- routers to the `svc_public` and `monitoring` planes, with their routes pushed by DHCP;
+- routers to the publication and observability planes, with their routes pushed by DHCP;
 - metrics pushed to your receiver by a Prometheus agent on each instance (node exporter and Traefik metrics, `monitoring.receiver`); nothing connects into the instances.
 
 ## Usage
@@ -21,7 +21,7 @@ The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. M
 
 The instances need Internet access at first boot (package index, Podman, Traefik image): `public_network` must provide a default route to the Internet, and `dns_nameservers` must be reachable through it.
 
-Give the tenants published through the entry point its `svc_public_sources` output, as their `edge_sources`: their service addresses admit these addresses only.
+Give the tenants published through the entry point its `publication_sources` output, as their `edge_sources`: their service addresses admit these addresses only.
 
 ## Changing the published domains
 
@@ -40,7 +40,7 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 ## Backends
 
 - `domains.<domain>.backends` take the tenant's service address, `address:port`.
-- Service addresses admit the ranges of the `svc_public_sources` output. With `proxy_protocol = true` (default), the backends expect a PROXY protocol v2 header.
+- Service addresses admit the ranges of the `publication_sources` output. With `proxy_protocol = true` (default), the backends expect a PROXY protocol v2 header.
 - Tenants terminate TLS and manage their certificates, with ACME DNS-01 challenges on their zone ([ADR-0006](../../../docs/adr/0006-exposure.md), D5).
 
 ## Inputs and outputs
@@ -74,7 +74,7 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 
 | Name | Type |
 | ---- | ---- |
-| [openstack_networking_router_v2.svc_public](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
+| [openstack_networking_router_v2.publication](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
 
 ### Inputs
 
@@ -93,7 +93,7 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | dns\_nameservers | DNS resolvers pushed by DHCP on the edge network. They must be reachable through the edge routes (public network or a plane), and resolve the backend names used in routes. Without them, the first boot cannot install Podman nor pull the Traefik image. | `list(string)` | `[]` | no |
 | domains | Public domains routed by SNI, keyed by domain name (ADR-0006).<br/>- backends: "address:port" of the tenant's service address (its load balancer, or its only<br/>  instance); several only for a tenant that exposes several addresses for one domain.<br/>- proxy\_protocol: send PROXY protocol v2 to the backends; they must be configured to accept it.<br/>- max\_connections: simultaneous connections allowed per client address.<br/>Delivered to the Traefik instances through their metadata, updated in place: a change takes<br/>effect in seconds, without replacing an instance. scripts/publish-domains.sh fills it from the<br/>published\_domains outputs of the tenants. | <pre>map(object({<br/>    backends        = list(string)<br/>    proxy_protocol  = optional(bool, true)<br/>    max_connections = optional(number, 100)<br/>  }))</pre> | `{}` | no |
 | edge\_cidr | Range of the edge network. The load balancer, its amphorae and the Traefik instances live in it. | `string` | `"10.20.0.0/24"` | no |
-| monitoring | Monitoring as a push integration point (ADR-0007): each Traefik instance runs its exporters<br/>and a Prometheus agent that reads them, with the Traefik metrics, and pushes to the receiver<br/>through the monitoring plane. Nothing connects into the instances for their metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null runs no agent. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
+| monitoring | Monitoring as a push integration point (ADR-0007): each Traefik instance runs its exporters<br/>and a Prometheus agent that reads them, with the Traefik metrics, and pushes to the receiver<br/>through the observability plane. Nothing connects into the instances for their metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null runs no agent. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes they join (planes contract): a larger value creates a<br/>path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator<br/>enables it. null keeps the cloud default. | `number` | `null` | no |
 | octavia\_flavor\_id | Octavia flavor; an active/standby flavor is recommended for the edge. null uses the cloud default. | `string` | `null` | no |
 | public\_dns | Optional A records on the public floating IP: an existing zone (name with its trailing dot) and relative names ("" for the apex). | <pre>object({<br/>    zone  = string<br/>    names = list(string)<br/>    ttl   = optional(number, 300)<br/>  })</pre> | `null` | no |
@@ -108,5 +108,5 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | domains | Domains currently routed by the entry point. |
 | instances | Traefik instances and their addresses on the edge network. |
 | load\_balancer | Virtual IP, public floating IP and DNS names of the entry point. |
-| svc\_public\_sources | Ranges the entry point connects from on svc\_public, in CIDR notation: the router's gateway address in gateway mode, the entry point's range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge\_sources). |
+| publication\_sources | Ranges the entry point connects from on publication, in CIDR notation: the router's gateway address in gateway mode, the entry point's range in interface mode. Backends admit them on their published ports (ADR-0001, D7); pass them to the tenant stacks (edge\_sources). |
 <!-- END_TF_DOCS -->

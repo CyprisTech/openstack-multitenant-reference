@@ -23,7 +23,7 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 | `examples/planes` | Configurations of `shared/planes` |
 | `scripts/` | Domain publication |
 | `tests/isolation` | The isolation test |
-| `tests/fixtures/receiver`, `tests/fixtures/intranet-service` | Stand-ins for your platform services, used by the tests and the isolation test |
+| `tests/fixtures/receiver`, `tests/fixtures/internal-service` | Stand-ins for your platform services, used by the tests and the isolation test |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
 Every directory under `stacks/`, `tests/fixtures/` and `tests/integration/` is a root configuration with its own state. The modules under `modules/` compose those of [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), pinned by tag.

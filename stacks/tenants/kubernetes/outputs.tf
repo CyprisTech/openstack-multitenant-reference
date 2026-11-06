@@ -8,10 +8,10 @@ output "edge_sources" {
   value       = var.edge_sources
 }
 
-output "intranet_sources" {
-  description = "Addresses the cluster reaches the intranet from, for the services of the intranet (allowed_sources): its router's gateway address on an operator plane, the cluster range on an interface plane."
-  value = module.planes.nat.intranet ? [
-    for ip in data.openstack_networking_router_v2.intranet[0].external_fixed_ip : "${ip.ip_address}/32"
+output "internal_sources" {
+  description = "Addresses the cluster reaches the internal services plane from, for the services of that plane (allowed_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT."
+  value = module.planes.nat.internal ? [
+    for ip in data.openstack_networking_router_v2.internal[0].external_fixed_ip : "${ip.ip_address}/32"
   ] : [var.cluster_cidr]
 }
 
@@ -28,12 +28,12 @@ output "scripts" {
 }
 
 output "published_domains" {
-  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of svc_public when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh)."
+  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh)."
   value       = { for d in var.cluster.domains : d => { backends = ["${local.ingress_address}:443"] } }
 }
 
 
-data "openstack_networking_router_v2" "intranet" {
-  count     = module.planes.nat.intranet ? 1 : 0
-  router_id = module.platform.networks[local.network].routers["intranet"].id
+data "openstack_networking_router_v2" "internal" {
+  count     = module.planes.nat.internal ? 1 : 0
+  router_id = module.platform.networks[local.network].routers["internal"].id
 }

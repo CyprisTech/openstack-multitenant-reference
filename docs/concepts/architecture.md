@@ -6,7 +6,7 @@ All names are fictional: the organisation is `example.org`, and address ranges a
 
 ## Topology
 
-Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr/0003-scope-and-boundary.md)): one per tenant, one per shared service (or a project of shared services), and, in each region, a hub project holding the network only when you build the planes yourself, with a member role. Tenants and shared services meet on **planes** ([ADR-0004](../adr/0004-planes-and-isolation.md)), any number, each with its own purpose. The reference scenario has three:
+Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr/0003-scope-and-boundary.md)): one per tenant, one per shared service (or a project of shared services), and, in each region, a hub project holding the network only when you build the planes yourself, with a member role. Tenants and shared services meet on **planes**: networks shared by several projects for one purpose, which each project joins through its own router ([ADR-0004](../adr/0004-planes-and-isolation.md)). There can be any number of them. The reference scenario has three:
 
 | Plane | Purpose | Shared services on it (role `shared`) |
 |---|---|---|
@@ -123,7 +123,7 @@ sequenceDiagram
 | Hop | Source seen | Admitted by |
 |---|---|---|
 | Client → entry point load balancer | client | listener, public |
-| Traefik → tenant service address | the entry point's address on the publication plane (output `svc_public_sources`) | the tenant load balancer's `allowed_cidrs` (`edge_sources`) |
+| Traefik → tenant service address | the entry point's address on the publication plane (output `publication_sources`) | the tenant load balancer's `allowed_cidrs` (`edge_sources`) |
 | Tenant load balancer → instances | amphora address, on the tenant network | security group of the instances; trusted as PROXY sender |
 
 On the Kubernetes tenant the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).

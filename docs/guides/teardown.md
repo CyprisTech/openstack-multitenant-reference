@@ -3,7 +3,7 @@
 Order matters: what depends on another stack goes first.
 
 1. **Kubernetes tenants**: set `bootstrap = true` and apply (the bootstrap instance is needed again), admit it on the API, then run `delete-cluster.sh` on it — see [its README](../../stacks/tenants/kubernetes/README.md#teardown).
-2. **Services that admit named consumers**: the intranet service (shared services project).
+2. **Services that admit named consumers**: the internal service (shared services project).
 3. **Tenants**: `tofu destroy` in each tenant stack.
 4. **Entry point**: `tofu destroy` in `stacks/shared/entry-point`.
 5. **Services the tenants push to**: the receiver (shared services project).

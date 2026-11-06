@@ -1,5 +1,5 @@
 variable "planes" {
-  description = "Planes the stack joins, keyed by name (svc_public, monitoring, intranet)."
+  description = "Planes the stack joins, keyed by name (publication, observability, internal)."
   type        = list(string)
 }
 

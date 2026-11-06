@@ -1,5 +1,5 @@
 # Tenant "isolated": a workload with no public exposure and no path to the other tenants
-# (ADR-0003, D3). Its network has a single router, to the monitoring plane: the workload pushes
+# (ADR-0003, D3). Its network has a single router, to the observability plane: the workload pushes
 # its metrics to the receiver through it (ADR-0007), and reaches nothing else.
 #
 # The workload is a stand-in with no package and no Internet access: it pushes one metric in
@@ -16,14 +16,14 @@ locals {
   boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
 }
 
-# How the stack joins the monitoring plane (ADR-0004). Its router is the default gateway:
+# How the stack joins the observability plane (ADR-0004). Its router is the default gateway:
 # the tenant has no other way out.
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes          = ["monitoring"]
+  planes          = ["observability"]
   attachment      = var.plane_attachment
-  default_gateway = "monitoring"
+  default_gateway = "observability"
 }
 
 module "admission" {
@@ -90,7 +90,7 @@ module "isolated" {
       (local.prefix) = {
         mtu     = var.network_mtu
         subnets = { main = { cidr = var.isolated_cidr, dns_nameservers = var.dns_nameservers } }
-        # The only router, to the monitoring plane, also the default gateway.
+        # The only router, to the observability plane, also the default gateway.
         routers = module.planes.routers
       }
     }, module.bastion.networks)

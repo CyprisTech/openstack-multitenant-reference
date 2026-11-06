@@ -24,7 +24,7 @@ variable "dns_nameservers" {
 }
 
 variable "plane_attachment" {
-  description = "The service's entry of the attachments output of stack shared/planes (role shared on intranet)."
+  description = "The service's entry of the attachments output of stack shared/planes (role shared on internal)."
   type = map(object({
     mode         = string
     nat          = bool
@@ -37,7 +37,7 @@ variable "plane_attachment" {
 }
 
 variable "cidr" {
-  description = "Range of the authority's network; on an interface plane, the attachment's cidr in shared/planes."
+  description = "Range of the authority's network; on a hub plane, the attachment's cidr in shared/planes."
   type        = string
   default     = "10.37.0.0/28"
 }

@@ -19,7 +19,7 @@ In `shared/planes`, add the tenant to `attachments` with its project ID, its ran
 ```hcl
 attachments = {
   # ...
-  shop = { project_id = "<project id>", cidr = "10.21.4.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  shop = { project_id = "<project id>", cidr = "10.21.4.0/24", planes = { publication = "tenant", observability = "tenant" } }
 }
 ```
 
@@ -35,7 +35,7 @@ Each tenant has its own working directory or state key. Set:
 | `site` | the same as the other stacks |
 | the tenant range (`web_cidr`, `isolated_cidr`, `cluster_cidr`) | step 2 |
 | `plane_attachment` | the tenant's entry of the `attachments` output of `shared/planes` (step 3) |
-| `edge_sources` (`vm`, `kubernetes`) | output `svc_public_sources` of the entry point |
+| `edge_sources` (`vm`, `kubernetes`) | output `publication_sources` of the entry point |
 | `monitoring.receiver` | the URL of your metrics receiver (output `receiver_url` of the test receiver) |
 
 No stack reads an object of another project: what the tenant needs from the shared services comes from their outputs.
@@ -51,7 +51,7 @@ Apply `shared/planes` again. It discovers the address Neutron gave the tenant's 
 ## 7. Publish and check
 
 1. If the tenant serves domains, [publish them](publish-a-domain.md): the entry point routes them to the tenant's `published_domains` output.
-2. If it provides an internal service, give the consumers' addresses to the service (for example `allowed_sources` from the Kubernetes tenant's `intranet_sources`).
+2. If it provides an internal service, give the consumers' addresses to the service (for example `allowed_sources` from the Kubernetes tenant's `internal_sources`).
 3. [Check the isolation](check-isolation.md): the new tenant must reach only what its type allows.
 
 ## Remove a tenant

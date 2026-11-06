@@ -12,16 +12,16 @@ locals {
   prefix   = "${var.site}-platform"
   network  = local.prefix
   subnet   = "${local.prefix}-main"
-  router   = local.admin_is_intranet ? "${local.prefix}-intranet" : "${local.prefix}-admin"
+  router   = local.admin_on_internal ? "${local.prefix}-internal" : "${local.prefix}-admin"
   instance = "${local.prefix}-bootstrap"
 
-  admin_is_intranet = var.admin_network == null
-  admin_network     = local.admin_is_intranet ? { network = module.planes.network_name.intranet } : { network = var.admin_network.network }
+  admin_on_internal = var.admin_network == null
+  admin_network     = local.admin_on_internal ? { network = module.planes.network_name.internal } : { network = var.admin_network.network }
 
   # The service address of the tenant (ADR-0006, D1): its ingress load balancer, at a floating
-  # IP of svc_public when the plane translates addresses, at a fixed address of the cluster
+  # IP of publication when the plane translates addresses, at a fixed address of the cluster
   # network otherwise.
-  ingress_internal = !module.planes.nat.svc_public
+  ingress_internal = !module.planes.nat.publication
   ingress_address  = local.ingress_internal ? cidrhost(var.cluster_cidr, var.service_addresses.ingress) : openstack_networking_floatingip_v2.ingress[0].address
 }
 
@@ -29,7 +29,7 @@ locals {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["svc_public", "monitoring", "intranet"]
+  planes     = ["publication", "observability", "internal"]
   attachment = var.plane_attachment
 }
 
@@ -42,13 +42,13 @@ module "admission" {
   }
 }
 
-# The intranet carries the administration role only when it is an operator plane: the API and
+# The internal services plane carries the administration role only when it is an operator plane: the API and
 # the bootstrap instance need floating IPs.
 resource "terraform_data" "checks" {
   lifecycle {
     precondition {
-      condition     = !local.admin_is_intranet || module.planes.nat.intranet
-      error_message = "The intranet plane gives no floating IPs (nat = false): set admin_network, an external network for the API and bootstrap floating IPs."
+      condition     = !local.admin_on_internal || module.planes.nat.internal
+      error_message = "The internal services plane gives no floating IPs (nat = false): set admin_network, an external network for the API and bootstrap floating IPs."
     }
   }
 }
@@ -60,7 +60,7 @@ resource "terraform_data" "checks" {
 resource "openstack_networking_floatingip_v2" "ingress" {
   count = local.ingress_internal ? 0 : 1
 
-  pool        = module.planes.network_name.svc_public
+  pool        = module.planes.network_name.publication
   description = "${local.prefix} ingress"
 }
 
@@ -72,7 +72,7 @@ module "platform" {
       networks = merge({
         egress = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
         }, module.planes.networks, {
-        for k in(local.admin_is_intranet ? [] : ["admin"]) : k => {
+        for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
           name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
         }
       })
@@ -85,7 +85,7 @@ module "platform" {
           main = {
             cidr            = var.cluster_cidr
             dns_nameservers = var.dns_nameservers
-            # The first addresses are kept for the ingress load balancer on an interface plane.
+            # The first addresses are kept for the ingress load balancer on a plane without NAT.
             allocation_pools = local.ingress_internal ? [{
               start = cidrhost(var.cluster_cidr, var.service_addresses.reserved_hosts)
               end   = cidrhost(var.cluster_cidr, -2)
@@ -99,7 +99,7 @@ module "platform" {
         routers = merge({
           egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
           }, module.planes.routers, {
-          for k in(local.admin_is_intranet ? [] : ["admin"]) : k => {
+          for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
             external_network = "admin", internal_subnet = "main",
             advertise_routes = [var.admin_network.cidr]
           }
@@ -134,7 +134,7 @@ module "platform" {
             network         = local.network
             subnet          = "main"
             security_groups = [local.instance]
-            floating_ip     = { pool = local.admin_is_intranet ? "intranet" : "admin" }
+            floating_ip     = { pool = local.admin_on_internal ? "internal" : "admin" }
           }
         }
       }

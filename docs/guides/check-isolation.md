@@ -12,7 +12,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 
 - The entry point and the `vm` and `isolated` tenants applied **with bastions**, the domains published.
 - The test receiver [`tests/fixtures/receiver`](../../tests/fixtures/receiver/README.md), given to the stacks as `monitoring.receiver`: the test reads it to check that every tenant pushed.
-- With a Kubernetes tenant: its kubeconfig, and the intranet service it consumes (or the test one, [`tests/fixtures/intranet-service`](../../tests/fixtures/intranet-service/README.md)).
+- With a Kubernetes tenant: its kubeconfig, and the internal service it consumes (or the test one, [`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)).
 - The same SSH user and key on the bastions, the instances and the receiver.
 
 ## Run

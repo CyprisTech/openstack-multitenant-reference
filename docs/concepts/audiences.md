@@ -32,7 +32,7 @@ One project per customer, many customers, many domains: the case of a host runni
 
 ### C. Operator of a private OpenStack cloud
 
-An IT department or a host running its own OpenStack, with administrator rights, providing common planes (Internet, intranet, monitoring) to its tenants.
+An IT department or a host running its own OpenStack, with administrator rights, providing common planes (publication, observability, internal services) to its tenants.
 
 | | |
 |---|---|

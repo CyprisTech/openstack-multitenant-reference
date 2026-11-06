@@ -19,7 +19,7 @@ locals {
   load_balancer = var.instance_count > 1
   public        = var.exposure == "public"
 
-  # Ranges of the entry point on svc_public, from its output svc_public_sources: only they may
+  # Ranges of the entry point on publication, from its output publication_sources: only they may
   # reach the service address.
   edge_sources = var.edge_sources
 
@@ -58,7 +58,7 @@ resource "terraform_data" "checks" {
   lifecycle {
     precondition {
       condition     = var.exposure != "entry-point" || length(var.edge_sources) > 0
-      error_message = "exposure = \"entry-point\" needs edge_sources: output svc_public_sources of stack shared/entry-point."
+      error_message = "exposure = \"entry-point\" needs edge_sources: output publication_sources of stack shared/entry-point."
     }
   }
 }
@@ -99,12 +99,12 @@ module "planes" {
 
   # The internal services plane when the attachment has it: the tenant consumes internal services,
   # such as the organisation's certificate authority.
-  planes     = concat(["svc_public", "monitoring"], contains(keys(var.plane_attachment), "intranet") ? ["intranet"] : [])
+  planes     = concat(["publication", "observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
   attachment = var.plane_attachment
   instances  = local.instances
   exposure = {
     # A single instance is the service address; behind a load balancer, instances have none.
-    primary = local.load_balancer || local.public ? null : "svc_public"
+    primary = local.load_balancer || local.public ? null : "publication"
   }
 }
 
@@ -181,7 +181,7 @@ module "web" {
         subnets = {
           main = { cidr = var.web_cidr, dns_nameservers = var.dns_nameservers }
         }
-        # Gateway mode: the published addresses are floating IPs of the router on svc_public.
+        # Gateway mode: the published addresses are floating IPs of the router on publication.
         # Interface mode: the instances' own addresses, reached through the routes.
         routers = merge({
           egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
@@ -203,9 +203,9 @@ module "web" {
     load_balancers = local.load_balancer ? {
       (local.prefix) = {
         vip = { network = local.prefix, subnet = "main" }
-        # The service address: on svc_public (a floating IP of the plane when it translates
+        # The service address: on publication (a floating IP of the plane when it translates
         # addresses, the VIP itself otherwise), or a public floating IP.
-        floating_ip = local.public ? { pool = "egress" } : (module.planes.nat.svc_public ? { pool = "svc_public" } : null)
+        floating_ip = local.public ? { pool = "egress" } : (module.planes.nat.publication ? { pool = "publication" } : null)
         listeners = {
           https = {
             protocol      = "TCP", port = 443
@@ -237,7 +237,7 @@ module "web" {
             subnet          = "main"
             security_groups = ["${local.prefix}-https"]
             # A single instance is the service address (ADR-0006, D1): a floating IP of
-            # svc_public when the plane translates addresses, a public one with exposure "public".
+            # publication when the plane translates addresses, a public one with exposure "public".
             floating_ip = !local.load_balancer && local.public ? { pool = "egress" } : module.planes.ports[name].floating_ip
           }
         }

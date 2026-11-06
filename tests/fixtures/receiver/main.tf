@@ -1,5 +1,5 @@
 # Test receiver: a small instance standing for the metrics receiver, a shared service of the
-# monitoring plane (ADR-0007). Prometheus with its remote-write and OTLP receivers: the tenants
+# observability plane (ADR-0007). Prometheus with its remote-write and OTLP receivers: the tenants
 # push to the receiver_url output; nothing connects into the tenants. It is administered through
 # a bastion, like the stacks, and gets packages and its image through egress_network.
 
@@ -10,9 +10,9 @@ locals {
   name = "${var.site}-receiver"
 
   # Who may push: on a plane with NAT, the tenants' routers, seen at their gateway address on
-  # the plane; on an interface plane, the ranges routed to the receiver.
-  push_sources = module.planes.nat.monitoring ? [module.planes.cidr.monitoring] : [
-    for r in var.plane_attachment.monitoring.routes : r.destination
+  # the plane; on a plane without NAT, the ranges routed to the receiver.
+  push_sources = module.planes.nat.observability ? [module.planes.cidr.observability] : [
+    for r in var.plane_attachment.observability.routes : r.destination
   ]
 
   config = yamlencode({
@@ -28,10 +28,10 @@ locals {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["monitoring"]
+  planes     = ["observability"]
   attachment = var.plane_attachment
   instances  = [local.name]
-  exposure   = { primary = "monitoring" }
+  exposure   = { primary = "observability" }
 }
 
 module "admission" {
@@ -96,7 +96,7 @@ module "receiver" {
     }, module.bastion.networks)
     security_groups = merge({
       (local.name) = {
-        description = "Test receiver: pushes from the monitoring plane, SSH from the bastion"
+        description = "Test receiver: pushes from the observability plane, SSH from the bastion"
         rules       = merge(module.admission.rules, module.bastion.ssh_rules)
       }
     }, module.bastion.security_groups)
@@ -108,7 +108,7 @@ module "receiver" {
         ports = {
           main = {
             network = local.name, subnet = "main", security_groups = [local.name]
-            # Its address on the monitoring plane: a floating IP of the plane when it translates
+            # Its address on the observability plane: a floating IP of the plane when it translates
             # addresses, its own address otherwise.
             floating_ip = module.planes.ports[local.name].floating_ip
           }
@@ -119,6 +119,6 @@ module "receiver" {
 }
 
 locals {
-  address = module.planes.nat.monitoring ? module.receiver.instances[local.name].ports["main"].floating_ip : module.receiver.instances[local.name].ports["main"].ip
+  address = module.planes.nat.observability ? module.receiver.instances[local.name].ports["main"].floating_ip : module.receiver.instances[local.name].ports["main"].ip
 }
 

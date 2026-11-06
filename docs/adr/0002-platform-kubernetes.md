@@ -10,7 +10,7 @@
 ADR-0001 (D4) chose Cluster API Provider OpenStack (CAPO) for Kubernetes and left the details open. The `platform` tenant must fit the rules of v0.1.0:
 
 - Terraform (the module) prepares the infrastructure of the project; another tool manages the cluster lifecycle.
-- Publishing on a plane is a floating IP of that plane (D2): backends on `svc_public`, metrics on `monitoring`.
+- Publishing on a plane is a floating IP of that plane (D2): backends on the publication plane, metrics on the observability plane.
 - Everything the architecture claims about isolation is proven by the reachability matrix (D6).
 - No admin role: the cluster runs with a credential scoped to its project.
 
@@ -22,8 +22,8 @@ The tests of v0.1.0 also showed two facts this design must respect: a tenant joi
 2. **Management cluster**: a separate, long-lived management cluster, or a self-managed workload cluster (`clusterctl move` after creation). A separate cluster is one more thing to run and back up; self-managed is the common pattern for a single cluster.
 3. **Pod network**: Cilium or Calico. Both are mature; Cilium brings eBPF datapath, network policies at layers 3 to 7 and flow visibility (Hubble).
 4. **Ingress**: Traefik with the Gateway API, Envoy Gateway, or ingress-nginx. ingress-nginx is retired; Traefik keeps one proxy technology across the architecture and supports PROXY protocol and the Gateway API.
-5. **Monitoring**: the collector federates an in-cluster Prometheus through a load balancer on the monitoring plane, or the cluster pushes with `remote_write`. Federation keeps the collector in control (pull, as for every other tenant) and needs one exposure point for the whole cluster; CAPO cannot give each node a floating IP of the monitoring plane.
-6. **Administration and intranet**: one network carrying both roles, or two networks. See D6.
+5. **Monitoring**: the collector federates an in-cluster Prometheus through a load balancer on the observability plane, or the cluster pushes with `remote_write`. Federation keeps the collector in control (pull, as for every other tenant) and needs one exposure point for the whole cluster; CAPO cannot give each node a floating IP of the observability plane.
+6. **Administration and internal services**: one network carrying both roles, or two networks. See D6.
 
 ## Decision
 
@@ -31,7 +31,7 @@ The tests of v0.1.0 also showed two facts this design must respect: a tenant joi
 
 | Layer | Tool | Creates |
 |---|---|---|
-| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, `svc_public`, `monitoring`, `intranet` and the administration network (when it is not the intranet) with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster), floating IPs of the ingress and of Prometheus, DNS record of Prometheus (D5) |
+| Infrastructure | Terraform (module), stack `30-tenants/platform` | cluster network (`network_mtu`), routers to the egress network, the publication, observability and internal services planes, and the administration network (when it is not the internal services plane) with DHCP routes, server groups, bootstrap instance (it is also the administration access point of the cluster), floating IPs of the ingress and of Prometheus, DNS record of Prometheus (D5) |
 | Node image | image-builder, OpenStack builder (Packer) | private image of the project, built in the project itself |
 | Cluster | Cluster API with CAPO, kubeadm | control plane and workers, API load balancer |
 | Cluster add-ons | Cluster API Add-on Provider Helm (CAAPH) | OpenStack cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus, metrics-server, kubelet-csr-approver |
@@ -72,30 +72,30 @@ Day-two operations (upgrades, scaling, machine replacement) run against the work
 
 | Purpose | How | Admitted sources |
 |---|---|---|
-| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets the **floating IP of `svc_public`** created by the stack. TCP listeners **without** PROXY on this load balancer: the entry point's PROXY v2 header passes through, so exactly one header reaches Traefik. `externalTrafficPolicy: Local` keeps the load balancer as the peer Traefik trusts; two Traefik replicas on two nodes | the entry point's addresses on `svc_public` only |
-| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets the **floating IP of `monitoring`** created by the stack, with an A record in the monitoring zone; the collector federates it. Without a collector, Prometheus stays inside the cluster: no load balancer, no floating IP | the collector's addresses only |
+| Applications | Traefik with the Gateway API, behind a `LoadBalancer` service: an Octavia load balancer whose VIP gets the **floating IP of the publication plane** created by the stack. TCP listeners **without** PROXY on this load balancer: the entry point's PROXY v2 header passes through, so exactly one header reaches Traefik. `externalTrafficPolicy: Local` keeps the load balancer as the peer Traefik trusts; two Traefik replicas on two nodes | the entry point's addresses on the publication plane only |
+| Metrics | Prometheus in the cluster, behind a `LoadBalancer` service whose VIP gets the **floating IP of the observability plane** created by the stack, with an A record in the monitoring zone; the collector federates it. Without a collector, Prometheus stays inside the cluster: no load balancer, no floating IP | the collector's addresses only |
 | Kubernetes API | the CAPO load balancer with a **floating IP of the administration network**. The admitted sources are a variable of the `Cluster`, since templates are immutable and the list changes | the administration sources; the bootstrap instance while it manages the cluster; the cluster's own addresses (added by CAPO) |
 
 **The floating IPs of the Services are created by Terraform, not by the cloud controller manager.** The Services request them (`loadBalancerIP`) and keep them when they are deleted (`keep-floatingip`). They are known before the cluster exists, so they are outputs of the stack like the addresses of the other tenants: the entry point routes the platform's domains to the ingress floating IP by SNI, from the `routes` output (ADR-0001, D9), and the monitoring record is written by the stack (ADR-0001, D2). Recreating a Service or the cluster changes neither. Rejected: letting the cloud controller manager allocate them, which leaves a hand-written route and a record that no stack owns.
 
-### D6 — Administration and intranet are two roles
+### D6 — Administration and internal services are two roles
 
 | Role | Carries | Who reaches it |
 |---|---|---|
 | Administration | SSH to bastions, Kubernetes API | operators only |
-| Intranet | internal services consumed by tenants (registry, database, directory) | the tenants that need them, such as `platform` |
+| Internal services | internal services consumed by tenants (registry, database, directory) | the tenants that need them, such as `platform` |
 
-A tenant joining the intranet gets addresses of its range through source NAT. If administration endpoints admitted the whole intranet range, any workload of that tenant could reach the bastions and APIs of every tenant.
+A tenant joining the internal services plane gets addresses of its range through source NAT. If administration endpoints admitted the whole range of that plane, any workload of that tenant could reach the bastions and APIs of every tenant.
 
-- **Recommended:** two networks, administration and intranet.
+- **Recommended:** two networks, administration and internal services.
 - **Accepted with one network:** the administration endpoints (bastion SSH, Kubernetes API) admit **specific operator addresses**, never the range of the network.
-- The stacks already take the two roles as separate inputs (`bastion.external_network` for the VM stacks, `admin_network` for the platform, and the `intranet` plane), so moving from one network to two is a change of configuration.
+- The stacks already take the two roles as separate inputs (`bastion.external_network` for the VM stacks, `admin_network` for the platform, and the `internal` plane), so moving from one network to two is a change of configuration.
 
 The reference test cloud has one network for both roles; the tests use restricted administration sources and prove the separation in the matrix.
 
-### D7 — The intranet flow
+### D7 — The internal services flow
 
-`platform` consumes an internal service on the intranet. For the tests, a demonstration service is published on the intranet; the matrix checks that `platform` reaches it and that `web` and `isolated` do not.
+`platform` consumes an internal service on the internal services plane. For the tests, a demonstration service is published on that plane; the matrix checks that `platform` reaches it and that `web` and `isolated` do not.
 
 ### D8 — Reachability matrix, new rows
 
@@ -107,8 +107,8 @@ The reference test cloud has one network for both roles; the tests use restricte
 | `web`, `isolated`, entry point | platform Prometheus | denied |
 | operators | Kubernetes API, 6443 | allowed |
 | `platform` | bastions (SSH), Kubernetes API of any tenant | denied |
-| `platform` | intranet demonstration service | allowed |
-| `web`, `isolated` | intranet demonstration service | denied |
+| `platform` | internal demonstration service | allowed |
+| `web`, `isolated` | internal demonstration service | denied |
 
 ## Consequences
 

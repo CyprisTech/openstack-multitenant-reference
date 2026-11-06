@@ -11,13 +11,13 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
-        [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service] \
+        [--platform-kubeconfig platform.kubeconfig --internal-service tests/fixtures/internal-service] \
         [--acme tests/fixtures/acme]
 
 Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions and pushing to the test receiver, and the receiver applied. With
 --platform-kubeconfig, the rows of the Kubernetes tenant are added: probes from the cluster run
-in a short-lived pod, and the intranet demonstration service must be applied. Probes only open
+in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
 use.
 
@@ -93,7 +93,7 @@ def main():
     ap.add_argument("--user", default="ops")
     ap.add_argument("--platform-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
-    ap.add_argument("--intranet-service", default="tests/fixtures/intranet-service")
+    ap.add_argument("--internal-service", default="tests/fixtures/internal-service")
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
@@ -177,7 +177,7 @@ def main():
         svc_ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
         api = kget("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
-        intranet = outputs(args.tool, args.intranet_service)["address"]
+        internal = outputs(args.tool, args.internal_service)["address"]
         # A probe pod left by an interrupted run would block the new one.
         kget("-n", "default", "delete", "pod", "isolation-probe", "--ignore-not-found", "--wait=true")
         kget("run", "isolation-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
@@ -197,11 +197,11 @@ def main():
         for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
             rows.append(("platform pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(probe_pod, b, 22)))
-        rows.append(("platform pod", f"intranet service {intranet}", 8080, "open", lambda: p.pod(probe_pod, intranet, 8080)))
-        rows.append((f"web {web_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_web(intranet, 8080)))
-        rows.append((f"isolated {iso_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_iso(intranet, 8080)))
-        rows.append((f"edge {edge_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_edge(intranet, 8080)))
-        rows.append(("receiver", f"intranet service {intranet}", 8080, "closed", from_receiver(intranet, 8080)))
+        rows.append(("platform pod", f"internal service {internal}", 8080, "open", lambda: p.pod(probe_pod, internal, 8080)))
+        rows.append((f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", from_web(internal, 8080)))
+        rows.append((f"isolated {iso_vm[0]}", f"internal service {internal}", 8080, "closed", from_iso(internal, 8080)))
+        rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
+        rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
         rows.append(("receiver", f"platform ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
 
     if args.acme:

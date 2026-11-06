@@ -24,7 +24,7 @@ output "networks" {
 }
 
 output "routers" {
-  description = "One router per plane, keyed by the plane name with dashes (svc-public, monitoring), for tenant.networks.<network>.routers."
+  description = "One router per plane, keyed by the plane name (publication, observability), for tenant.networks.<network>.routers."
   value = {
     for k, p in local.plane : replace(k, "_", "-") => {
       internal_subnet  = var.internal_subnet

@@ -35,7 +35,7 @@ variable "boot_volume_size" {
 }
 
 variable "web_cidr" {
-  description = "Range of the tenant network. On planes with NAT tenants may reuse the same range; on interface planes it must be unique (stack shared/planes checks it)."
+  description = "Range of the tenant network. On planes with NAT tenants may reuse the same range; on planes without NAT it must be unique (stack shared/planes checks it)."
   type        = string
   default     = "10.21.0.0/24"
 }
@@ -101,8 +101,8 @@ variable "exposure" {
 
 variable "edge_sources" {
   description = <<-EOT
-    Ranges the entry point connects from on svc_public, in CIDR notation: output
-    svc_public_sources of stack shared/entry-point. Only they may reach the service address.
+    Ranges the entry point connects from on publication, in CIDR notation: output
+    publication_sources of stack shared/entry-point. Only they may reach the service address.
     Required with exposure = "entry-point".
   EOT
   type        = list(string)
@@ -167,7 +167,7 @@ variable "network_mtu" {
 variable "monitoring" {
   description = <<-EOT
     Monitoring as a push integration point (ADR-0007): each instance runs its exporters and a
-    Prometheus agent that pushes to the receiver through the monitoring plane. Nothing connects
+    Prometheus agent that pushes to the receiver through the observability plane. Nothing connects
     into the instances for their metrics.
     - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
       receiver_url of the receiver); null runs no agent.

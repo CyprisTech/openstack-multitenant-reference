@@ -15,7 +15,7 @@ output "attachments" {
     The plane_attachment input of each attached stack, keyed like the input: for every plane it
     joins, how its router joins it (mode: gateway or interface), whether its addresses are
     translated there (nat: floating IPs) or seen as they are, the plane's network and subnet,
-    and the router routes (through the transit router, interface planes only). The same shape
+    and the router routes (through the transit router, hub planes only). The same shape
     for operator planes and for planes built here: the stacks do not depend on where the planes
     come from.
   EOT
@@ -36,7 +36,7 @@ output "attachments" {
 }
 
 output "transit" {
-  description = "Transit router of each interface plane: its address, and the attachments it routes to (address Neutron gave their router on the plane)."
+  description = "Transit router of each hub plane: its address, and the attachments it routes to (address Neutron gave their router on the plane)."
   value = {
     for pk, ip in local.transit_ip : pk => {
       address = ip

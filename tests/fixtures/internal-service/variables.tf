@@ -19,7 +19,7 @@ variable "network_mtu" {
 }
 
 variable "plane_attachment" {
-  description = "The service's entry of the attachments output of stack shared/planes (role shared on intranet)."
+  description = "The service's entry of the attachments output of stack shared/planes (role shared on internal)."
   type = map(object({
     mode         = string
     nat          = bool
@@ -32,13 +32,13 @@ variable "plane_attachment" {
 }
 
 variable "cidr" {
-  description = "Range of the service's network; on an interface plane, the attachment's cidr in shared/planes."
+  description = "Range of the service's network; on a hub plane, the attachment's cidr in shared/planes."
   type        = string
   default     = "10.35.0.0/28"
 }
 
 variable "allowed_sources" {
-  description = "Sources admitted on port 8080: output intranet_sources of the Kubernetes tenant."
+  description = "Sources admitted on port 8080: output internal_sources of the Kubernetes tenant."
   type        = list(string)
 }
 

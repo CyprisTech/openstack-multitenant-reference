@@ -10,7 +10,7 @@ This is the hub-and-spoke model, which public clouds also recommend over many po
 
 ## When a direct connection is needed: a transit network
 
-When the two tenants really need each other (two applications of one team, a migration between projects), connect them through a **transit network**, the same mechanism as an interface plane ([How a tenant joins a plane](plane-attachment.md), mode 2), with two tenants only.
+When the two tenants really need each other (two applications of one team, a migration between projects), connect them through a **transit network**, the same mechanism as a hub plane ([How a tenant joins a plane](plane-attachment.md), mode 2), with two tenants only.
 
 ```mermaid
 flowchart LR

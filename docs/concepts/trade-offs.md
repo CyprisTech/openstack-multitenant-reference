@@ -14,7 +14,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
 | 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router, or routed operator planes |
-| 11 | [Administration and intranet](#11-one-network-for-administration-and-intranet) | Two roles; one network accepted with specific sources |
+| 11 | [Administration and internal services](#11-one-network-for-administration-and-internal-services) | Two roles; one network accepted with specific sources |
 | 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready |
 | 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
 | 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
@@ -100,11 +100,11 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 7. Isolation on the publication plane
 
-**Choice.** The tenants' service addresses are on the shared publication plane (`svc_public` in the scenario); each admits the entry point only (load balancer sources, `edge_sources`). Instances are not on the plane.
+**Choice.** The tenants' service addresses are on the shared publication plane; each admits the entry point only (load balancer sources, `edge_sources`). Instances are not on the plane.
 
 **Why.** One plane serves every tenant: no per-tenant network between the entry point and each tenant.
 
-**Cost.** At the network level, every project attached to `svc_public` can reach every service address on it: isolation rests on the load balancers' sources and the security groups, without a firewall in between. The sources must match the address the service actually sees: the entry point's router address on a plane with address translation, its own addresses on a routed plane (output `svc_public_sources`).
+**Cost.** At the network level, every project attached to the publication plane can reach every service address on it: isolation rests on the load balancers' sources and the security groups, without a firewall in between. The sources must match the address the service actually sees: the entry point's router address on a plane with address translation, its own addresses on a routed plane (output `publication_sources`).
 
 **Alternative.** A firewall at the hub, between the plane and the tenants (OVHcloud's landing zone does so), or a dedicated transit network per tenant.
 
@@ -154,11 +154,11 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Choose routed operator planes when** you run the cloud, coordinate the addressing and advertise the tenant ranges: no translation, no static routes.
 
-## 11. One network for administration and intranet
+## 11. One network for administration and internal services
 
-**Choice.** Administration (bastions, Kubernetes API) and intranet (internal services) are two roles. One network may carry both, provided the administration endpoints admit **specific administrator addresses**, never the network range.
+**Choice.** Administration (bastions, Kubernetes API) and internal services are two roles. One network may carry both, provided the administration endpoints admit **specific administrator addresses**, never the network range.
 
-**Why.** Many clouds have a single internal network. A tenant joining the intranet appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
+**Why.** Many clouds have a single internal network. A tenant joining the internal services plane appears there with an address of its range (source NAT): admitting the range would let any workload of that tenant reach every bastion and API.
 
 **Cost.** Administrator addresses must be known and kept current, and they are often router addresses, easy to guess wrong (see the [test results](test-results.md)).
 
@@ -192,7 +192,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 15. Monitoring by push
 
-**Choice.** Each tenant pushes its metrics to a receiver of the shared services (Prometheus remote write; OTLP for workloads that use it); nothing on the monitoring plane connects into a tenant ([ADR-0007](../adr/0007-monitoring.md)).
+**Choice.** Each tenant pushes its metrics to a receiver of the shared services (Prometheus remote write; OTLP for workloads that use it); nothing on the observability plane connects into a tenant ([ADR-0007](../adr/0007-monitoring.md)).
 
 **Why.** Pulling is how Prometheus works and stays the practice inside one network or cluster; across tenant boundaries, pushing is the common practice: the only flow is outbound from the tenant, no metrics port is open to a central server, and no instance needs an address on the observability plane.
 

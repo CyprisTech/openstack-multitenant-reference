@@ -1,22 +1,22 @@
-# Intranet demonstration service for the isolation test (ADR-0002, D7): a small instance, a
-# shared service of the intranet plane, answering on port 8080. Only the sources given in
-# allowed_sources are admitted: the Kubernetes tenant's intranet address (its router's
-# gateway address on an operator plane, its range on an interface plane). On an operator
+# Internal demonstration service for the isolation test (ADR-0002, D7): a small instance, a
+# shared service of the internal services plane, answering on port 8080. Only the sources given in
+# allowed_sources are admitted: the Kubernetes tenant's address on that plane (its router's
+# gateway address on a plane with NAT, its range on a plane without NAT). On an operator
 # plane the service has a floating IP of the plane, which also carries SSH for the
-# administration sources (the test cloud uses the intranet as administration network).
+# administration sources (the test cloud uses that plane as administration network).
 
 locals {
-  name = "${var.site}-intranet-service"
+  name = "${var.site}-internal-service"
 }
 
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes          = ["intranet"]
+  planes          = ["internal"]
   attachment      = var.plane_attachment
-  default_gateway = "intranet"
+  default_gateway = "internal"
   instances       = [local.name]
-  exposure        = { primary = "intranet" }
+  exposure        = { primary = "internal" }
 }
 
 module "admission" {
@@ -35,12 +35,12 @@ module "cloudinit" {
   package_update = false
   users          = { debug = { ssh_authorized_keys = var.ssh_keys, sudo = true } }
   write_files = {
-    "/srv/www/index.html" = { content = "intranet-service\n" }
-    "/etc/systemd/system/intranet-service.service" = {
-      content = file("${path.module}/files/intranet-service.service")
+    "/srv/www/index.html" = { content = "internal-service\n" }
+    "/etc/systemd/system/internal-service.service" = {
+      content = file("${path.module}/files/internal-service.service")
     }
   }
-  runcmd = ["systemctl daemon-reload", "systemctl enable --now intranet-service.service"]
+  runcmd = ["systemctl daemon-reload", "systemctl enable --now internal-service.service"]
 }
 
 module "service" {

@@ -35,7 +35,7 @@ The plane is read by its subnet's range — unique in the hub project, and never
 | ---- | ----------- | ---- | ------- | :------: |
 | attachments | One entry per attachment and plane, keyed as you like: the plane and the attached project. | `map(object({ plane = string, project_id = string }))` | n/a | yes |
 | hub\_project\_id | Project owning the planes; its credentials see every port on them. | `string` | n/a | yes |
-| planes | Interface planes, keyed by plane: the range of their subnet in the hub project (unique there). | `map(string)` | n/a | yes |
+| planes | Hub planes, keyed by plane: the range of their subnet in the hub project (unique there). | `map(string)` | n/a | yes |
 
 ### Outputs
 

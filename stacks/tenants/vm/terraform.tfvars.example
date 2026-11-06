@@ -26,7 +26,7 @@ domains = ["site-a.example.org", "site-b.example.org"]
 instance_count = 2
 exposure       = "entry-point"
 
-# Ranges the entry point connects from: output svc_public_sources of stack shared/entry-point.
+# Ranges the entry point connects from: output publication_sources of stack shared/entry-point.
 edge_sources = ["198.51.100.5/32"]
 
 # SSH users, created on the bastion and on the web instances. No direct SSH source:

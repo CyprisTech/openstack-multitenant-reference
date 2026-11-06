@@ -3,17 +3,17 @@
 - **Status:** Accepted (implemented in v0.3.0); supersedes [ADR-0001](0001-reference-architecture.md) D2 and [ADR-0002](0002-platform-kubernetes.md) D5 for monitoring
 - **Date:** 2026-11-02
 - **Deciders:** maintainers
-- **Supersedes, once accepted:** [ADR-0001](0001-reference-architecture.md) D2 for monitoring (a floating IP of `monitoring` per instance, targets discovered by DNS); [ADR-0002](0002-platform-kubernetes.md) D5 for monitoring (federation of the cluster's Prometheus through a load balancer)
+- **Supersedes, once accepted:** [ADR-0001](0001-reference-architecture.md) D2 for monitoring (a floating IP of the observability plane per instance, targets discovered by DNS); [ADR-0002](0002-platform-kubernetes.md) D5 for monitoring (federation of the cluster's Prometheus through a load balancer)
 
 ## Context
 
 Monitoring is the first platform service to fit the boundary of [ADR-0003](0003-scope-and-boundary.md) (D4): the reference states the contract, the tools are the deployer's.
 
-In `v0.2.x` the contract is pull: a central collector connects to every tenant, its addresses are admitted on every metrics port, each instance carries a floating IP and a DNS record on the `monitoring` plane, and the Kubernetes tenant's Prometheus is federated through a load balancer. Pull is how Prometheus works and stays the common practice inside one network or cluster. Across tenant boundaries, the common practice is the reverse: an agent next to the targets reads them locally and pushes to a central store (Prometheus remote write), which also removes every inbound monitoring flow into the tenants.
+In `v0.2.x` the contract is pull: a central collector connects to every tenant, its addresses are admitted on every metrics port, each instance carries a floating IP and a DNS record on the observability plane, and the Kubernetes tenant's Prometheus is federated through a load balancer. Pull is how Prometheus works and stays the common practice inside one network or cluster. Across tenant boundaries, the common practice is the reverse: an agent next to the targets reads them locally and pushes to a central store (Prometheus remote write), which also removes every inbound monitoring flow into the tenants.
 
 ## Options considered
 
-1. **Keep the pull contract.** Needs a path from the collector into every tenant, hence a floating IP of `monitoring` on every instance with operator planes.
+1. **Keep the pull contract.** Needs a path from the collector into every tenant, hence a floating IP of the observability plane on every instance with operator planes.
 2. **Federation of per-tenant Prometheus servers.** Pull again, across the boundary; advised for small volumes only.
 3. **Push: an agent in each tenant writes to a receiver of the shared services** (chosen).
 
@@ -23,8 +23,8 @@ In `v0.2.x` the contract is pull: a central collector connects to every tenant, 
 
 ### D1 — Contract
 
-- The deployer runs a **receiver of the Prometheus remote-write protocol** (Prometheus, Mimir, Thanos, VictoriaMetrics and others accept it) in a project of shared services, joined to `monitoring` with the role `shared`.
-- The `monitoring` plane carries **one flow: from the tenants to the receiver's address and port**. Nothing on the plane connects into a tenant.
+- The deployer runs a **receiver of the Prometheus remote-write protocol** (Prometheus, Mimir, Thanos, VictoriaMetrics and others accept it) in a project of shared services, joined to the observability plane with the role `shared`.
+- The observability plane carries **one flow: from the tenants to the receiver's address and port**. Nothing on the plane connects into a tenant.
 - The receiver's address and port are an input of every tenant stack.
 
 ### D2 — In the tenants: Prometheus in agent mode
@@ -41,7 +41,7 @@ A target that stops pushing is detected by the receiver (alert on missing series
 ### D4 — Removed
 
 - The collector's addresses admitted on the metrics ports (`collector_cidrs`).
-- The floating IPs and DNS records of the `monitoring` plane on the instances.
+- The floating IPs and DNS records of the observability plane on the instances.
 - The federation load balancer of the Kubernetes tenant.
 
 ## Consequences

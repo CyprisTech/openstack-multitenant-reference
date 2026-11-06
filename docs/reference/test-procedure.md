@@ -13,7 +13,7 @@ flowchart LR
     C --> E["3. Entry point"]
     E --> T["4. vm · isolated<br/>kubernetes"]
     T --> K["5. Cluster"]
-    K --> I["6. Intranet service"]
+    K --> I["6. Internal service"]
     I --> R["7. Planes again<br/>(transit routes)"]
     R --> PB["8. Publish"]
     PB --> A["9. Acceptance"]
@@ -23,8 +23,8 @@ flowchart LR
 | Project | Stacks | Role on the planes |
 |---|---|---|
 | hub (interface mode) | `shared/planes` | owns the planes and their transit routers; no instance. With operator planes, `shared/planes` runs with the shared services' credentials and only adopts them |
-| shared services | `tests/fixtures/receiver`, `tests/fixtures/intranet-service` | `shared` on `monitoring`, `shared` on `intranet` |
-| entry point | `shared/entry-point` | `shared` on `svc_public`, `tenant` on `monitoring` |
+| shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service` | `shared` on `observability`, `shared` on `internal` |
+| entry point | `shared/entry-point` | `shared` on `publication`, `tenant` on `observability` |
 | one per tenant | `tenants/vm`, `tenants/isolated`, `tenants/kubernetes` | `tenant` |
 
 | Step | Measured (2026-11-02, interface mode) |
@@ -34,7 +34,7 @@ flowchart LR
 | 3. Entry point | 3 to 10 min (Octavia) |
 | 4. `vm` (with its load balancer), `isolated`, `kubernetes` | 1 to 4 min each |
 | 5. Cluster (`create-cluster.sh`, add-ons included) | 18 min |
-| 6. Intranet service | 1 min |
+| 6. Internal service | 1 min |
 | 7. Planes again | 7 s |
 | 8. Domain publication | 19 s, the routes answering 13 s later |
 | 9. Acceptance | 3 min |
@@ -52,8 +52,8 @@ No stack reads an object of another project: each passes what the next ones need
 | `cloud` | every stack | the project's `clouds.yaml` entry |
 | `plane_attachment` | every attached stack | `tofu -chdir=stacks/shared/planes output -json attachments \| jq .<name>.planes` |
 | `monitoring.receiver` | entry point, `vm`, `isolated`, `kubernetes` | output `receiver_url` of the receiver |
-| `edge_sources` | `vm`, `kubernetes` | output `svc_public_sources` of the entry point |
-| `allowed_sources` | intranet service | output `intranet_sources` of `kubernetes` |
+| `edge_sources` | `vm`, `kubernetes` | output `publication_sources` of the entry point |
+| `allowed_sources` | internal service | output `internal_sources` of `kubernetes` |
 | `certificates` | `vm`, `kubernetes` | output `certificates` of the ACME authority, keyed by tenant (`jq .web`, `jq .platform`) |
 
 ## 0. Projects and prerequisites
@@ -62,7 +62,7 @@ No stack reads an object of another project: each passes what the next ones need
 |---|---|---|
 | Projects and credentials | one project per row of the table above; an application credential `member` + `load-balancer_member` each, plus one for the cluster in the Kubernetes project | `openstack token issue` works for every `clouds.yaml` entry |
 | DNS zones (optional) | the public zone with the entry point's project | `openstack zone list` from that project shows it |
-| Quotas | `openstack quota show` per project | Kubernetes project: 25 security groups, 200 rules (the cloud controller manager creates its own); hub: one RBAC policy per attachment and interface plane |
+| Quotas | `openstack quota show` per project | Kubernetes project: 25 security groups, 200 rules (the cloud controller manager creates its own); hub: one RBAC policy per attachment and hub plane |
 | Node image | [images/kubernetes-node](../../images/kubernetes-node/README.md), shared with the Kubernetes project and accepted there | private image `ubuntu-2404-kube-<version>` visible from the Kubernetes project |
 | Your address | the address the cloud sees for you | in `admin.sources` and `bastion.ssh_cidrs` of every stack |
 | Capacity per host | ask the operator | the two entry point instances are in hard anti-affinity: replacing one needs room on another host than the other's |
@@ -73,18 +73,18 @@ No stack reads an object of another project: each passes what the next ones need
 cd stacks/shared/planes && tofu init && tofu apply && tofu plan -detailed-exitcode
 ```
 
-`terraform.tfvars` declares the planes — adopted (`mode = "gateway"`) or built (`mode = "interface"`) — every attachment with its project, range and role per plane, and `tenant_ranges` per interface plane ([examples](../../examples/planes/README.md)).
+`terraform.tfvars` declares the planes — adopted (`mode = "gateway"`) or built (`mode = "interface"`) — every attachment with its project, range and role per plane, and `tenant_ranges` per hub plane ([examples](../../examples/planes/README.md)).
 
 | Checkpoint | If it fails |
 |---|---|
 | plan after apply empty | `DuplicateRbacPolicy`: an attachment was renamed on the same project; apply again |
-| the planes are visible from every attached project (`openstack network show <site>-svc-public`) and from no other | check the project IDs of the attachments |
+| the planes are visible from every attached project (`openstack network show <site>-publication`) and from no other | check the project IDs of the attachments |
 
 ```console
-$ openstack network show t1-svc-public -f value -c mtu -c shared     # from an attached project
+$ openstack network show t1-publication -f value -c mtu -c shared     # from an attached project
 1362 True
-$ openstack network show t1-svc-public                               # from a project not attached
-No Network found for t1-svc-public
+$ openstack network show t1-publication                               # from a project not attached
+No Network found for t1-publication
 ```
 
 ## 2. Receiver
@@ -93,7 +93,7 @@ Create it before the stacks that push to it: they need its `receiver_url`.
 
 ```bash
 cd tests/fixtures/receiver && tofu init && tofu apply && tofu plan -detailed-exitcode
-tofu output -raw receiver_url   # with NAT: a floating IP of monitoring; interface: its own address
+tofu output -raw receiver_url   # with NAT: a floating IP of the observability plane; interface: its own address
 ```
 
 ```console
@@ -101,7 +101,7 @@ $ tofu output -raw receiver_url
 http://10.34.0.12:9090
 ```
 
-The **ACME authority** (Knot and step-ca, [`tests/fixtures/acme`](../../tests/fixtures/acme/README.md)) is created at the same step, a shared service of the intranet plane: the tenant stacks need its `certificates` output.
+The **ACME authority** (Knot and step-ca, [`tests/fixtures/acme`](../../tests/fixtures/acme/README.md)) is created at the same step, a shared service of the internal services plane: the tenant stacks need its `certificates` output.
 
 ```bash
 cd tests/fixtures/acme && tofu init && tofu apply && tofu plan -detailed-exitcode
@@ -118,11 +118,11 @@ tofu output -raw root_certificate > root.pem      # for the clients of the accep
 
 ```bash
 cd stacks/shared/entry-point && tofu init && tofu apply && tofu plan -detailed-exitcode
-tofu output -json svc_public_sources   # gateway: its router's address; interface: the edge range
+tofu output -json publication_sources   # gateway: its router's address; interface: the edge range
 ```
 
 ```console
-$ tofu output -json svc_public_sources
+$ tofu output -json publication_sources
 ["10.20.0.0/24"]
 ```
 
@@ -147,7 +147,7 @@ done; wait
 |---|---|
 | three empty plans | report |
 | cloud-init `done` on the instances (through their bastions) and on the Kubernetes bootstrap instance | as in step 3 |
-| `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the intranet plane |
+| `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the internal services plane |
 
 ## 5. Cluster
 
@@ -166,7 +166,7 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
 | 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicated release proxies after the move happen intermittently; see [test results](../concepts/test-results.md#history) (One-shot rebuild, 2026-10-29) before deleting any (deleting one uninstalls the release) |
-| ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of `svc_public`; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
+| ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of the publication plane; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
 
 ```console
 $ kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[-1].type,VERSION:.status.nodeInfo.kubeletVersion
@@ -192,13 +192,13 @@ traefik     traefik   LoadBalancer   10.24.0.10    80:32745/TCP,443:31426/TCP
 
 Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` removes the bootstrap instance; set it back to `true` before teardown.
 
-## 6. Intranet service
+## 6. Internal service
 
 ```bash
-cd tests/fixtures/intranet-service && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -detailed-exitcode
 ```
 
-Its `allowed_sources` is the `intranet_sources` output of the Kubernetes tenant, so it comes after step 4.
+Its `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, so it comes after step 4.
 
 ## 7. Planes again
 
@@ -211,7 +211,7 @@ On hub planes, `shared/planes` discovers the address Neutron gave each attached 
 ```console
 $ tofu output -json transit
 {
-  "monitoring": {
+  "observability": {
     "address": "172.31.1.1",
     "routes": {
       "edge": "10.20.0.0/24 via 172.31.1.254",
@@ -221,7 +221,7 @@ $ tofu output -json transit
       "web": "10.21.0.0/24 via 172.31.1.52"
     }
   },
-  "svc_public": {
+  "publication": {
     "address": "172.31.0.1",
     "routes": {
       "edge": "10.20.0.0/24 via 172.31.0.9",
@@ -295,8 +295,8 @@ receiver               series pushed by web                                     
 The automatic test only opens connections. This step changes a tenant's router, so it is manual: a tenant adds a route to another tenant through the transit router, and must still reach nothing.
 
 ```bash
-# isolated routes the web range through the monitoring transit router (172.31.1.1 here)
-jq '.plane_attachment.monitoring.routes += [{destination: "10.21.0.0/24", next_hop: "172.31.1.1"}]' \
+# isolated routes the web range through the observability transit router (172.31.1.1 here)
+jq '.plane_attachment.observability.routes += [{destination: "10.21.0.0/24", next_hop: "172.31.1.1"}]' \
   stacks/tenants/isolated/mode.auto.tfvars.json > /tmp/hostile.json
 tofu -chdir=stacks/tenants/isolated apply -var-file=/tmp/hostile.json
 # on the isolated instance (through its bastion): renew DHCP, then probe a web instance
@@ -350,7 +350,7 @@ tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.
   | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig platform.kubeconfig apply -f -
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
-for s in tests/fixtures/intranet-service stacks/tenants/kubernetes stacks/tenants/isolated \
+for s in tests/fixtures/internal-service stacks/tenants/kubernetes stacks/tenants/isolated \
          stacks/tenants/vm stacks/shared/entry-point tests/fixtures/receiver tests/fixtures/acme stacks/shared/planes; do
   tofu -chdir=$s destroy -auto-approve
 done

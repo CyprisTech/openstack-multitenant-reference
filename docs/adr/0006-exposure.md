@@ -7,7 +7,7 @@
 
 ## Context
 
-The Kubernetes tenant has always been exposed through one address: its ingress controller, behind a load balancer. **The exposure of a tenant of virtual machines was never designed as such.** The example tenant `web`, written without a load balancer, made an implicit choice: the entry point routes to each of its instances, and each instance carries a floating IP of `svc_public` in addition to its floating IP of `monitoring` (ADR-0001, D2). As a result, the entry point depends on the inside of the tenant (adding an instance changes the entry point), and an instance answers on two planes with one routing table: a floating IP only serves the sources routed back through its plane's router, and the setup was verified on OVN only.
+The Kubernetes tenant has always been exposed through one address: its ingress controller, behind a load balancer. **The exposure of a tenant of virtual machines was never designed as such.** The example tenant `web`, written without a load balancer, made an implicit choice: the entry point routes to each of its instances, and each instance carries a floating IP of the publication plane in addition to its floating IP of the observability plane (ADR-0001, D2). As a result, the entry point depends on the inside of the tenant (adding an instance changes the entry point), and an instance answers on two planes with one routing table: a floating IP only serves the sources routed back through its plane's router, and the setup was verified on OVN only.
 
 **Publishing a domain replaces the entry point instances** (ADR-0001, D8): routes are written by cloud-init, which runs once. Measured in the tests: 5 to 8 minutes per change, requests lost during each replacement (8 of 179), and no host left on small clouds with strict anti-affinity (`No valid host was found`, 2026-10-29).
 
@@ -41,7 +41,7 @@ The Kubernetes tenant has always been exposed through one address: its ingress c
 
 - For each domain it serves, a tenant exposes **one service address**: its Octavia load balancer when it runs several instances, or its instance when it has only one. The tenant stack outputs `domain → address:port` (`published_domains`).
 - The entry point and every shared service know these addresses only: a tenant adds, removes or replaces instances without any change outside its project.
-- On a plane with NAT, the service address is a floating IP of the publication plane (`svc_public` in the scenario) on the load balancer or the single instance; on a routed plane, its own address.
+- On a plane with NAT, the service address is a floating IP of the publication plane on the load balancer or the single instance; on a routed plane, its own address.
 - The pattern inside a tenant of virtual machines mirrors the Kubernetes tenant: a TCP load balancer, then a reverse proxy or the application terminating TLS.
 
 ### D2 — Exposure chosen per tenant
@@ -59,7 +59,7 @@ The Kubernetes tenant has always been exposed through one address: its ingress c
 
 ### D4 — At most one floating IP per address
 
-No instance or load balancer carries floating IPs of several networks. Each plane is joined through its own router, and every flow on a plane is initiated from the side that holds the route back: the entry point to the service addresses on `svc_public`, the tenants to the metrics receiver on `monitoring` ([ADR-0007](0007-monitoring.md)), the tenants to the internal services on `intranet`.
+No instance or load balancer carries floating IPs of several networks. Each plane is joined through its own router, and every flow on a plane is initiated from the side that holds the route back: the entry point to the service addresses on the publication plane, the tenants to the metrics receiver on the observability plane ([ADR-0007](0007-monitoring.md)), the tenants to the internal services on the internal services plane.
 
 ### D5 — Certificates: ACME with DNS-01, in the tenant
 
@@ -69,7 +69,7 @@ No instance or load balancer carries floating IPs of several networks. Each plan
 
 ## Consequences
 
-- **Breaking for `v0.2.x` users**, released with a migration note: `published_domains` carries service addresses instead of backend lists; the floating IPs of `svc_public` on the instances go away. ADR-0001 gets the status *superseded in part by ADR-0006* when this ADR is accepted; its text is not edited.
+- **Breaking for `v0.2.x` users**, released with a migration note: `published_domains` carries service addresses instead of backend lists; the floating IPs of the publication plane on the instances go away. ADR-0001 gets the status *superseded in part by ADR-0006* when this ADR is accepted; its text is not edited.
 - A tenant of several instances needs a load balancer, which the cloud bills; a single-instance tenant does not.
 - The isolation test checks "entry point to service address" instead of "entry point to instance", and a new check publishes a domain while requests run and expects none lost.
 - The module keeps `extra_floating_ips` (several floating IPs on one port is a Neutron capability); its documentation states the routing condition it relies on.

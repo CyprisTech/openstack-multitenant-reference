@@ -29,26 +29,26 @@ locals {
   ])), 0, 8)
 
   manifest_vars = {
-    revision         = local.revision
-    cluster          = var.cluster
-    prefix           = local.prefix
-    az               = var.az
-    network          = local.network
-    subnet           = local.subnet
-    router           = local.router
-    admin_network    = local.admin_network.network
-    admin_sources    = var.admin.sources
-    ssh_key_name     = var.admin.ssh_key_name
-    pod_mtu          = local.pod_mtu
-    versions         = local.versions
-    edge_sources     = var.edge_sources
-    receiver         = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
-    site             = var.site
-    cluster_cidr     = var.cluster_cidr
-    svc_public_id    = local.ingress_internal ? "" : var.plane_attachment.svc_public.network_id
-    ingress_ip       = local.ingress_address
-    ingress_internal = local.ingress_internal
-    certificates     = var.certificates
+    revision               = local.revision
+    cluster                = var.cluster
+    prefix                 = local.prefix
+    az                     = var.az
+    network                = local.network
+    subnet                 = local.subnet
+    router                 = local.router
+    admin_network          = local.admin_network.network
+    admin_sources          = var.admin.sources
+    ssh_key_name           = var.admin.ssh_key_name
+    pod_mtu                = local.pod_mtu
+    versions               = local.versions
+    edge_sources           = var.edge_sources
+    receiver               = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
+    site                   = var.site
+    cluster_cidr           = var.cluster_cidr
+    publication_network_id = local.ingress_internal ? "" : var.plane_attachment.publication.network_id
+    ingress_ip             = local.ingress_address
+    ingress_internal       = local.ingress_internal
+    certificates           = var.certificates
   }
 
   manifests = merge({

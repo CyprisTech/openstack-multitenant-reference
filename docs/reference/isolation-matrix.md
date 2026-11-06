@@ -1,6 +1,6 @@
 # Isolation matrix
 
-Every flow of the reference scenario between the Internet, the planes, the shared services and the tenants, with the expected result. Another deployment adds the rows of its own planes and services. The [isolation test](../guides/check-isolation.md) checks each row on a deployment ([`tests/isolation`](../../tests/isolation/README.md)); run it after every change. The rows that involve the Kubernetes tenant or the `intranet` plane are checked when the test is given its kubeconfig; the rows of the certificates, when it is given the test ACME authority.
+Every flow of the reference scenario between the Internet, the planes, the shared services and the tenants, with the expected result. Another deployment adds the rows of its own planes and services. The [isolation test](../guides/check-isolation.md) checks each row on a deployment ([`tests/isolation`](../../tests/isolation/README.md)); run it after every change. The rows that involve the Kubernetes tenant or the internal services plane are checked when the test is given its kubeconfig; the rows of the certificates, when it is given the test ACME authority.
 
 *Enforced by* names the mechanism that makes the row true. The rows are the same whatever provides the planes ([ADR-0004](../adr/0004-planes-and-isolation.md)); the mechanism sometimes differs between planes with address translation (operator planes) and routed planes (hub planes, [How a tenant joins a plane](../concepts/plane-attachment.md)).
 
@@ -8,26 +8,26 @@ Every flow of the reference scenario between the Internet, the planes, the share
 |---|---|---|---|---|
 | Internet | entry point load balancer | 80, 443 | allowed | public floating IP |
 | Internet | a tenant's service address | 443 | denied | not routed from the Internet; load balancer sources (`allowed_cidrs`) = entry point |
-| entry point | a tenant's service address (`vm` load balancer, Kubernetes ingress) | 443 | allowed | route to `svc_public`; load balancer sources = entry point (`edge_sources`) |
+| entry point | a tenant's service address (`vm` load balancer, Kubernetes ingress) | 443 | allowed | route to the publication plane; load balancer sources = entry point (`edge_sources`) |
 | entry point | a tenant's instance, at its private address | 443 | denied | NAT plane: no route; routed plane: security group of the instances (source = their load balancer) |
 | a tenant | another tenant's service address | 443 | denied | load balancer sources = entry point only |
 | a tenant | another tenant, at its private address | any | denied | NAT plane: no route between tenants; routed plane: routes go to the shared services only, and the security groups of the target admit only its load balancer, its bastion or the administrators — also when a tenant adds a route to another through the transit router |
-| a tenant | the metrics receiver | 9090 | allowed | route to `monitoring`; security group of the receiver (sources = the plane, or the routed tenant ranges) |
-| the receiver, or anything on `monitoring` | a tenant's metrics ports | 9100 | denied | NAT plane: no address on the plane; routed plane: security groups (no metrics rule) |
+| a tenant | the metrics receiver | 9090 | allowed | route to the observability plane; security group of the receiver (sources = the plane, or the routed tenant ranges) |
+| the receiver, or anything on the observability plane | a tenant's metrics ports | 9100 | denied | NAT plane: no address on the plane; routed plane: security groups (no metrics rule) |
 | the receiver | series of every tenant | — | present | agents push with `site`, `tenant`, `instance` labels |
 | a tenant, or the entry point | the receiver | 22 | denied | security group of the receiver: SSH from the administrator addresses only |
 | the receiver | a tenant's service address | 443 | denied | load balancer sources = entry point only |
 | the receiver | the entry point's instances | 443 | denied | NAT plane: no route; routed plane: security group of the proxies (source = their load balancer) |
-| the Kubernetes tenant | an internal service on `intranet` | its port | allowed | router to `intranet`; the service admits the tenant's `intranet_sources` |
-| `vm`, `isolated` | an internal service on `intranet` | its port | denied | `isolated` has no router to `intranet`; a `vm` tenant joins it only when it consumes internal services, and the service admits only its consumers |
-| the entry point, the receiver | an internal service on `intranet` | its port | denied | the service admits only its consumers |
+| the Kubernetes tenant | an internal service | its port | allowed | router to the internal services plane; the service admits the tenant's `internal_sources` |
+| `vm`, `isolated` | an internal service | its port | denied | `isolated` has no router to the internal services plane; a `vm` tenant joins it only when it consumes internal services, and the service admits only its consumers |
+| the entry point, the receiver | an internal service | its port | denied | the service admits only its consumers |
 | the receiver | the Kubernetes tenant's ingress | 443 | denied | sources of the ingress = entry point only |
 | the Kubernetes tenant | the bastions of the other stacks | 22 | denied | bastions admit the administrator addresses only |
 | a client trusting the authority | each published domain, through the entry point | 443 | certificate for the name, issued by the authority | the tenant's ACME client (lego, cert-manager) and DNS-01 ([ADR-0008](../adr/0008-tenant-certificates.md)) |
 | a tenant, with its TSIG key | the `_acme-challenge` records of its own names | 53 | allowed | DNS server ACL: key, record type TXT, owner names, sources |
 | a tenant, with its TSIG key | the `_acme-challenge` records of another tenant's names | 53 | denied | DNS server ACL: each key covers its tenant's names only |
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
-| `isolated` | the Internet | any | denied | no egress router: its only router joins `monitoring` |
+| `isolated` | the Internet | any | denied | no egress router: its only router joins the observability plane |
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/architecture.md#lateral-movement)).
 

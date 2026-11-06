@@ -35,7 +35,7 @@ variable "boot_volume_size" {
 }
 
 variable "isolated_cidr" {
-  description = "Range of the isolated network. With operator planes it may overlap the ranges of other tenants; on an interface plane it must not (shared/planes checks it)."
+  description = "Range of the isolated network. On planes with NAT it may overlap the ranges of other tenants; on a plane without NAT it must not (shared/planes checks it)."
   type        = string
   default     = "10.22.0.0/24"
 }
@@ -104,7 +104,7 @@ variable "network_mtu" {
 variable "monitoring" {
   description = <<-EOT
     Monitoring as a push integration point (ADR-0007): the workload pushes its metrics to the
-    receiver through the monitoring plane, its only way out. Nothing connects into the tenant.
+    receiver through the observability plane, its only way out. Nothing connects into the tenant.
     - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
       receiver_url of the receiver); null pushes nothing.
   EOT

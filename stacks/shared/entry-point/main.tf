@@ -51,7 +51,7 @@ module "bastion" {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["svc_public", "monitoring"]
+  planes     = ["publication", "observability"]
   attachment = var.plane_attachment
   instances  = local.instances
 }
@@ -114,9 +114,9 @@ module "edge" {
   tenant = {
     existing = {
       networks = merge({
-        public     = { name = var.public_network.network, subnets = { main = { name = var.public_network.subnet } } }
-        svc_public = module.planes.networks.svc_public
-        monitoring = module.planes.networks.monitoring
+        public        = { name = var.public_network.network, subnets = { main = { name = var.public_network.subnet } } }
+        publication   = module.planes.networks.publication
+        observability = module.planes.networks.observability
       }, module.bastion.existing_networks)
       dns_zones = var.public_dns == null ? {} : { public = { name = var.public_dns.zone } }
     }
@@ -131,8 +131,8 @@ module "edge" {
           # Default route and public floating IP.
           public = { external_network = "public", internal_subnet = "main", default_gateway = true }
           # Plane routers: their routes are pushed to the instances by DHCP (ADR-0001, D2).
-          svc-public = module.planes.routers["svc-public"]
-          monitoring = module.planes.routers["monitoring"]
+          publication   = module.planes.routers["publication"]
+          observability = module.planes.routers["observability"]
         }
       }
     }, module.bastion.networks)
@@ -201,10 +201,10 @@ module "edge" {
   }
 }
 
-# Address under which the edge reaches svc_public in gateway mode: backends admit it in their
+# Address under which the edge reaches publication in gateway mode: backends admit it in their
 # security groups (ADR-0001, D7). Read from the router, never written by hand (D9). In interface
 # mode there is no translation: backends admit the edge range.
-data "openstack_networking_router_v2" "svc_public" {
-  count     = module.planes.nat.svc_public ? 1 : 0
-  router_id = module.edge.networks[local.prefix].routers["svc-public"].id
+data "openstack_networking_router_v2" "publication" {
+  count     = module.planes.nat.publication ? 1 : 0
+  router_id = module.edge.networks[local.prefix].routers["publication"].id
 }

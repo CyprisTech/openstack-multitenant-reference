@@ -79,7 +79,7 @@ variable "plane_attachment" {
 }
 
 variable "edge_sources" {
-  description = "Ranges the entry point connects from on svc_public: output svc_public_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header."
+  description = "Ranges the entry point connects from on publication: output publication_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header."
   type        = list(string)
 }
 
@@ -99,9 +99,9 @@ variable "service_addresses" {
 variable "admin_network" {
   description = <<-EOT
     Administration network carrying the floating IPs of the Kubernetes API and of the bootstrap
-    instance (ADR-0002, D6). null uses the intranet plane for this role, which requires an
-    operator intranet plane (gateway mode): then admin.sources must be specific addresses, never
-    the range of the intranet.
+    instance (ADR-0002, D6). null uses the internal services plane for this role, which requires an
+    operator plane (gateway mode): then admin.sources must be specific addresses, never the range
+    of the plane.
   EOT
   type        = object({ network = string, subnet = string, cidr = string })
   default     = null
@@ -170,7 +170,7 @@ variable "cluster" {
 variable "monitoring" {
   description = <<-EOT
     Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to
-    the receiver through the monitoring plane (remote write). Nothing connects into the cluster
+    the receiver through the observability plane (remote write). Nothing connects into the cluster
     for its metrics.
     - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
       receiver_url of the receiver); null keeps the metrics in the cluster.

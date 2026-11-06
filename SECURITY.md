@@ -36,7 +36,7 @@ Out of scope: vulnerabilities of the [terraform-openstack-tenant](https://github
 
 ## Security-relevant behaviour of the architecture
 
-- **Isolation on the publication plane (`svc_public` in the scenario) rests on the load balancers' sources and the security groups.** Every project attached to the plane can reach every service address on it at the network level; a wrong rule exposes a tenant to every other on the plane ([trade-offs, 7](docs/concepts/trade-offs.md#7-isolation-on-the-publication-plane)).
+- **Isolation on the publication plane rests on the load balancers' sources and the security groups.** Every project attached to the plane can reach every service address on it at the network level; a wrong rule exposes a tenant to every other on the plane ([trade-offs, 7](docs/concepts/trade-offs.md#7-isolation-on-the-publication-plane)).
 - **The metrics receiver trusts what the tenants push.** Series are identified by labels a tenant could forge; the receiver admits pushes from the observability plane (operator plane) or the routed tenant ranges (hub plane) ([trade-offs, 15](docs/concepts/trade-offs.md#15-monitoring-by-push)).
 - **The entry point does not terminate TLS.** It holds no tenant certificate; it can only limit connections, not filter HTTP.
 - **The demonstration backends are not production services**: the `vm` stack serves a self-signed certificate.

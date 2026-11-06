@@ -51,11 +51,11 @@ stacks/
 
 ### D2 — Shared network planes
 
-The operator shares three planes: `intranet`, `monitoring` and `svc_public`. A tenant joins only the planes it needs, through dedicated routers; the routes to each plane are advertised by DHCP (`routers` and `advertise_routes` in the module), so instances need no static route.
+The operator shares three planes: internal services, observability and publication. A tenant joins only the planes it needs, through dedicated routers; the routes to each plane are advertised by DHCP (`routers` and `advertise_routes` in the module), so instances need no static route.
 
-**Publishing on a plane is one mechanism for every plane: a floating IP of that plane.** Backends are published on `svc_public` with a floating IP of `svc_public`; instances are exposed to the monitoring collector with a floating IP of `monitoring`. A port can carry one floating IP per plane (module ≥ v0.1.2). Tenants stay behind their own routers: nothing but the floating IP is reachable, and security groups open only the published ports. Rejected alternatives: a second port of every instance directly on the `monitoring` network (all tenants on one shared segment), and metrics pushed by an agent in every tenant (more moving parts).
+**Publishing on a plane is one mechanism for every plane: a floating IP of that plane.** Backends are published on the publication plane with a floating IP of that plane; instances are exposed to the monitoring collector with a floating IP of the observability plane. A port can carry one floating IP per plane (module ≥ v0.1.2). Tenants stay behind their own routers: nothing but the floating IP is reachable, and security groups open only the published ports. Rejected alternatives: a second port of every instance directly on the network of the observability plane (all tenants on one shared segment), and metrics pushed by an agent in every tenant (more moving parts).
 
-Replies leave through the routes of the instance: a floating IP of a plane serves only clients whose addresses are routed back through that plane's router, that is the plane range advertised by DHCP. The collector must therefore have an address in the `monitoring` range, and its security groups must allow outgoing TCP to the metrics ports. Metrics ports are open to the collector's addresses only: every tenant joins the plane through a router with source NAT, so an address of the plane range does not identify the collector.
+Replies leave through the routes of the instance: a floating IP of a plane serves only clients whose addresses are routed back through that plane's router, that is the plane range advertised by DHCP. The collector must therefore have an address in the range of the observability plane, and its security groups must allow outgoing TCP to the metrics ports. Metrics ports are open to the collector's addresses only: every tenant joins the plane through a router with source NAT, so an address of the plane range does not identify the collector.
 
 **Monitoring targets are discovered by DNS.** Each stack writes an A record per instance in a monitoring zone shared with the projects (for example `mon.site-a.example.org.`), named `<instance>.<tenant>`; the collector uses DNS service discovery. No address is written by hand (D9).
 
@@ -84,10 +84,10 @@ A fictional organisation, `example.org`:
 
 | Project | Planes | Purpose |
 |---|---|---|
-| `edge` | `svc_public`, `monitoring` | Public entry point (D3) |
-| `web` | `svc_public`, `monitoring` | Two domains served by VMs spread across hosts, routed by SNI |
-| `platform` | `svc_public`, `intranet`, `monitoring` | CAPO cluster; its ingress is published through the edge |
-| `isolated` | `monitoring` | A workload with no public exposure and no path to other tenants |
+| `edge` | `publication`, `observability` | Public entry point (D3) |
+| `web` | `publication`, `observability` | Two domains served by VMs spread across hosts, routed by SNI |
+| `platform` | `publication`, `internal`, `observability` | CAPO cluster; its ingress is published through the edge |
+| `isolated` | `observability` | A workload with no public exposure and no path to other tenants |
 
 ### D6 — Executable reachability matrix
 
@@ -96,7 +96,7 @@ The expected flows between the internet, the planes and the tenants are written 
 ### D7 — Security groups and DNS
 
 - **Each tenant declares its own security groups** with the module. This works on any cloud, including with a single project.
-- Rules that refer to another tenant use **CIDRs** (for example the addresses of the edge instances on `svc_public`), never `remote_group_id`, which only works inside one project.
+- Rules that refer to another tenant use **CIDRs** (for example the addresses of the edge instances on the publication plane), never `remote_group_id`, which only works inside one project.
 - A **central security group catalogue shared by RBAC is an operator option of layer 10**, delivered with cloud-baseline (v0.2). The choice between central governance and tenant autonomy is discussed in the trade-offs.
 - Each tenant has its own DNS zone, created for the project, or records in a shared zone.
 
@@ -104,7 +104,7 @@ The expected flows between the internet, the planes and the tenants are written 
 
 - The two Traefik instances run on **plain VMs, without an orchestrator**: Traefik is a container started by systemd, with a pinned image, installed by cloud-init through the module's `cloudinit` sub-module.
 - The routes are **generated by Terraform** from a `domain → backend` map and read by Traefik from a file.
-- The Traefik dashboard is not exposed; metrics are scraped on the `monitoring` plane.
+- The Traefik dashboard is not exposed; metrics are scraped on the observability plane.
 - A route change is a new cloud-init, hence an **explicit replacement of the instances, one at a time**. The Octavia TCP monitor takes the replaced instance out of the pool; its open connections are cut.
 - Rejected: Docker Swarm (an orchestrator for two containers), Traefik inside the `platform` cluster (every tenant would depend on one tenant), configuration pushed by Ansible (another tool, and drift from the code).
 
@@ -128,7 +128,7 @@ The first version runs in **one site**. Failover between sites comes in a later 
   - Octavia topology: single amphora or active/standby, chosen through the load balancer flavor;
   - one site in v1;
   - limits of SNI passthrough at the load balancer;
-  - security group sharing and isolation on `svc_public`;
+  - security group sharing and isolation on the publication plane;
   - central catalogue against tenant-owned security groups;
   - layer 10 provided by the operator until v0.2;
   - integration test results of the module.

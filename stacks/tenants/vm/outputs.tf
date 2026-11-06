@@ -1,5 +1,5 @@
 output "service_address" {
-  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its load balancer, or its only instance. On svc_public through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = \"public\"."
+  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its load balancer, or its only instance. On publication through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = \"public\"."
   value       = local.service_address
 }
 
@@ -26,20 +26,20 @@ output "bastion" {
 
 locals {
   service_address = "${local.load_balancer ? (
-    local.public || module.planes.nat.svc_public ? module.web.load_balancers[local.prefix].floating_ip : module.web.load_balancers[local.prefix].vip
+    local.public || module.planes.nat.publication ? module.web.load_balancers[local.prefix].floating_ip : module.web.load_balancers[local.prefix].vip
     ) : (
-    local.public || module.planes.nat.svc_public ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip
+    local.public || module.planes.nat.publication ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip
   )}:443"
 }
 
-output "intranet_sources" {
-  description = "Addresses the tenant reaches the internal services plane from, for the services of that plane (allowed_sources): its router's gateway address on an operator plane, the tenant range on an interface plane. Empty when the tenant does not join the plane."
-  value = !contains(keys(var.plane_attachment), "intranet") ? [] : module.planes.nat.intranet ? [
-    for ip in data.openstack_networking_router_v2.intranet[0].external_fixed_ip : "${ip.ip_address}/32"
+output "internal_sources" {
+  description = "Addresses the tenant reaches the internal services plane from, for the services of that plane (allowed_sources): its router's gateway address on a plane with NAT, the tenant range on a plane without NAT. Empty when the tenant does not join the plane."
+  value = !contains(keys(var.plane_attachment), "internal") ? [] : module.planes.nat.internal ? [
+    for ip in data.openstack_networking_router_v2.internal[0].external_fixed_ip : "${ip.ip_address}/32"
   ] : [var.web_cidr]
 }
 
-data "openstack_networking_router_v2" "intranet" {
-  count     = contains(keys(var.plane_attachment), "intranet") && try(module.planes.nat.intranet, false) ? 1 : 0
-  router_id = module.web.networks[local.prefix].routers["intranet"].id
+data "openstack_networking_router_v2" "internal" {
+  count     = contains(keys(var.plane_attachment), "internal") && try(module.planes.nat.internal, false) ? 1 : 0
+  router_id = module.web.networks[local.prefix].routers["internal"].id
 }

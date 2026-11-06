@@ -192,7 +192,7 @@ variable "monitoring" {
   description = <<-EOT
     Monitoring as a push integration point (ADR-0007): each Traefik instance runs its exporters
     and a Prometheus agent that reads them, with the Traefik metrics, and pushes to the receiver
-    through the monitoring plane. Nothing connects into the instances for their metrics.
+    through the observability plane. Nothing connects into the instances for their metrics.
     - receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output
       receiver_url of the receiver); null runs no agent.
   EOT

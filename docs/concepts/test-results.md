@@ -37,7 +37,7 @@ Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron w
 
 ## Detailed results: certificates of the tenants (2026-11-05)
 
-The design of [ADR-0008](../adr/0008-tenant-certificates.md), from empty projects, each stack in its own project, in both plane modes. The test ACME authority (`tests/fixtures/acme`: Knot and step-ca, one TSIG key per tenant) in the shared services project, on the intranet plane, which the `vm` tenant joins. Certificates valid 90 days.
+The design of [ADR-0008](../adr/0008-tenant-certificates.md), from empty projects, each stack in its own project, in both plane modes. The test ACME authority (`tests/fixtures/acme`: Knot and step-ca, one TSIG key per tenant) in the shared services project, on the internal services plane, which the `vm` tenant joins. Certificates valid 90 days.
 
 | Cycle | Deployment | Certificates | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
 |---|---|---|---|---|---|---|
@@ -56,7 +56,7 @@ Findings, each fixed before the end of the campaign:
 
 ## History
 
-Earlier designs: numbered layers, a collector scraping the tenants through floating IPs of the monitoring plane, an entry point routing to the tenants' instances and replaced at each publication. Kept in date order.
+Earlier designs: numbered layers, a collector scraping the tenants through floating IPs of the observability plane, an entry point routing to the tenants' instances and replaced at each publication. Kept in date order.
 
 <a id="stack-20--public-entry-point-2026-10-27"></a>
 <details>
@@ -73,7 +73,7 @@ Earlier designs: numbered layers, a collector scraping the tenants through float
 | Destroy | ✅ 38 resources in 88 s, no leftover |
 | SNI routing and PROXY v2 to a backend | pending: needs stack 30 `web` |
 
-Finding: on the first run the resolvers of the edge network were only reachable through an intranet plane that the edge does not join. The first boot could not install Podman nor pull the Traefik image, and the members stayed in `ERROR`. Fixed by using resolvers reachable through the public network; the requirement is now stated in the stack documentation.
+Finding: on the first run the resolvers of the edge network were only reachable through an internal services plane that the edge does not join. The first boot could not install Podman nor pull the Traefik image, and the members stayed in `ERROR`. Fixed by using resolvers reachable through the public network; the requirement is now stated in the stack documentation.
 
 Observation: a TLS connection with an unknown server name is answered by Traefik with its default self-signed certificate and a `404`.
 
@@ -96,7 +96,7 @@ Observation: a TLS connection with an unknown server name is answered by Traefik
 Findings:
 
 - **Reserved range.** A web network in `10.30.0.0/24` could not route at all (ARP answered, no packet crossed any router), while `10.21.0.0/24` worked. The layer 10 contract now asks the operator to publish the ranges tenants must not use.
-- **Path MTU black hole.** Small packets crossed `svc_public`, large ones were dropped: the tenant networks used MTU 1442, the planes 1382, and the tenant overlay of the test cloud runs itself over a tunnel. A packet capture on the backend showed the 1390-byte TLS segment retransmitted until timeout while the 37-byte tail was acknowledged. Fixed by `network_mtu = 1362` on every network of the stacks; the contract now asks the operator to publish the MTUs.
+- **Path MTU black hole.** Small packets crossed the publication plane, large ones were dropped: the tenant networks used MTU 1442, the planes 1382, and the tenant overlay of the test cloud runs itself over a tunnel. A packet capture on the backend showed the 1390-byte TLS segment retransmitted until timeout while the 37-byte tail was acknowledged. Fixed by `network_mtu = 1362` on every network of the stacks; the contract now asks the operator to publish the MTUs.
 - **cloud-init.** nginx failed to start at package installation because the demo certificate was created later; the certificate is now created in `bootcmd`.
 - **Bastion routes.** The second interface of a bastion received the default route, plane routes and resolvers of the tenant network; DHCP routes and resolvers are now ignored on that interface.
 
@@ -106,19 +106,19 @@ Findings:
 <details>
 <summary><strong>Two floating IPs on one port (2026-10-27)</strong></summary>
 
-Test configuration: `tests/integration/dual-floating-ip`, removed in `v0.3.0` with the design it served. Purpose: decide how the monitoring plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
+Test configuration: `tests/integration/dual-floating-ip`, removed in `v0.3.0` with the design it served. Purpose: decide how the observability plane reaches tenant instances (option B: a floating IP per plane, with DNS records).
 
 | Check | Result |
 |---|---|
-| Neutron accepts a floating IP from `svc_public` and one from `monitoring` on the same fixed IP, through two routers | ✅ both `ACTIVE` |
-| From an instance of another tenant (routed source): TCP to the target through `svc_public` and through `monitoring`, three times each | ✅ 6/6 |
+| Neutron accepts a floating IP from the publication plane and one from the observability plane on the same fixed IP, through two routers | ✅ both `ACTIVE` |
+| From an instance of another tenant (routed source): TCP to the target through the publication plane and through the observability plane, three times each | ✅ 6/6 |
 | Plan empty after apply, destroy | ✅ 41 resources, destroyed in 25 s, no leftover |
-| From a host attached directly to the `monitoring` network to the `monitoring` floating IP | not conclusive: the security groups of that host allow no outgoing TCP on its monitoring port (ARP answered, SYN dropped at the source) |
+| From a host attached directly to the network of the observability plane to a floating IP of that plane | not conclusive: the security groups of that host allow no outgoing TCP on its port on that network (ARP answered, SYN dropped at the source) |
 
 Findings:
 
 - **Replies follow the routes of the instance.** A floating IP on a plane answers only clients whose address is routed back through that plane's router: the plane CIDR is advertised by DHCP, so clients inside the plane work. A client whose address is outside the advertised ranges (for example an administration network reached without source NAT) gets its replies through the default gateway and the connection fails. This is why bastions use their administration router as default gateway.
-- **Security groups of the collector.** A host used as a test source had a monitoring port whose security groups allow scraping *into* it (ingress) but no outgoing TCP: its connections never left. A collector on the monitoring plane needs an egress rule to the metrics ports of the plane range.
+- **Security groups of the collector.** A host used as a test source had a port on the observability plane whose security groups allow scraping *into* it (ingress) but no outgoing TCP: its connections never left. A collector on the observability plane needs an egress rule to the metrics ports of the plane range.
 
 </details>
 
@@ -126,7 +126,7 @@ Findings:
 <details>
 <summary><strong>Full scenario and reachability matrix (2026-10-27)</strong></summary>
 
-Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, monitoring floating IPs and DNS records (module commit `fa88feb`, after `v0.1.1`; the same code is released as `v0.1.2`).
+Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastions, the test collector, floating IPs of the observability plane and DNS records (module commit `fa88feb`, after `v0.1.1`; the same code is released as `v0.1.2`).
 
 | Check | Result |
 |---|---|
@@ -138,9 +138,9 @@ Stacks `20-public-edge`, `30-tenants/web` and `30-tenants/isolated` with bastion
 | **Reachability matrix** (`tests/reachability/check.py`) | ✅ **27/27 rows as expected** |
 | Destroy, four configurations | ✅ 153 resources, no leftover (instances, load balancers, networks, routers, volumes, floating IPs, DNS records) |
 
-The matrix covers: the entry point from the outside; the web backends reachable from the entry point only; the collector reaching the metrics of every instance (node exporter, Traefik metrics); no tenant reaching the metrics of another through the monitoring plane; no route between tenants; `isolated` reaching neither the published addresses, nor the other tenants, nor the Internet.
+The matrix covers: the entry point from the outside; the web backends reachable from the entry point only; the collector reaching the metrics of every instance (node exporter, Traefik metrics); no tenant reaching the metrics of another through the observability plane; no route between tenants; `isolated` reaching neither the published addresses, nor the other tenants, nor the Internet.
 
-Finding: every tenant joins the monitoring plane through a router with source NAT, so seen from the plane all tenants have addresses of the plane range. Metrics ports opened to the plane range would let tenants scrape each other: they are now opened to the collector's addresses only (`monitoring.collector_cidrs`).
+Finding: every tenant joins the observability plane through a router with source NAT, so seen from the plane all tenants have addresses of the plane range. Metrics ports opened to the plane range would let tenants scrape each other: they are now opened to the collector's addresses only (`monitoring.collector_cidrs`).
 
 </details>
 
@@ -176,7 +176,7 @@ Node image `ubuntu-2404-kube-v1.36.5` (8 GiB virtual size), Cluster API v1.14.3,
 | API: floating IP on the administration network, admitted sources | ✅ operators, plus the bootstrap instance until the move; refused from elsewhere |
 | Ingress through the entry point, SNI passthrough, TLS terminated by Traefik (Gateway API) | ✅ 12/12, both demonstration pods, client address preserved (`X-Real-Ip`) |
 | Prometheus federation from the collector | ✅ HTTP 200, 34 `up` series, all up |
-| Reachability matrix with the platform rows (ADR-0002, D8) and the intranet demonstration service | ✅ 42/42 rows |
+| Reachability matrix with the platform rows (ADR-0002, D8) and the internal demonstration service | ✅ 42/42 rows |
 
 Findings, all fixed in the stack:
 
@@ -254,7 +254,7 @@ First run of `delete-cluster.sh`, then destroy of every stack.
 |---|---|---|
 | `delete-cluster.sh`: LoadBalancer Services deleted, Cluster API moved back to kind, `Cluster` deleted | ✅ after two manual steps (findings 1 and 2) | 21 min 24 s, of which about 12 min blocked |
 | Stack `platform` | ✅ 30 resources; the Service floating IPs, kept by the cloud controller manager, destroyed by Terraform | 21 s |
-| Test intranet service | ✅ 13 resources (finding 3) | 12 s |
+| Test internal service | ✅ 13 resources (finding 3) | 12 s |
 | Test collector | ✅ 17 resources | 27 s |
 | Stack `isolated` | ✅ 28 resources | 34 s |
 | Stack `web` | ✅ 48 resources | 20 s |
@@ -265,7 +265,7 @@ Findings, fixed in `delete-cluster.sh` and the READMEs (the scripted fixes run f
 
 1. **The bootstrap instance is no longer admitted on the API.** `create-cluster.sh` removes its address after the move, so the instance cannot reach the API to admit itself again. An operator admits it from an administration source first; the script now checks the API and prints the command to run.
 2. **Cluster deletion blocked twice.** The ORC `Image` was not carried back by `clusterctl move` (as on the way in), so CAPO waited for it; and the `KubeadmControlPlane` was gone before its machines, leaving its `kcp-cleanup` pre-terminate hook on them. The script now declares the image again after the move and removes the hook when the control plane object no longer exists.
-3. **Destroy order.** The test intranet service reads the platform's intranet router: destroy it before the platform stack, or with `-refresh=false`.
+3. **Destroy order.** The test internal service reads the platform's internal services router: destroy it before the platform stack, or with `-refresh=false`.
 
 </details>
 
@@ -280,7 +280,7 @@ The whole environment rebuilt from an empty project, as a user would: published 
 | Entry point (60 resources) | 10 min 02 s | ✅ empty plan; 9 minutes were three DNS records (508 to 553 s each), the load balancer took 120 s |
 | `web` (48), `isolated` (28), test collector (17), platform stack (30), in parallel | 2 min 54 s | ✅ empty plans; root volumes from the image about 80 s each |
 | Cluster, add-ons included (`create-cluster.sh`) | 16 min 02 s | ✅ no manual step |
-| Intranet demonstration service | 46 s | ✅ |
+| Internal demonstration service | 46 s | ✅ |
 | Route publication | 13 min 20 s | ⚠️ stopped: one edge instance unhealthy (finding 1) |
 | Collector address in the stacks | 40 s | (finding 3) |
 | Edge instance replaced, members `ONLINE` | 74 s + 3 min | ✅ |
@@ -311,7 +311,7 @@ A second full cycle, from the branch with the fixes of the first rebuild, follow
 | Entry point | 10 min 39 s | ✅ cloud-init `done` on both instances, members `ONLINE`; DNS records 68 s in the project's zone, about 9 min in the shared zone |
 | `web`, `isolated`, platform stack, in parallel | 2 min 58 s | ✅ empty plans, cloud-init `done` everywhere |
 | Cluster | 16 min 14 s | ✅ one release proxy per chart this time |
-| Intranet demonstration service | 36 s | ✅ |
+| Internal demonstration service | 36 s | ✅ |
 | Route publication | 2 min 22 s | ⚠️ edge-1 replaced; edge-2 not placed (`No valid host was found`); the script stopped, the entry point kept serving |
 | Bootstrap instance removed, publication resumed | 4 min 29 s | ✅ the instance in error replaced first, then the other |
 | Acceptance | 2 min 37 s | ✅ HTTPS 12/12 with the client address, matrix **43/43** |
@@ -329,7 +329,7 @@ Findings:
 <details>
 <summary><strong>One project per stack, both plane modes (2026-10-31)</strong></summary>
 
-The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-boundary.md) prescribes — hub (planes only), shared services (collector, intranet service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
+The whole scenario with **each stack in its own project**, as [ADR-0003](../adr/0003-scope-and-boundary.md) prescribes — hub (planes only), shared services (collector, internal service), entry point, `vm`, `isolated`, Kubernetes — in each plane mode, following the [test procedure](../reference/test-procedure.md). Module `terraform-openstack-tenant` at the commit adding router interfaces and routes (unreleased).
 
 | Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
 |---|---|---|---|---|---|
