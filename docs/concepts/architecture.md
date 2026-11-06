@@ -286,6 +286,23 @@ sequenceDiagram
 
 The expected flows between the Internet, the planes, the tenants and the shared services are listed, row by row, in the [isolation matrix](../reference/isolation-matrix.md); the [isolation test](../guides/check-isolation.md) checks them on a deployment.
 
+## Lateral movement
+
+The shared services are the only points that several tenants reach, and the entry point is the only one that reaches the tenants: a hub-and-spoke design concentrates lateral movement there rather than removing it. Their reach is bounded by the security groups of each target and checked by the [isolation test](../guides/check-isolation.md):
+
+| Shared service | Reaches | Never reaches |
+|---|---|---|
+| Entry point | the tenants' service addresses, on their service port | a tenant's instances or other ports; the other shared services, except the receiver it pushes to |
+| Receiver | nothing: every flow to it is pushed | a tenant, the other shared services |
+| Internal service | nothing: its consumers call it | a tenant, the other shared services |
+| Hub project | runs no instance | — |
+
+- **A compromised entry point** can send requests to every published application, on its service port only, and holds no key: TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)). It is the largest reach of the design, and the one the entry point needs to work.
+- **A tenant** reaches a shared service on the ports of the service it consumes, and no other: SSH is admitted from the administrators' addresses only ([ADR-0005](../adr/0005-stacks-contracts-and-access.md)).
+- **Routes exist between the shared services of a plane** ([ADR-0004](../adr/0004-planes-and-isolation.md)): only the security groups of the target close the flows that are not declared.
+- **Spoofed sources.** Port security filters the ports of the instances, not those of the routers. A project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address through its router. They are blind: the answer goes to the real owner, so no TCP connection is established, and every service of the scenario listens on TCP. Services answering on UDP, such as name resolution and time, allow reflection; their integration point states it. The [test procedure](../reference/test-procedure.md) checks this on each cloud.
+- **Beyond the network** ([ADR-0003](../adr/0003-scope-and-boundary.md), D4, level 3): the integrity of what a shared service distributes (images, packages, name resolution) and whom it authenticates are properties of the tool chosen for it, not of this architecture.
+
 ## Planes contract
 
 What the stacks expect from planes provided by the cloud operator (names, ranges, MTUs, reserved ranges) is the [planes contract](../reference/planes-contract.md).

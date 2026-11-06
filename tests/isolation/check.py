@@ -141,6 +141,12 @@ def main():
         rows.append((name, f"receiver {receiver}", 9090, "open", probe(receiver, 9090)))
     for name, ip in ((edge_vm[0], edge_vm[1]), (web_vm[0], web_vm[1]), (iso_vm[0], iso_vm[1])):
         rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", from_receiver(ip, 9100)))
+    # Lateral movement (docs/concepts/architecture.md): a tenant or the entry point reaches the receiver on its port only,
+    # and the receiver reaches neither a tenant's service address nor the entry point.
+    for name, probe in ((f"edge {edge_vm[0]}", from_edge), (f"web {web_vm[0]}", from_web), (f"isolated {iso_vm[0]}", from_iso)):
+        rows.append((name, f"receiver {receiver} (SSH)", 22, "closed", probe(receiver, 22)))
+    rows.append(("receiver", f"web service address {service}", 443, "closed", from_receiver(service, 443)))
+    rows.append(("receiver", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", from_receiver(edge_vm[1], 443)))
     for tenant in ("edge", "web", "isolated"):
         rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: pushed(t)))
     # Tenant to tenant, at the private addresses, and the isolated tenant's way out.
@@ -186,6 +192,9 @@ def main():
         rows.append(("platform pod", f"intranet service {intranet}", 8080, "open", lambda: p.pod(probe_pod, intranet, 8080)))
         rows.append((f"web {web_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_web(intranet, 8080)))
         rows.append((f"isolated {iso_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_iso(intranet, 8080)))
+        rows.append((f"edge {edge_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_edge(intranet, 8080)))
+        rows.append(("receiver", f"intranet service {intranet}", 8080, "closed", from_receiver(intranet, 8080)))
+        rows.append(("receiver", f"platform ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
 
     failures = 0
     print(f"{'from':<22} {'to':<52} {'port':>5}  {'expected':<8} {'actual':<8}")

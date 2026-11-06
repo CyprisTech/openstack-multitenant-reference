@@ -15,10 +15,17 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | a tenant | the metrics receiver | 9090 | allowed | route to `monitoring`; security group of the receiver (sources = the plane, or the routed tenant ranges) |
 | the receiver, or anything on `monitoring` | a tenant's metrics ports | 9100 | denied | NAT plane: no address on the plane; routed plane: security groups (no metrics rule) |
 | the receiver | series of every tenant | — | present | agents push with `site`, `tenant`, `instance` labels |
+| a tenant, or the entry point | the receiver | 22 | denied | security group of the receiver: SSH from the administrator addresses only |
+| the receiver | a tenant's service address | 443 | denied | load balancer sources = entry point only |
+| the receiver | the entry point's instances | 443 | denied | NAT plane: no route; routed plane: security group of the proxies (source = their load balancer) |
 | the Kubernetes tenant | an internal service on `intranet` | its port | allowed | router to `intranet`; the service admits the tenant's `intranet_sources` |
 | `vm`, `isolated` | an internal service on `intranet` | its port | denied | no router to `intranet`; the service admits only its consumers |
+| the entry point, the receiver | an internal service on `intranet` | its port | denied | the service admits only its consumers |
+| the receiver | the Kubernetes tenant's ingress | 443 | denied | sources of the ingress = entry point only |
 | the Kubernetes tenant | the bastions of the other stacks | 22 | denied | bastions admit the administrator addresses only |
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
 | `isolated` | the Internet | any | denied | no egress router: its only router joins `monitoring` |
 
-The hostile-route case (a tenant routing to another through the transit router) needs a change of a tenant's router: it is a step of the [test procedure](test-procedure.md), not of the automatic test, which only opens TCP connections and reads the receiver.
+The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/architecture.md#lateral-movement)).
+
+The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the automatic test, which only opens TCP connections and reads the receiver.

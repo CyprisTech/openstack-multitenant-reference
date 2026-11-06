@@ -256,7 +256,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS through the entry point | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (33 with the Kubernetes tenant) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| isolation test | every row as expected (41 with the Kubernetes tenant, 24 without) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
@@ -295,6 +295,35 @@ tofu -chdir=stacks/tenants/isolated apply   # back to normal
 ```
 
 Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only its load balancer, its bastion and the administrators.
+
+### Spoofed source (interface mode)
+
+Neutron's port security filters the ports of the instances, not those of the routers ([lateral movement](../concepts/architecture.md#lateral-movement)). This step checks whether a member can disable port security on its own instance, then whether a packet sent with another project's address reaches anything. It changes a tenant's port, so it is manual; run it after the hostile route, with the same route in place.
+
+```bash
+# credentials of the isolated stack (its clouds.yaml entry)
+PORT=$(openstack --os-cloud <isolated entry> port list --server <isolated instance> -f value -c ID)
+SGS=$(openstack --os-cloud <isolated entry> port show $PORT -f json -c security_group_ids | jq -r '.security_group_ids[]')
+openstack --os-cloud <isolated entry> port set --no-security-group --disable-port-security $PORT
+```
+
+If the cloud refuses (`Forbidden`), a member cannot disable port security there: record it in the [test results](../concepts/test-results.md) and stop. Otherwise, with the hostile route of the previous step applied:
+
+```bash
+# on the isolated instance: send from the web load balancer's address, which the web instances admit on 443
+sudo ip addr add <web load balancer address>/32 dev ens3
+nc -s <web load balancer address> -z -w 4 <web address> 443 && echo "443 OPEN" || echo "443 closed"
+sudo ip addr del <web load balancer address>/32 dev ens3
+# back to normal: port security and security groups, then the route
+openstack --os-cloud <isolated entry> port set --enable-port-security $(for g in $SGS; do printf -- '--security-group %s ' $g; done) $PORT
+tofu -chdir=stacks/tenants/isolated apply
+```
+
+```console
+443 closed
+```
+
+Expected: closed. The packet may reach the web instance, whose security group admits that source, but the answer goes to the real load balancer: no connection is established. Record whether port security could be disabled, and the result. Finally `openstack port show $PORT -c port_security_enabled` shows `True` and `tofu plan` is empty in the isolated stack.
 
 ## 10. Teardown
 
