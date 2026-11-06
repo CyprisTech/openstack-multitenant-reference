@@ -36,13 +36,30 @@ scp cacert.pem ops@$(tofu output -raw bootstrap):/tmp/cacert.pem      # private 
 ssh ops@$(tofu output -raw bootstrap) 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem; sudo /opt/platform/create-cluster.sh'
 ```
 
-The script can be run again after a failure: each step skips what already exists. It ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance. The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
+The script can be run again after a failure: each step skips what already exists.
 
-Publish the ingress through the entry point with [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh): the `published_domains` output of this stack sends the domains of `cluster.domains` to the ingress address, known before the cluster exists. The ingress admits the entry point only, by the `edge_sources` input (output `svc_public_sources` of the entry point). The intranet services admit the cluster by its `intranet_sources` output. The cluster's Prometheus pushes to the receiver given as `monitoring.receiver`, with the labels `site`, `tenant` and `instance`.
+- It ends with `clusterctl move`: the cluster then manages itself, and the kubeconfig is `/opt/platform/<cluster>.kubeconfig` on the bootstrap instance.
+- The bootstrap instance can be removed with `bootstrap = false`; set it back to `true` before deleting the cluster.
 
-**Certificates** ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)). With `certificates`, the script's last step configures cert-manager, already in the cluster for Cluster API: a `ClusterIssuer` for the ACME directory with a DNS-01 solver (RFC 2136, or the cert-manager solver you give), and a `Certificate` for `cluster.domains` that writes `platform-tls`, the secret of the ingress listener; cert-manager renews it. The TSIG key is written in the `cert-manager` namespace; it reaches the cluster through the bootstrap instance's user data, readable by the members of the project, so give a key restricted to the `_acme-challenge` records of the domains. With `dns.resolvers`, cert-manager checks the TXT record on these name servers only. Without `certificates`, the tenant runs in **demonstration mode**: a self-signed `platform-tls`, and a warning at every plan.
+### Publish the domains
+
+Publish the ingress through the entry point with [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh): the `published_domains` output of this stack sends the domains of `cluster.domains` to the ingress address, known before the cluster exists.
 
 The ingress Service requests this address (`loadBalancerIP`) and keeps it when it is deleted (`keep-floatingip`): recreating the Service or the whole cluster does not change the published route. If the requested address is not available, the cloud controller manager silently allocates another one; `kubectl -n traefik get svc traefik` must show the address of `tofu output published_domains`.
+
+### Who reaches what
+
+- The ingress admits the entry point only, by the `edge_sources` input (output `svc_public_sources` of the entry point).
+- The internal services admit the cluster by its `intranet_sources` output.
+- The cluster's Prometheus pushes to the receiver given as `monitoring.receiver`, with the labels `site`, `tenant` and `instance`.
+
+### Certificates
+
+With `certificates` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)), the script's last step configures cert-manager, already in the cluster for Cluster API: a `ClusterIssuer` for the ACME directory with a DNS-01 solver (RFC 2136, or the cert-manager solver you give), and a `Certificate` for `cluster.domains` that writes `platform-tls`, the secret of the ingress listener; cert-manager renews it.
+
+- The TSIG key is written in the `cert-manager` namespace; it reaches the cluster through the bootstrap instance's user data, readable by the members of the project, so give a key restricted to the `_acme-challenge` records of the domains.
+- With `dns.resolvers`, cert-manager checks the TXT record on these name servers only.
+- Without `certificates`, the tenant runs in **demonstration mode**: a self-signed `platform-tls`, and a warning at every plan.
 
 ## Checks
 

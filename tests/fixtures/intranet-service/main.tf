@@ -5,54 +5,6 @@
 # plane the service has a floating IP of the plane, which also carries SSH for the
 # administration sources (the test cloud uses the intranet as administration network).
 
-terraform {
-  required_version = ">= 1.9"
-  required_providers {
-    openstack = { source = "terraform-provider-openstack/openstack", version = "~> 3.2" }
-  }
-}
-
-provider "openstack" {
-  cloud = var.cloud
-}
-
-variable "cloud" { type = string }
-variable "site" { type = string }
-variable "az" { type = string }
-variable "image" { type = string }
-variable "flavor" { type = string }
-variable "boot_volume_size" {
-  type    = number
-  default = null
-}
-variable "network_mtu" {
-  type    = number
-  default = null
-}
-variable "plane_attachment" {
-  description = "The service's entry of the attachments output of stack shared/planes (role shared on intranet)."
-  type = map(object({
-    mode         = string
-    nat          = bool
-    cidr         = string
-    network_id   = string
-    network_name = string
-    subnet_id    = string
-    routes       = optional(list(object({ destination = string, next_hop = string })), [])
-  }))
-}
-variable "cidr" {
-  description = "Range of the service's network; on an interface plane, the attachment's cidr in shared/planes."
-  type        = string
-  default     = "10.35.0.0/28"
-}
-variable "allowed_sources" {
-  description = "Sources admitted on port 8080: output intranet_sources of the Kubernetes tenant."
-  type        = list(string)
-}
-variable "ssh_cidrs" { type = list(string) }
-variable "ssh_keys" { type = list(string) }
-
 locals {
   name = "${var.site}-intranet-service"
 }
@@ -85,19 +37,7 @@ module "cloudinit" {
   write_files = {
     "/srv/www/index.html" = { content = "intranet-service\n" }
     "/etc/systemd/system/intranet-service.service" = {
-      content = <<-EOT
-        [Unit]
-        Description=Intranet demonstration service
-        After=network-online.target
-
-        [Service]
-        ExecStart=/usr/bin/python3 -m http.server 8080 --directory /srv/www
-        Restart=always
-        DynamicUser=yes
-
-        [Install]
-        WantedBy=multi-user.target
-      EOT
+      content = file("${path.module}/files/intranet-service.service")
     }
   }
   runcmd = ["systemctl daemon-reload", "systemctl enable --now intranet-service.service"]
@@ -138,12 +78,3 @@ module "service" {
   }
 }
 
-output "address" {
-  description = "Address of the service on the intranet (port 8080): its floating IP on an operator plane (which also carries SSH), its own address on an interface plane."
-  value       = module.planes.nat.intranet ? module.service.instances[local.name].ports["main"].floating_ip : module.service.instances[local.name].ports["main"].ip
-}
-
-output "service_sources" {
-  description = "Sources admitted on port 8080."
-  value       = var.allowed_sources
-}

@@ -3,6 +3,9 @@
 # routing by SNI without terminating TLS.
 
 locals {
+  # Boot disk of the instances: the image's ephemeral disk, or a volume of the given size.
+  boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+
   prefix = "${var.site}-edge"
 
   instances = ["${local.prefix}-1", "${local.prefix}-2"]
@@ -36,7 +39,7 @@ module "bastion" {
     az     = var.az
     image  = var.image
     flavor = var.flavor
-    boot   = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+    boot   = local.boot
   }
   mtu             = var.network_mtu
   dns_nameservers = var.dns_nameservers
@@ -150,7 +153,7 @@ module "edge" {
         az           = var.az
         flavor       = var.flavor
         image        = var.image
-        boot         = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+        boot         = local.boot
         server_group = local.prefix
         user_data    = module.cloudinit[name].rendered
         metadata     = local.route_metadata # the routes, updated in place (ADR-0006, D3)

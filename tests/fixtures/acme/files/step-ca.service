@@ -1,0 +1,14 @@
+[Unit]
+Description=step-ca (test ACME authority)
+Wants=network-online.target knot.service
+After=network-online.target knot.service
+
+[Service]
+Environment=STEPPATH=/etc/step-ca
+ExecStartPre=/usr/local/sbin/step-ca-init
+ExecStart=/usr/bin/step-ca /etc/step-ca/config/ca.json --password-file /etc/step-ca-password --resolver 127.0.0.1:53
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

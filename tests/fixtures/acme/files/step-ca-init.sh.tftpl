@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+export STEPPATH=/etc/step-ca
+[ -f "$STEPPATH/config/ca.json" ] && exit 0
+own=$(curl -fsS http://169.254.169.254/latest/meta-data/local-ipv4)
+names="$own"
+if [ "${nat}" = "true" ]; then
+  for _ in $(seq 60); do
+    fip=$(curl -fsS http://169.254.169.254/latest/meta-data/public-ipv4 || true)
+    [ -n "$fip" ] && break
+    sleep 5
+  done
+  [ -n "$fip" ] && names="$names,$fip"
+fi
+head -c 32 /dev/urandom | base64 > /etc/step-ca-password
+chmod 600 /etc/step-ca-password
+step ca init --deployment-type standalone --name "Test ACME authority" \
+  --dns "$names" --address :443 --provisioner admin --acme \
+  --root /etc/step-ca-root/root.crt --key /etc/step-ca-root/root.key \
+  --password-file /etc/step-ca-password --provisioner-password-file /etc/step-ca-password
+# Certificates valid 90 days, like Let's Encrypt, so that renewal 30 days before expiry is exercised.
+jq '(.authority.provisioners[] | select(.type == "ACME") | .claims) = {"defaultTLSCertDuration": "2160h", "maxTLSCertDuration": "2160h"}' \
+  "$STEPPATH/config/ca.json" > /tmp/ca.json && mv /tmp/ca.json "$STEPPATH/config/ca.json"
+chmod -R go-rwx "$STEPPATH" /etc/step-ca-root

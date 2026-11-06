@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# Pushes isolated_up = 1 every 30 seconds to the receiver (OTLP, JSON over HTTP).
+import json, sys, time, urllib.request
+
+URL = sys.argv[1].rstrip("/") + "/api/v1/otlp/v1/metrics"
+ATTRIBUTES = {"service.name": "isolated", "service.instance.id": "${instance}",
+              "site": "${site}", "tenant": "isolated"}
+
+while True:
+    body = {"resourceMetrics": [{
+        "resource": {"attributes": [{"key": k, "value": {"stringValue": v}} for k, v in ATTRIBUTES.items()]},
+        "scopeMetrics": [{"metrics": [{"name": "isolated_up", "gauge": {
+            "dataPoints": [{"asDouble": 1, "timeUnixNano": str(time.time_ns())}]}}]}],
+    }]}
+    request = urllib.request.Request(URL, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(request, timeout=10).read()
+    except Exception as e:
+        print(f"push failed: {e}", file=sys.stderr, flush=True)
+    time.sleep(30)

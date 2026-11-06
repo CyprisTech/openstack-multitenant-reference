@@ -1,0 +1,11 @@
+[Unit]
+Description=Intranet demonstration service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 8080 --directory /srv/www
+Restart=always
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target

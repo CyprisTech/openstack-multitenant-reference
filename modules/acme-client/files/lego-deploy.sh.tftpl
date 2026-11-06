@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+install -m 0644 "$LEGO_HOOK_CERT_PATH" ${certificate_path}
+install -m 0600 "$LEGO_HOOK_CERT_KEY_PATH" ${key_path}
+%{for c in commands~}
+${c}
+%{endfor~}

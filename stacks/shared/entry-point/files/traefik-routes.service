@@ -1,0 +1,6 @@
+[Unit]
+Description=Render the Traefik routes from the instance metadata
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/traefik-routes

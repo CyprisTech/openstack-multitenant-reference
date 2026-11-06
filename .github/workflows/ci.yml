@@ -75,7 +75,7 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in modules/admission modules/bastion modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
+          for d in modules/acme-client modules/admission modules/bastion modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations
@@ -90,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: syntax check
-        run: python3 -m py_compile tests/isolation/check.py
+        run: python3 -m py_compile tests/isolation/check.py stacks/shared/entry-point/files/traefik-routes.py
       - name: help runs
         run: python3 tests/isolation/check.py --help
       - name: tour script syntax

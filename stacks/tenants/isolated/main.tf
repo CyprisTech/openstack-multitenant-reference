@@ -12,43 +12,8 @@ locals {
 
   bastion_name = "${local.prefix}-bastion"
 
-  pusher = <<-EOT
-    #!/usr/bin/env python3
-    # Pushes isolated_up = 1 every 30 seconds to the receiver (OTLP, JSON over HTTP).
-    import json, sys, time, urllib.request
-
-    URL = sys.argv[1].rstrip("/") + "/api/v1/otlp/v1/metrics"
-    ATTRIBUTES = {"service.name": "isolated", "service.instance.id": "${local.instance}",
-                  "site": "${var.site}", "tenant": "isolated"}
-
-    while True:
-        body = {"resourceMetrics": [{
-            "resource": {"attributes": [{"key": k, "value": {"stringValue": v}} for k, v in ATTRIBUTES.items()]},
-            "scopeMetrics": [{"metrics": [{"name": "isolated_up", "gauge": {
-                "dataPoints": [{"asDouble": 1, "timeUnixNano": str(time.time_ns())}]}}]}],
-        }]}
-        request = urllib.request.Request(URL, data=json.dumps(body).encode(),
-                                         headers={"Content-Type": "application/json"})
-        try:
-            urllib.request.urlopen(request, timeout=10).read()
-        except Exception as e:
-            print(f"push failed: {e}", file=sys.stderr, flush=True)
-        time.sleep(30)
-  EOT
-
-  pusher_unit = <<-EOT
-    [Unit]
-    Description=Stand-in workload: pushes its metric to the receiver
-    After=network-online.target
-
-    [Service]
-    ExecStart=/usr/bin/python3 /usr/local/bin/push-metrics ${coalesce(var.monitoring.receiver, "none")}
-    Restart=always
-    DynamicUser=yes
-
-    [Install]
-    WantedBy=multi-user.target
-  EOT
+  # Boot disk of the instances: the image's ephemeral disk, or a volume of the given size.
+  boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
 }
 
 # How the stack joins the monitoring plane (ADR-0004). Its router is the default gateway:
@@ -83,7 +48,7 @@ module "bastion" {
     az     = var.az
     image  = var.image
     flavor = var.flavor
-    boot   = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+    boot   = local.boot
   }
   mtu             = var.network_mtu
   dns_nameservers = var.dns_nameservers
@@ -99,8 +64,13 @@ module "cloudinit" {
   }
 
   write_files = var.monitoring.receiver == null ? {} : {
-    "/usr/local/bin/push-metrics"              = { content = local.pusher, permissions = "0755" }
-    "/etc/systemd/system/push-metrics.service" = { content = local.pusher_unit }
+    "/usr/local/bin/push-metrics" = {
+      content     = templatefile("${path.module}/files/push-metrics.py.tftpl", { instance = local.instance, site = var.site })
+      permissions = "0755"
+    }
+    "/etc/systemd/system/push-metrics.service" = {
+      content = templatefile("${path.module}/files/push-metrics.service.tftpl", { receiver = coalesce(var.monitoring.receiver, "none") })
+    }
   }
   runcmd = var.monitoring.receiver == null ? [] : [
     "systemctl daemon-reload",
@@ -137,7 +107,7 @@ module "isolated" {
         az        = var.az
         flavor    = var.flavor
         image     = var.image
-        boot      = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+        boot      = local.boot
         user_data = module.cloudinit.rendered
         labels    = ["isolated"]
         ports = {

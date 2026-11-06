@@ -1,0 +1,16 @@
+[Unit]
+Description=Traefik (public entry point)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStartPre=-/usr/bin/podman rm --force traefik
+ExecStart=/usr/bin/podman run --rm --name traefik --network host \
+  --volume /etc/traefik:/etc/traefik:ro \
+  ${image} --configFile=/etc/traefik/traefik.yml
+ExecStop=/usr/bin/podman stop --time 10 traefik
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

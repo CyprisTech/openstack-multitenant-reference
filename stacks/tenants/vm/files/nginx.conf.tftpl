@@ -1,0 +1,17 @@
+server {
+    listen 443 ssl%{if proxy_protocol} proxy_protocol%{endif} default_server;
+    ssl_certificate     /etc/nginx/tls/cert.pem;
+    ssl_certificate_key /etc/nginx/tls/key.pem;
+
+%{if proxy_protocol~}
+%{for cidr in https_sources~}
+    set_real_ip_from ${cidr};
+%{endfor~}
+    real_ip_header proxy_protocol;
+%{endif~}
+
+    location / {
+        default_type text/plain;
+        return 200 "host=$host server=$hostname client=$remote_addr\n";
+    }
+}

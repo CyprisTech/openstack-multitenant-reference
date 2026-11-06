@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)): input `certificates` on the `vm` and `kubernetes` stacks — ACME DNS-01 from any directory (Let's Encrypt or the organisation's authority), lego on the instances, cert-manager in the cluster, RFC 2136 with TSIG in the examples. Without it, demonstration mode (self-signed, with a warning). Guide [certificates](docs/guides/certificates.md).
+- Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)): input `certificates` on the `vm` and `kubernetes` stacks — ACME DNS-01 from any directory (Let's Encrypt or the organisation's authority), lego on the instances (local module `acme-client`), cert-manager in the cluster, RFC 2136 with TSIG in the examples. Without it, demonstration mode (self-signed, with a warning). Guide [certificates](docs/guides/certificates.md).
 - `vm`: joins the internal services plane when its attachment has it; output `intranet_sources`.
 - Test fixture `tests/fixtures/acme` (Knot and step-ca, one TSIG key per tenant); isolation rows for certificates and TSIG keys (`--acme`).
 - `admission` module: UDP flows.

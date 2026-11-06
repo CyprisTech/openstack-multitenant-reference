@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+set -a; . /etc/lego/dns.env; set +a
+if [ -f /etc/lego/ca.pem ]; then export LEGO_CA_CERTIFICATES=/etc/lego/ca.pem; fi
+run() { /usr/local/bin/lego run ${flags} --deploy-hook /usr/local/sbin/lego-deploy; }
+# An authority that lost the account (restored, or the account deleted) answers
+# accountDoesNotExist: register again with a new account.
+if ! out=$(run 2>&1); then
+  echo "$out"
+  grep -q accountDoesNotExist <<<"$out" || exit 1
+  rm -rf /var/lib/lego/accounts
+  run
+else
+  echo "$out"
+fi

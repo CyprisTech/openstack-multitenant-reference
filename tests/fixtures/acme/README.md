@@ -91,6 +91,7 @@ tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/ten
 | address | Address of the authority on the internal services plane (DNS on 53, ACME on 443). |
 | bastion | Floating IP of the bastion on the administration network. |
 | certificates | The certificates input of each tenant stack, keyed by tenant: ACME directory, root, DNS-01 through RFC 2136 with the tenant's TSIG key. |
+| instance\_address | Address of the authority on its own network, reached through the bastion (SSH). |
 | root\_certificate | Root certificate of the test authority, for the clients of the tests. |
 | tenants | Names each tenant may obtain certificates for. |
 | zone | The test zone. |

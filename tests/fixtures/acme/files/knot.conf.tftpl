@@ -1,0 +1,31 @@
+server:
+  listen: [0.0.0.0@53]
+log:
+  - target: syslog
+    any: info
+key:
+%{for t in keys(tenants)~}
+  - id: ${t}
+    algorithm: hmac-sha256
+    secret: ${tsig[t]}
+%{endfor~}
+acl:
+%{for t, names in tenants~}
+  - id: ${t}
+    key: ${t}
+    address: [${join(", ", sources)}]
+    action: update
+    update-type: [TXT]
+    update-owner: name
+    update-owner-match: equal
+    update-owner-name: [${join(", ", [for n in names : "_acme-challenge.${n}."])}]
+%{endfor~}
+template:
+  - id: default
+    storage: /var/lib/knot
+    zonefile-sync: -1
+    zonefile-load: difference-no-serial
+    journal-content: all
+zone:
+  - domain: ${zone}
+    acl: [${join(", ", keys(tenants))}]

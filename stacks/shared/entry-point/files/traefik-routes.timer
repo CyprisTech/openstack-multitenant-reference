@@ -1,0 +1,10 @@
+[Unit]
+Description=Render the Traefik routes from the instance metadata, every 10 seconds
+
+[Timer]
+OnBootSec=5
+OnUnitActiveSec=10
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target

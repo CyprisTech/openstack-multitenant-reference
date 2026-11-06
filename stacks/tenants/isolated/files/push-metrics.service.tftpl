@@ -1,0 +1,11 @@
+[Unit]
+Description=Stand-in workload: pushes its metric to the receiver
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/push-metrics ${receiver}
+Restart=always
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
