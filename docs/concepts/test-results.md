@@ -6,48 +6,53 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Tests of 2026-11-02 and 2026-11-03, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
+Tests of 2026-11-05 and 2026-11-06, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
-| Deployment | 7 stacks; empty plan after apply | ✅ | ✅ |
-| Isolation | executable matrix: tenants, shared services, administrators (33 rows) | ✅ 33/33 | ✅ 33/33 |
+| Deployment | 8 stacks (with the test ACME authority); empty plan after apply | ✅ | ✅ |
+| Isolation | executable matrix: tenants, shared services, administrators, certificates, DNS keys (38 rows) | ✅ 38/38 | ✅ 38/38 |
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed on 443, 22, 9100 |
-| Ingress | HTTPS through the entry point, SNI without decryption, client address kept (3 domains × 12) | ✅ 36/36 | ✅ 36/36 |
+| Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root (3 domains × 12) | ✅ 36/36 | ✅ 36/36 |
+| Certificates | ACME DNS-01 from an internal authority: lego on the `vm` instances, cert-manager in the cluster; a tenant's DNS key changes its own names only | ✅ | ✅ |
 | Observability | push from every tenant type (Prometheus agent, OTLP, remote write); nothing connects in | ✅ | ✅ |
 | Kubernetes | self-managed cluster with Cluster API, management moved into the cluster | ✅ | ✅ |
 | Teardown | no leftover in any project | ✅ | ✅ |
 
-Publishing a domain under load, measured once: nothing is replaced, the domain answers 13 s after a 19 s apply, and none of the 290 requests sent meanwhile to another domain fails.
+Publishing a domain under load, measured once (2026-11-02): nothing is replaced, the domain answers 13 s after a 19 s apply, and none of the 290 requests sent meanwhile to another domain fails.
+
+**Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
 
 Known limits, detailed in the findings below and in the [test procedure](../reference/test-procedure.md):
 
 - On hub planes, `shared/planes` is applied again after the tenants; until then the pushes time out and the agents retry.
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
-- Duplicate release proxies after `clusterctl move` have been seen once, without visible effect ([History](#history)).
+- An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
 
 The isolation matrix of the earlier designs had 45 rows; the counts are not comparable.
 
 ## Environment
 
-Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 code for the current state (tested at its commit before the release); v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
-## Detailed results: Service addresses, routes through metadata, monitoring by push (2026-11-02)
+## Detailed results: certificates of the tenants (2026-11-05)
 
-The design of [ADR-0006](../adr/0006-exposure.md) and [ADR-0007](../adr/0007-monitoring.md), from empty projects, each stack in its own project, in both plane modes, following the [test procedure](../reference/test-procedure.md). The `vm` tenant behind its load balancer, the receiver (`tests/fixtures/receiver`, Prometheus 3.15.1) in the shared services project.
+The design of [ADR-0008](../adr/0008-tenant-certificates.md), from empty projects, each stack in its own project, in both plane modes. The test ACME authority (`tests/fixtures/acme`: Knot and step-ca, one TSIG key per tenant) in the shared services project, on the intranet plane, which the `vm` tenant joins. Certificates valid 90 days.
 
-| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
-|---|---|---|---|---|---|
-| Interface mode (hub planes) | planes 16 s, receiver 75 s, entry point 9 min 36 s, `vm` 3 min 42 s, `isolated` 70 s, Kubernetes stack 84 s, cluster 18 min 8 s, planes again 7 s | ✅ 36/36, client address preserved | ✅ **33/33** | ✅ closed on 443, 22, 9100 | ✅ empty (7 stacks) |
-| Gateway mode (operator planes, NAT) | planes 2 s, receiver 2 min 12 s, entry point 3 min 15 s, `vm` 3 min 5 s, `isolated` 2 min 42 s, Kubernetes stack 1 min 56 s, cluster 17 min 27 s | ✅ 36/36, client address preserved | ✅ **33/33** | — (no transit router) | ✅ empty (7 stacks) |
+| Cycle | Deployment | Certificates | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
+|---|---|---|---|---|---|---|
+| Gateway mode (operator planes, NAT) | planes 3 s, ACME authority 2 min 3 s, receiver 1 min 54 s, `vm` 3 min 49 s, `isolated` 1 min 42 s, Kubernetes stack 2 min 4 s, cluster 21 min 15 s | `vm`: issued at first boot by lego on both instances; `kubernetes`: issued by cert-manager about 1 min after its `Certificate` | ✅ 36/36, verified with the test root, client address preserved | ✅ **38/38** | — (no transit router) | ✅ empty (8 stacks) |
+| Interface mode (hub planes) | planes 5 s, ACME authority 1 min 12 s, receiver 2 min 55 s, entry point 9 min 26 s, `vm` 3 min 26 s, `isolated` 1 min 52 s, Kubernetes stack 1 min 28 s, cluster 32 min 19 s | as above | ✅ 36/36, verified with the test root | ✅ **38/38** | ✅ closed on 443, 22, 9100 | ✅ empty (8 stacks) |
 
-Teardown (interface mode): cluster 4 min 19 s, stacks 4 min 51 s; no leftover in any project.
+Teardown (interface mode): cluster 3 min 48 s, stacks about 7 min; no leftover in any project.
 
-Findings:
+Findings, each fixed before the end of the campaign:
 
-1. **Publishing a domain no longer replaces anything.** A new domain added while a client sends two requests per second to another: the entry point's apply changes its two instances in place (19 s), the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails. Before, a publication took 5 to 8 minutes and lost requests (8 of 179 on 2026-10-29).
-2. **Every tenant pushes, nothing connects in.** The receiver holds series from the entry point, `vm`, `isolated` (OTLP from the stand-in workload) and the Kubernetes tenant (remote write), labelled `site`, `tenant`, `instance`; from the receiver, the metrics ports of the tenants are closed. On hub planes, the pushes time out until `shared/planes` is applied again after the tenants (step 7 of the procedure): the agents retry, nothing is lost but the delay.
-3. **The isolation test must wait** for the ingress Service's address and for the first push (30 s) after the publication; the procedure says so.
+1. **lego checked the TXT record on the zone's authoritative servers** found through the instance's resolvers, which do not know a private zone. With `dns.resolvers`, lego now checks on these servers only (`--dns.propagation.disable-ans`), as cert-manager does with `--dns01-recursive-nameservers-only`.
+2. **The certificates step of `create-cluster.sh` ran after the bootstrap instance left the API sources**: it could not reach the cluster. The step now runs right after `clusterctl move`, before that change.
+3. **An authority that lost the ACME account** (replaced, restored) answers `accountDoesNotExist`, and lego v5 does not register again: the renewal script now removes the local account and runs once more.
+4. **The test authority's configuration**: Knot rejected an indented configuration, and systemd-resolved held port 53; both fixed in the fixture.
+5. **Replacing a router that carries a floating IP's route**: Neutron refuses to remove the router's interface while a floating IP of the subnet uses it (`RouterInterfaceInUseByFloatingIP`); the floating IP must be removed first. Only a test operation (a router replaced by hand) meets it.
 
 ## History
 
@@ -341,5 +346,26 @@ Findings:
 3. **Renaming an attachment on the same project** fails the first apply of `shared/planes` (`DuplicateRbacPolicy`: the new policy is created before the old one is deleted); a second apply completes it. Documented in the stack's README.
 4. **Duplicate release proxies after `clusterctl move`** came back once (cloud controller manager and Traefik), without visible effect; none in the two other cycles. Still open, for the Kubernetes day-to-day work.
 5. **Routes pushed by DHCP reach the instances at lease renewal.** With `tenant_ranges` set from the start, the entry point's routes never change when a tenant is added; changing the aggregates later needs a lease renewal on the instances.
+
+</details>
+
+<a id="service-addresses-routes-through-metadata-monitoring-by-push-2026-11-02"></a>
+<details>
+<summary><strong>Service addresses, routes through metadata, monitoring by push (2026-11-02)</strong></summary>
+
+The design of [ADR-0006](../adr/0006-exposure.md) and [ADR-0007](../adr/0007-monitoring.md), from empty projects, each stack in its own project, in both plane modes, following the [test procedure](../reference/test-procedure.md). The `vm` tenant behind its load balancer, the receiver (`tests/fixtures/receiver`, Prometheus 3.15.1) in the shared services project.
+
+| Cycle | Deployment | HTTPS (3 domains × 12) | Isolation test | Hostile route | Plans |
+|---|---|---|---|---|---|
+| Interface mode (hub planes) | planes 16 s, receiver 75 s, entry point 9 min 36 s, `vm` 3 min 42 s, `isolated` 70 s, Kubernetes stack 84 s, cluster 18 min 8 s, planes again 7 s | ✅ 36/36, client address preserved | ✅ **33/33** | ✅ closed on 443, 22, 9100 | ✅ empty (7 stacks) |
+| Gateway mode (operator planes, NAT) | planes 2 s, receiver 2 min 12 s, entry point 3 min 15 s, `vm` 3 min 5 s, `isolated` 2 min 42 s, Kubernetes stack 1 min 56 s, cluster 17 min 27 s | ✅ 36/36, client address preserved | ✅ **33/33** | — (no transit router) | ✅ empty (7 stacks) |
+
+Teardown (interface mode): cluster 4 min 19 s, stacks 4 min 51 s; no leftover in any project.
+
+Findings:
+
+1. **Publishing a domain no longer replaces anything.** A new domain added while a client sends two requests per second to another: the entry point's apply changes its two instances in place (19 s), the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails. Before, a publication took 5 to 8 minutes and lost requests (8 of 179 on 2026-10-29).
+2. **Every tenant pushes, nothing connects in.** The receiver holds series from the entry point, `vm`, `isolated` (OTLP from the stand-in workload) and the Kubernetes tenant (remote write), labelled `site`, `tenant`, `instance`; from the receiver, the metrics ports of the tenants are closed. On hub planes, the pushes time out until `shared/planes` is applied again after the tenants (step 7 of the procedure): the agents retry, nothing is lost but the delay.
+3. **The isolation test must wait** for the ingress Service's address and for the first push (30 s) after the publication; the procedure says so.
 
 </details>

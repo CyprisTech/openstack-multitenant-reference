@@ -180,3 +180,34 @@ variable "monitoring" {
   })
   default = {}
 }
+
+variable "certificates" {
+  description = <<-EOT
+    Certificates of the domains of the cluster (ADR-0008): cert-manager obtains and renews them
+    through the ACME DNS-01 challenge, from any ACME directory (Let's Encrypt, or the
+    organisation's authority), and writes the secret of the ingress listener. null runs the
+    demonstration mode: a self-signed certificate, with a warning at every plan.
+    - directory_url, ca_bundle (PEM, for an authority that is not publicly trusted), email.
+    - dns.provider "rfc2136" with dns.settings nameserver ("host:port"), tsig_key_name,
+      tsig_algorithm, tsig_secret: the stack writes the TSIG secret in the cert-manager
+      namespace. Any other provider: dns.solver, a cert-manager dns01 solver, whose credentials
+      Secret you create in the cert-manager namespace.
+    - dns.resolvers: name servers ("host:port") cert-manager checks the TXT record on; empty
+      uses the cluster's resolvers.
+    The settings reach the cluster through the bootstrap instance's user data, readable by the
+    members of the project: give a key restricted to the _acme-challenge records of the domains.
+  EOT
+  type = object({
+    directory_url = string
+    ca_bundle     = optional(string)
+    email         = string
+    dns = object({
+      provider  = string
+      settings  = optional(map(string), {})
+      solver    = optional(any)
+      resolvers = optional(list(string), [])
+    })
+  })
+  default   = null
+  sensitive = true
+}

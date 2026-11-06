@@ -1,0 +1,51 @@
+# Certificates of the domains (ADR-0008): cert-manager obtains them from an ACME directory through
+# the DNS-01 challenge and writes the secret the ingress listener uses (platform-tls).
+%{ if certificates.dns.provider == "rfc2136" ~}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-dns
+  namespace: cert-manager
+type: Opaque
+stringData:
+  tsig-secret: "${certificates.dns.settings.tsig_secret}"
+---
+%{ endif ~}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: tenant-acme
+spec:
+  acme:
+    server: "${certificates.directory_url}"
+    email: "${certificates.email}"
+%{ if certificates.ca_bundle != null ~}
+    caBundle: ${base64encode(certificates.ca_bundle)}
+%{ endif ~}
+    privateKeySecretRef:
+      name: tenant-acme-account
+    solvers:
+%{ if certificates.dns.provider == "rfc2136" ~}
+      - dns01:
+          rfc2136:
+            nameserver: "${certificates.dns.settings.nameserver}"
+            tsigKeyName: "${certificates.dns.settings.tsig_key_name}"
+            tsigAlgorithm: ${upper(replace(trimsuffix(certificates.dns.settings.tsig_algorithm, "."), "-", ""))}
+            tsigSecretSecretRef:
+              name: tenant-dns
+              key: tsig-secret
+%{ else ~}
+      - dns01: ${jsonencode(certificates.dns.solver)}
+%{ endif ~}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: platform-tls
+  namespace: traefik
+spec:
+  secretName: platform-tls
+  dnsNames: ${jsonencode(cluster.domains)}
+  issuerRef:
+    name: tenant-acme
+    kind: ClusterIssuer

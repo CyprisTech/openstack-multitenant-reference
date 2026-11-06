@@ -8,12 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)): input `certificates` on the `vm` and `kubernetes` stacks — ACME DNS-01 from any directory (Let's Encrypt or the organisation's authority), lego on the instances, cert-manager in the cluster, RFC 2136 with TSIG in the examples. Without it, demonstration mode (self-signed, with a warning). Guide [certificates](docs/guides/certificates.md).
+- `vm`: joins the internal services plane when its attachment has it; output `intranet_sources`.
+- Test fixture `tests/fixtures/acme` (Knot and step-ca, one TSIG key per tenant); isolation rows for certificates and TSIG keys (`--acme`).
+- `admission` module: UDP flows.
 - OpenSSF Best Practices badge (passing).
 - `CODEOWNERS`: the maintainers team reviews every change; ADRs name the maintainers as deciders.
 - CodeQL workflow: static analysis of the GitHub Actions workflows and the Python scripts (HCL is not supported by CodeQL).
 
 ### Changed
 
+- `kubernetes`: outputs `manifests` and `scripts` are sensitive (they may hold the DNS provider's key).
 - README badges: tested OpenStack release, OpenSSF Scorecard; OpenSSF Scorecard workflow (weekly and on every push to `main`).
 - ADR-0003 to ADR-0007 accepted; ADR-0001 and ADR-0002 superseded in part by ADR-0006 and ADR-0007.
 

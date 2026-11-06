@@ -180,6 +180,7 @@ isolated t1-isolated-1 intranet service 198.51.100.3                          80
 |---|---|
 | Add a tenant | [add-a-tenant](docs/guides/add-a-tenant.md) |
 | Publish a domain | [publish-a-domain](docs/guides/publish-a-domain.md) |
+| Give a tenant trusted certificates | [certificates](docs/guides/certificates.md) |
 | Check the isolation after a change | [check-isolation](docs/guides/check-isolation.md) |
 | Discover a Kubernetes tenant | [kubernetes-tour](docs/guides/kubernetes-tour.md) |
 | Tear down | [teardown](docs/guides/teardown.md) |
@@ -190,6 +191,7 @@ This is a reference, not an operated platform. What stays yours:
 
 - **the tools** behind the integration points: metrics, logs and audit receivers, backup and secret stores;
 - **identity**: single sign-on for the administration access (your identity provider, or the provider's IAM);
+- **certificates**: the tenants run in demonstration mode (self-signed) until `certificates` is set ([guide](docs/guides/certificates.md));
 - **capacity**: quotas per project ([sizing](docs/concepts/architecture.md#sizing)) and room per compute host — the entry point instances are in anti-affinity, and a replacement needs room on another host;
 - **the trade-offs**: read [them](docs/concepts/trade-offs.md) against your own constraints.
 
@@ -198,10 +200,10 @@ This is a reference, not an operated platform. What stays yours:
 | | |
 |---|---|
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
-| **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
+| **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md): [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md) |
-| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md) · [node image boot check](tests/integration/node-image/README.md) |
+| **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [intranet service](tests/fixtures/intranet-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
 ## Status
@@ -211,15 +213,15 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 | Release | Design areas delivered | |
 |---|---|---|
 | `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
-| **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | in progress |
-| `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | |
+| **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | released |
+| `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | in progress: certificates done |
 | `v0.5` | Availability zones; recovery of the architecture | |
 | `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with `cloud-baseline`) | |
 | `v0.7` | Observability: logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
 | `v0.8` | Several regions joined by an encrypted overlay; failover of the entry point between regions | |
 | `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
 
-`v0.3` is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, isolation test (33/33), destroy without leftover. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
+The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, certificates from an internal ACME authority on both tenant types, isolation test (38/38), destroy without leftover. Let's Encrypt takes the same path with another directory; it is not tested by the maintainers. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
 
 ## Requirements
 

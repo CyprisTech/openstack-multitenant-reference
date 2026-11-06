@@ -2,10 +2,10 @@
 # load balancer, or its instance when it has only one. Published through the shared entry point,
 # or with its own public floating IP.
 #
-# The web server is a demonstration backend: nginx terminates TLS with a self-signed
-# certificate, reads the PROXY protocol v2 header sent by the entry point and answers
-# with the client address it received. A real backend would obtain its certificates
-# with a DNS-01 or TLS-ALPN-01 challenge.
+# The web server is a demonstration backend: nginx terminates TLS, reads the PROXY protocol v2
+# header sent by the entry point and answers with the client address it received. Its
+# certificate comes from an ACME directory through the DNS-01 challenge (lego, ADR-0008), or is
+# self-signed in demonstration mode, without certificates.
 
 locals {
   prefix = "${var.site}-web"
@@ -51,6 +51,103 @@ locals {
   EOT
 
   san = join(",", [for d in var.domains : "DNS:${d}"])
+
+  # Certificates (ADR-0008). The provider settings live in one place on the instance, an
+  # environment file read by the renewal service only: a secrets manager can write it instead.
+  acme = var.certificates != null
+  dns_env = local.acme ? (
+    var.certificates.dns.provider == "rfc2136" ? {
+      DNSUPDATE_NAMESERVER     = var.certificates.dns.settings.nameserver
+      DNSUPDATE_TSIG_KEY       = var.certificates.dns.settings.tsig_key_name
+      DNSUPDATE_TSIG_ALGORITHM = "${trimsuffix(var.certificates.dns.settings.tsig_algorithm, ".")}."
+      DNSUPDATE_TSIG_SECRET    = var.certificates.dns.settings.tsig_secret
+    } : var.certificates.dns.settings
+  ) : {}
+
+  lego_flags = local.acme ? join(" ", concat(
+    ["--accept-tos", "--email '${var.certificates.email}'", "--server '${var.certificates.directory_url}'"],
+    ["--dns '${var.certificates.dns.provider}'", "--path /var/lib/lego", "--key-type EC256"],
+    # With resolvers, the TXT record is checked on them only, not on the zone's authoritative
+    # servers found through the instance's resolvers (like cert-manager's
+    # --dns01-recursive-nameservers-only).
+    [for r in var.certificates.dns.resolvers : "--dns.resolvers '${r}'"],
+    length(var.certificates.dns.resolvers) > 0 ? ["--dns.propagation.disable-ans"] : [],
+    [for d in var.domains : "--domains '${d}'"],
+  )) : ""
+
+  acme_files = local.acme ? merge({
+    "/etc/lego/dns.env" = {
+      content     = join("", [for k, v in local.dns_env : "${k}='${replace(v, "'", "'\\''")}'\n"])
+      permissions = "0600"
+    }
+    # Obtains the certificate, or renews it when it is due, and installs it for nginx.
+    "/usr/local/sbin/lego-certificate" = {
+      permissions = "0755"
+      content     = <<-EOT
+        #!/bin/bash
+        set -euo pipefail
+        set -a; . /etc/lego/dns.env; set +a
+        if [ -f /etc/lego/ca.pem ]; then export LEGO_CA_CERTIFICATES=/etc/lego/ca.pem; fi
+        run() { /usr/local/bin/lego run ${local.lego_flags} --deploy-hook /usr/local/sbin/lego-deploy; }
+        # An authority that lost the account (restored, or the account deleted) answers
+        # accountDoesNotExist: register again with a new account.
+        if ! out=$(run 2>&1); then
+          echo "$out"
+          grep -q accountDoesNotExist <<<"$out" || exit 1
+          rm -rf /var/lib/lego/accounts
+          run
+        else
+          echo "$out"
+        fi
+      EOT
+    }
+    "/usr/local/sbin/lego-deploy" = {
+      permissions = "0755"
+      content     = <<-EOT
+        #!/bin/bash
+        set -euo pipefail
+        install -m 0644 "$LEGO_HOOK_CERT_PATH" /etc/nginx/tls/cert.pem
+        install -m 0600 "$LEGO_HOOK_CERT_KEY_PATH" /etc/nginx/tls/key.pem
+        ln -sf /etc/nginx/web.conf /etc/nginx/conf.d/web.conf
+        systemctl reload nginx
+      EOT
+    }
+    "/etc/systemd/system/lego-certificate.service" = {
+      content = <<-EOT
+        [Unit]
+        Description=Obtain or renew the certificate of the domains (lego)
+        Wants=network-online.target
+        After=network-online.target nginx.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/lego-certificate
+      EOT
+    }
+    "/etc/systemd/system/lego-certificate.timer" = {
+      content = <<-EOT
+        [Unit]
+        Description=Check the certificate every hour; lego renews it when it is due
+
+        [Timer]
+        OnBootSec=2min
+        OnUnitActiveSec=1h
+
+        [Install]
+        WantedBy=timers.target
+      EOT
+    }
+    }, var.certificates.ca_bundle == null ? {} : {
+    "/etc/lego/ca.pem" = { content = var.certificates.ca_bundle }
+  }) : {}
+}
+
+# Demonstration mode: a warning at every plan and apply, without failing.
+check "certificates" {
+  assert {
+    condition     = var.certificates != null
+    error_message = "certificates not set: self-signed certificate, for evaluation only (ADR-0008)."
+  }
 }
 
 # Who may reach the web instances.
@@ -97,7 +194,9 @@ module "bastion" {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["svc_public", "monitoring"]
+  # The internal services plane when the attachment has it: the tenant consumes internal services,
+  # such as the organisation's certificate authority.
+  planes     = concat(["svc_public", "monitoring"], contains(keys(var.plane_attachment), "intranet") ? ["intranet"] : [])
   attachment = var.plane_attachment
   instances  = local.instances
   exposure = {
@@ -125,26 +224,34 @@ module "cloudinit" {
   }
   packages = concat(["nginx"], module.metrics[each.key].packages)
 
-  write_files = merge({
-    "/etc/nginx/conf.d/web.conf" = { content = local.nginx_conf }
-  }, module.metrics[each.key].write_files)
+  # With certificates, the site is enabled by the deploy hook once the certificate is issued:
+  # until then nothing listens on 443 and the load balancer keeps the instance out of its pool.
+  write_files = merge(
+    local.acme ? { "/etc/nginx/web.conf" = { content = local.nginx_conf } } : { "/etc/nginx/conf.d/web.conf" = { content = local.nginx_conf } },
+    local.acme_files,
+    module.metrics[each.key].write_files,
+  )
 
-  # The certificate must exist before the nginx package starts the service with this
-  # configuration: bootcmd runs before package installation (and at every boot, hence the test).
-  # apt retries: a mirror error at first boot would leave the instance without its packages,
-  # silently.
+  # Demonstration mode: the certificate must exist before the nginx package starts the service
+  # with this configuration; bootcmd runs before package installation (and at every boot, hence
+  # the test). apt retries: a mirror error at first boot would leave the instance without its
+  # packages, silently.
   extra_config = {
     apt = { conf = "Acquire::Retries \"10\";\n" }
-    bootcmd = [
-      "mkdir -p /etc/nginx/tls",
+    bootcmd = concat(["mkdir -p /etc/nginx/tls"], local.acme ? [] : [
       "test -f /etc/nginx/tls/cert.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj /CN=${var.domains[0]} -addext subjectAltName=${local.san} -keyout /etc/nginx/tls/key.pem -out /etc/nginx/tls/cert.pem",
-    ]
+    ])
   }
 
   runcmd = concat([
     "rm -f /etc/nginx/sites-enabled/default",
     "systemctl restart nginx",
-  ], module.metrics[each.key].runcmd)
+    ], local.acme ? [
+    "curl -fsSL https://github.com/go-acme/lego/releases/download/v${var.lego_version}/lego_v${var.lego_version}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin lego",
+    "systemctl daemon-reload",
+    "systemctl enable --now lego-certificate.timer",
+    "systemctl start --no-block lego-certificate.service",
+  ] : [], module.metrics[each.key].runcmd)
 }
 
 module "web" {
@@ -153,10 +260,8 @@ module "web" {
   tenant = {
     existing = {
       networks = merge({
-        egress     = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
-        svc_public = module.planes.networks.svc_public
-        monitoring = module.planes.networks.monitoring
-      }, module.bastion.existing_networks)
+        egress = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
+      }, module.planes.networks, module.bastion.existing_networks)
     }
 
     networks = merge({
@@ -165,13 +270,11 @@ module "web" {
         subnets = {
           main = { cidr = var.web_cidr, dns_nameservers = var.dns_nameservers }
         }
-        routers = {
+        # Gateway mode: the published addresses are floating IPs of the router on svc_public.
+        # Interface mode: the instances' own addresses, reached through the routes.
+        routers = merge({
           egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
-          # Gateway mode: the published addresses are floating IPs of this router on svc_public.
-          # Interface mode: the instances' own addresses, reached through the routes.
-          svc-public = module.planes.routers["svc-public"]
-          monitoring = module.planes.routers["monitoring"]
-        }
+        }, module.planes.routers)
       }
     }, module.bastion.networks)
 

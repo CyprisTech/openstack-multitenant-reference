@@ -59,7 +59,8 @@ kubectl -n platform wait cluster/${cluster.name} --for=condition=ControlPlaneIni
 clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
 
 # 3. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
-#    cloud controller manager and Cinder CSI, the Gateway API CRDs, the demonstration certificate.
+#    cloud controller manager and Cinder CSI, the Gateway API CRDs, and, in demonstration mode
+#    (without certificates), a self-signed certificate.
 cloud_conf=$(python3 - <<'EOF'
 import yaml
 c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
@@ -81,12 +82,14 @@ kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-conf
   --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 kubectl --kubeconfig "$workload" create namespace traefik --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+%{ if certificates == null ~}
 if ! kubectl --kubeconfig "$workload" -n traefik get secret platform-tls >/dev/null 2>&1; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${cluster.domains[0]}" \
     -addext "subjectAltName=${join(",", [for d in cluster.domains : "DNS:${d}"])}" -keyout /tmp/tls.key -out /tmp/tls.crt
   kubectl --kubeconfig "$workload" -n traefik create secret tls platform-tls --cert=/tmp/tls.crt --key=/tmp/tls.key
   rm -f /tmp/tls.key /tmp/tls.crt
 fi
+%{ endif ~}
 
 kubectl -n platform wait cluster/${cluster.name} --for=condition=Available --timeout=30m
 # clusterctl move refuses to run while a machine is still provisioning.
@@ -105,6 +108,24 @@ clusterctl move -n platform --to-kubeconfig "$workload"
 # clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
 python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
   | kubectl --kubeconfig "$workload" apply -f -
+%{ if certificates != null ~}
+# 5. Certificates of the domains (ADR-0008), once cert-manager runs in the workload cluster,
+#    while the bootstrap instance may still reach the API.
+%{ if length(certificates.dns.resolvers) > 0 ~}
+#    cert-manager checks the TXT record on the given name servers only.
+args=$(kubectl --kubeconfig "$workload" -n cert-manager get deployment cert-manager -o jsonpath='{.spec.template.spec.containers[0].args}')
+if [[ "$args" != *dns01-recursive-nameservers-only* ]]; then
+  kubectl --kubeconfig "$workload" -n cert-manager patch deployment cert-manager --type=json -p '[
+    {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--dns01-recursive-nameservers-only"},
+    {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--dns01-recursive-nameservers=${join(",", certificates.dns.resolvers)}"}]'
+  kubectl --kubeconfig "$workload" -n cert-manager rollout status deployment cert-manager --timeout=5m
+fi
+%{ endif ~}
+kubectl --kubeconfig "$workload" wait --for=condition=Available -n cert-manager deployment --all --timeout=10m
+kubectl --kubeconfig "$workload" apply -f manifests/certificates.yaml
+kubectl --kubeconfig "$workload" -n traefik wait certificate/platform-tls --for=condition=Ready --timeout=15m
+%{ endif ~}
+
 # The bootstrap instance no longer manages the cluster: its address leaves the API sources.
 sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 kind delete cluster --name bootstrap

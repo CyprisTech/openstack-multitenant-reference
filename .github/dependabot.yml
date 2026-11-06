@@ -11,5 +11,6 @@ updates:
       - /stacks/tenants/vm
       - /stacks/tenants/isolated
       - /tests/fixtures/receiver
+      - /tests/fixtures/acme
     schedule:
       interval: weekly

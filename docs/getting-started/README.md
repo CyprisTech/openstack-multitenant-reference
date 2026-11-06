@@ -93,4 +93,6 @@ It gathers the `published_domains` output of every tenant and applies the entry 
 curl -k --resolve site-a.example.org:443:<public IP of the entry point> https://site-a.example.org/
 ```
 
+`-k`: without `certificates`, the tenants run in demonstration mode, with a self-signed certificate (a warning at every plan says so). For certificates clients trust, see [certificates](../guides/certificates.md).
+
 The answer shows the backend and the client address it received through the PROXY protocol. Then [check the isolation](../guides/check-isolation.md). Adding a tenant later: [add a tenant](../guides/add-a-tenant.md). Every step with its checkpoint and measured duration: [test procedure](../reference/test-procedure.md).

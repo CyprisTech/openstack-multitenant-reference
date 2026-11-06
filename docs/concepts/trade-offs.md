@@ -20,6 +20,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 14 | [Node image size](#14-node-image-size) | Smallest image; disks sized per role by the cluster |
 | 15 | [Monitoring by push](#15-monitoring-by-push) | Agents push to a receiver; nothing connects into a tenant |
 | 16 | [Routes through instance metadata](#16-routes-through-instance-metadata) | Updated in place, read by a timer |
+| 17 | [Certificates through DNS-01 only](#17-certificates-through-dns-01-only) | DNS-01 from any ACME directory; HTTP-01 not shipped |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -208,6 +209,16 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **Cost.** About 120 domains per entry point (Nova quota `metadata_items`); a delay of seconds before a change is applied; routes are readable by the project's members (they hold no secret).
 
 **Choose object storage or a key-value store when** the cloud has one and the number of domains exceeds the metadata quota.
+
+## 17. Certificates through DNS-01 only
+
+**Choice.** Tenants obtain their certificates with the ACME DNS-01 challenge, from Let's Encrypt or the organisation's authority ([ADR-0008](../adr/0008-tenant-certificates.md)).
+
+**Why.** DNS-01 works for published and internal names alike, for any number of instances behind a load balancer, allows wildcard certificates, needs no inbound port 80, and fits an entry point that does not decrypt.
+
+**Cost.** The tenant needs write access to its DNS zone, through a provider supported by its tool; the credentials reach the instances or the cluster and must be restricted to the `_acme-challenge` records. With Let's Encrypt, the zone must resolve publicly (or `_acme-challenge` be a CNAME to a public zone), and every certificate appears in the public Certificate Transparency logs.
+
+**Choose HTTP-01 when** a tenant is published on the Internet, cannot get write access to its zone, and terminates TLS on one place (an ingress or a reverse-proxy tier): the entry point would then forward `/.well-known/acme-challenge/` on port 80 to the tenant. It cannot work for several instances behind a load balancer, each requesting its own certificate.
 
 ## Evidence
 

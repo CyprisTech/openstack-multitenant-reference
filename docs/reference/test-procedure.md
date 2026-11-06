@@ -30,7 +30,7 @@ flowchart LR
 | Step | Measured (2026-11-02, interface mode) |
 |---|---|
 | 1. Planes | 16 s |
-| 2. Receiver | 1 min 15 s |
+| 2. Receiver and ACME authority | 1 min 15 s each |
 | 3. Entry point | 3 to 10 min (Octavia) |
 | 4. `vm` (with its load balancer), `isolated`, `kubernetes` | 1 to 4 min each |
 | 5. Cluster (`create-cluster.sh`, add-ons included) | 18 min |
@@ -54,6 +54,7 @@ No stack reads an object of another project: each passes what the next ones need
 | `monitoring.receiver` | entry point, `vm`, `isolated`, `kubernetes` | output `receiver_url` of the receiver |
 | `edge_sources` | `vm`, `kubernetes` | output `svc_public_sources` of the entry point |
 | `allowed_sources` | intranet service | output `intranet_sources` of `kubernetes` |
+| `certificates` | `vm`, `kubernetes` | output `certificates` of the ACME authority, keyed by tenant (`jq .web`, `jq .platform`) |
 
 ## 0. Projects and prerequisites
 
@@ -100,6 +101,19 @@ $ tofu output -raw receiver_url
 http://10.34.0.12:9090
 ```
 
+The **ACME authority** (Knot and step-ca, [`tests/fixtures/acme`](../../tests/fixtures/acme/README.md)) is created at the same step, a shared service of the intranet plane: the tenant stacks need its `certificates` output.
+
+```bash
+cd tests/fixtures/acme && tofu init && tofu apply && tofu plan -detailed-exitcode
+tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/tenants/vm/certificates.auto.tfvars.json
+tofu output -json certificates | jq '{certificates: .platform}' > ../../../stacks/tenants/kubernetes/certificates.auto.tfvars.json
+tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
+```
+
+| Checkpoint | If it fails |
+|---|---|
+| `knot` and `step-ca` active on the instance (through its bastion) | cloud-init `error` with packages not installed: the instance had no Internet access at boot (its egress router); replace it once the egress works |
+
 ## 3. Entry point
 
 ```bash
@@ -133,6 +147,7 @@ done; wait
 |---|---|
 | three empty plans | report |
 | cloud-init `done` on the instances (through their bastions) and on the Kubernetes bootstrap instance | as in step 3 |
+| `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the intranet plane |
 
 ## 5. Cluster
 
@@ -246,17 +261,18 @@ Publication under load, measured: a new domain added while a client sends two re
 kubectl --kubeconfig platform.kubeconfig apply -f stacks/tenants/kubernetes/demo/whoami.yaml
 LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .floating_ip)
 for d in site-a.example.org site-b.example.org apps.platform.example.org; do
-  for i in $(seq 12); do curl -sk --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
+  for i in $(seq 12); do curl -s --cacert tests/fixtures/acme/root.pem --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
 done
-python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --platform-kubeconfig platform.kubeconfig
+python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --platform-kubeconfig platform.kubeconfig \
+  --acme tests/fixtures/acme
 ```
 
 Wait until the ingress Service has its address and the agents have pushed once (30 s) before the acceptance.
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
-| HTTPS through the entry point | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (41 with the Kubernetes tenant, 24 without) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
+| isolation test | every row as expected (46 with the Kubernetes tenant and the ACME authority) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
@@ -335,7 +351,7 @@ tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
 for s in tests/fixtures/intranet-service stacks/tenants/kubernetes stacks/tenants/isolated \
-         stacks/tenants/vm stacks/shared/entry-point tests/fixtures/receiver stacks/shared/planes; do
+         stacks/tenants/vm stacks/shared/entry-point tests/fixtures/receiver tests/fixtures/acme stacks/shared/planes; do
   tofu -chdir=$s destroy -auto-approve
 done
 ```

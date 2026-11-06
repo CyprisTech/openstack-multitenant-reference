@@ -16,12 +16,14 @@ output "intranet_sources" {
 }
 
 output "manifests" {
-  description = "Rendered Cluster API manifests, as written on the bootstrap instance."
+  description = "Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key)."
+  sensitive   = true
   value       = local.manifests
 }
 
 output "scripts" {
   description = "Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change)."
+  sensitive   = true
   value       = local.scripts
 }
 

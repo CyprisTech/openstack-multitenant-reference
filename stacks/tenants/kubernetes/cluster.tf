@@ -48,13 +48,16 @@ locals {
     svc_public_id    = local.ingress_internal ? "" : var.plane_attachment.svc_public.network_id
     ingress_ip       = local.ingress_address
     ingress_internal = local.ingress_internal
+    certificates     = var.certificates
   }
 
-  manifests = {
+  manifests = merge({
     "cluster-class.yaml" = templatefile("${path.module}/manifests/cluster-class.yaml.tftpl", local.manifest_vars)
     "cluster.yaml"       = templatefile("${path.module}/manifests/cluster.yaml.tftpl", local.manifest_vars)
     "addons.yaml"        = templatefile("${path.module}/manifests/addons.yaml.tftpl", local.manifest_vars)
-  }
+    }, var.certificates == null ? {} : {
+    "certificates.yaml" = templatefile("${path.module}/manifests/certificates.yaml.tftpl", local.manifest_vars)
+  })
 
   scripts = {
     "create-cluster.sh" = templatefile("${path.module}/scripts/create-cluster.sh.tftpl", local.manifest_vars)

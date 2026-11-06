@@ -38,7 +38,7 @@ flowchart LR
 | Project | Planes | Content |
 |---|---|---|
 | entry point | publication (shared), observability | Octavia load balancer with a public floating IP, two Traefik instances in anti-affinity |
-| `vm` tenant | publication, observability | instances behind a load balancer, the tenant's service address |
+| `vm` tenant | publication, observability, internal services (optional) | instances behind a load balancer, the tenant's service address |
 | `kubernetes` tenant | publication, observability, internal services | a cluster created with Cluster API; its ingress load balancer is the service address |
 | `isolated` tenant | observability | one workload, no public address, no other way out |
 | shared services | the planes they serve (`shared`) | the receiver, internal services; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) |
@@ -88,7 +88,7 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 | Tenant | Default gateway | Other routers | Exposed |
 |---|---|---|---|
 | entry point | public network | publication, observability | public floating IP of its load balancer |
-| `vm` | egress | publication, observability | its service address on the publication plane (or a public floating IP, `exposure = "public"`) |
+| `vm` | egress | publication, observability, internal services (optional) | its service address on the publication plane (or a public floating IP, `exposure = "public"`) |
 | `kubernetes` | egress | publication, observability, internal services | ingress (service address on the publication plane), API (floating IP of the administration network) |
 | `isolated` | observability | — | nothing |
 | bastions | administration network | — (second port on the tenant network) | floating IP of the administration network |
@@ -144,7 +144,7 @@ With `exposure = "public"`, a `vm` tenant's load balancer has its own public flo
 | Routes | instance metadata, one item per domain, updated in place ([ADR-0006](../adr/0006-exposure.md), D3) |
 | Dashboard | not exposed |
 
-What the entry point does not do: TLS termination, L7 routing, WAF. Each tenant owns its certificates, obtained with ACME DNS-01 challenges on its own zone ([ADR-0006](../adr/0006-exposure.md), D5).
+What the entry point does not do: TLS termination, L7 routing, WAF. Each tenant owns its certificates ([Certificates](#certificates)).
 
 ### Publishing a domain
 
@@ -158,6 +158,27 @@ flowchart LR
 ```
 
 The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route. Limit: about 120 domains per entry point (Nova quota `metadata_items`, 128 by default).
+
+## Certificates
+
+TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)); each tenant obtains and renews its certificates with the standard tool of its platform, from an ACME directory, through the DNS-01 challenge ([ADR-0008](../adr/0008-tenant-certificates.md)).
+
+| Tenant | TLS ends on | Tool | Certificate |
+|---|---|---|---|
+| `vm` | each instance (nginx in front of the application) | lego, run by a systemd timer | one per instance; the site is enabled once it is issued |
+| `kubernetes` | the ingress | cert-manager (`ClusterIssuer`, `Certificate`) | one for the cluster's domains, shared by the ingress replicas |
+| shared services on Kubernetes | their own entry | cert-manager, the organisation's authority | see the [shared-services spec](../specs/kubernetes-shared-services.md) |
+
+| Choice | Values |
+|---|---|
+| Authority | an ACME directory: Let's Encrypt for names published on the Internet, the organisation's authority (step-ca, Vault PKI, EJBCA…) for names served on internal planes only, with its root certificate |
+| Challenge | DNS-01: works for public and internal names and any number of instances, needs no inbound port 80 |
+| DNS provider | any provider of the tool; RFC 2136 with TSIG in the examples, one key per tenant restricted to the `_acme-challenge` records of its names |
+| Provider credentials | one place per platform: `/etc/lego/dns.env` on the instances, a Secret in the `cert-manager` namespace; delivered by the stack today, by a secrets manager through the secrets integration point |
+
+Without `certificates`, a tenant runs in **demonstration mode**: a self-signed certificate, with a warning at every plan. It is meant for evaluation only.
+
+**A reverse-proxy tier** in front of the application instances (load balancer, two proxies, then the instances) is not shipped. Use it when one domain serves several applications or routes by path, when a web application firewall is needed, or when the application instances must not hold keys: the proxies then terminate TLS and hold the certificate. For one application, the instances terminate TLS themselves, which avoids a tier.
 
 ## Observability data path
 

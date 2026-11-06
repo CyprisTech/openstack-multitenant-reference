@@ -31,3 +31,15 @@ locals {
     local.public || module.planes.nat.svc_public ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip
   )}:443"
 }
+
+output "intranet_sources" {
+  description = "Addresses the tenant reaches the internal services plane from, for the services of that plane (allowed_sources): its router's gateway address on an operator plane, the tenant range on an interface plane. Empty when the tenant does not join the plane."
+  value = !contains(keys(var.plane_attachment), "intranet") ? [] : module.planes.nat.intranet ? [
+    for ip in data.openstack_networking_router_v2.intranet[0].external_fixed_ip : "${ip.ip_address}/32"
+  ] : [var.web_cidr]
+}
+
+data "openstack_networking_router_v2" "intranet" {
+  count     = contains(keys(var.plane_attachment), "intranet") && try(module.planes.nat.intranet, false) ? 1 : 0
+  router_id = module.web.networks[local.prefix].routers["intranet"].id
+}

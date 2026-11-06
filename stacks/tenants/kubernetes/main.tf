@@ -141,3 +141,11 @@ module "platform" {
     }
   }
 }
+
+# Demonstration mode: a warning at every plan and apply, without failing (ADR-0008).
+check "certificates" {
+  assert {
+    condition     = var.certificates != null
+    error_message = "certificates not set: self-signed certificate, for evaluation only (ADR-0008)."
+  }
+}

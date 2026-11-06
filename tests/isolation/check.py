@@ -11,7 +11,8 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
-        [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service]
+        [--platform-kubeconfig platform.kubeconfig --intranet-service tests/fixtures/intranet-service] \
+        [--acme tests/fixtures/acme]
 
 Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions and pushing to the test receiver, and the receiver applied. With
@@ -19,12 +20,19 @@ bastions and pushing to the test receiver, and the receiver applied. With
 in a short-lived pod, and the intranet demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
 use.
+
+With --acme, the rows of the certificates are added (ADR-0008): each published domain, reached
+through the entry point, presents a certificate for its name issued by the test authority, and
+a tenant's TSIG key can change its own _acme-challenge records only (nsupdate on the web
+instance; the record it adds is deleted at once).
 """
 
 import argparse
 import json
 import os
 import shlex
+import socket
+import ssl
 import subprocess
 import sys
 
@@ -71,7 +79,6 @@ class Prober:
 
     @staticmethod
     def local(target, port):
-        import socket
         try:
             with socket.create_connection((target, port), timeout=5):
                 return "open"
@@ -89,6 +96,7 @@ def main():
     ap.add_argument("--intranet-service", default="tests/fixtures/intranet-service")
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
+    ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
@@ -195,6 +203,47 @@ def main():
         rows.append((f"edge {edge_vm[0]}", f"intranet service {intranet}", 8080, "closed", from_edge(intranet, 8080)))
         rows.append(("receiver", f"intranet service {intranet}", 8080, "closed", from_receiver(intranet, 8080)))
         rows.append(("receiver", f"platform ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
+
+    if args.acme:
+        acme = outputs(args.tool, args.acme)
+        root = acme["root_certificate"]
+
+        def certificate(domain):
+            """Whether the domain, reached through the entry point, presents a certificate for its
+            name that chains to the test authority."""
+            ctx = ssl.create_default_context(cadata=root)
+            try:
+                with socket.create_connection((public_ip, 443), timeout=10) as sock:
+                    with ctx.wrap_socket(sock, server_hostname=domain):
+                        return "valid"
+            except ssl.SSLCertVerificationError as e:
+                return "invalid: " + (e.verify_message or str(e))[:40]
+            except OSError as e:
+                return "error: " + str(e)[:40]
+
+        def update(owner):
+            """Adds then deletes a TXT record with the web tenant's key, from the web instance."""
+            key = acme["certificates"]["web"]["dns"]["settings"]
+            server, port = key["nameserver"].rsplit(":", 1)
+            script = (f"server {server} {port}\nzone {acme['zone']}\nupdate add {owner}. 60 TXT isolation-probe\nsend\n"
+                      f"update delete {owner}. TXT\nsend\n")
+            cmd = (f"printf {shlex.quote(script)} | nsupdate -y "
+                   f"{shlex.quote('hmac-sha256:' + key['tsig_key_name'] + ':' + key['tsig_secret'])} 2>&1; echo rc=$?")
+            out = p.run(web["bastion"], web_vm[1], cmd)
+            if out.endswith("rc=0"):
+                return "accepted"
+            return "refused" if "REFUSED" in out or "NOTAUTH" in out else "error: " + out[-60:]
+
+        for tenant, names in sorted(acme["tenants"].items()):
+            for d in names:
+                rows.append(("test runner", f"{tenant} certificate of {d}", 443, "valid", lambda d=d: certificate(d)))
+        own = acme["tenants"]["web"][0]
+        rows.append((f"web {web_vm[0]}", f"TSIG update _acme-challenge.{own}", 53, "accepted",
+                     lambda: update(f"_acme-challenge.{own}")))
+        for tenant, names in sorted(acme["tenants"].items()):
+            if tenant != "web":
+                rows.append((f"web {web_vm[0]}", f"TSIG update _acme-challenge.{names[0]}", 53, "refused",
+                             lambda n=names[0]: update(f"_acme-challenge.{n}")))
 
     failures = 0
     print(f"{'from':<22} {'to':<52} {'port':>5}  {'expected':<8} {'actual':<8}")

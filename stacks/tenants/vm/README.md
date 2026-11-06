@@ -10,7 +10,11 @@ Instances serving several domains behind **one service address** ([ADR-0006](../
 - metrics pushed to your receiver by a Prometheus agent on each instance (`monitoring.receiver`); nothing connects into the instances;
 - an optional bastion for administration.
 
-The web server is a demonstration backend: nginx terminates TLS with a self-signed certificate, accepts the PROXY protocol v2 header from its load balancer only, and answers with the host, the server name and the client address it received. A real backend obtains its certificates with ACME DNS-01 challenges on its zone.
+The web server is a demonstration backend: nginx terminates TLS, accepts the PROXY protocol v2 header from its load balancer only, and answers with the host, the server name and the client address it received.
+
+**Certificates** ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)). With `certificates`, each instance runs lego: it obtains the certificate of the domains through the ACME DNS-01 challenge, from Let's Encrypt or the organisation's authority, renews it when it is due (checked every hour), and enables the site once the certificate is issued; until then the load balancer keeps the instance out of its pool. The DNS provider's settings are written to `/etc/lego/dns.env`, readable by root only, through the instance's user data, which the members of the project can read: give a key restricted to the `_acme-challenge` records of the domains. Without `certificates`, the tenant runs in **demonstration mode**: a self-signed certificate, and a warning at every plan.
+
+The tenant joins the internal services plane when its entry of the `shared/planes` attachments has it, for instance to reach the organisation's certificate authority; its `intranet_sources` output gives the addresses the services of that plane must admit.
 
 ## Usage
 
@@ -54,6 +58,7 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 
 | Name | Version |
 | ---- | ------- |
+| openstack | ~> 3.2 |
 | terraform | n/a |
 
 ### Modules
@@ -72,6 +77,7 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | Name | Type |
 | ---- | ---- |
 | [terraform_data.checks](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [openstack_networking_router_v2.intranet](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
 
 ### Inputs
 
@@ -87,11 +93,13 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | admin | Administration access: users (login => SSH public keys, sudo granted) and SSH source ranges. No access by default. | <pre>object({<br/>    users     = optional(map(list(string)), {})<br/>    ssh_cidrs = optional(list(string), [])<br/>  })</pre> | `{}` | no |
 | bastion | Optional administration bastion. It lives in its own small network whose router joins<br/>external\_network (an administration network such as an intranet) and carries a floating<br/>IP on it. A second port on the web network gives it access to the instances; the web<br/>network itself gets no route to the administration network.<br/>- ssh\_cidrs: sources allowed to reach the bastion on port 22.<br/>The users of var.admin are created on the bastion and on the instances. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    cidr             = optional(string)<br/>    flavor           = optional(string)<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | `null` | no |
 | boot\_volume\_size | Size in GiB of a root volume created from the image; null boots from the flavor's local disk. | `number` | `null` | no |
+| certificates | Certificates of the domains (ADR-0008): obtained and renewed by lego on each instance, through<br/>the ACME DNS-01 challenge, from any ACME directory (Let's Encrypt, or the organisation's<br/>authority). null runs the demonstration mode: a self-signed certificate, with a warning at<br/>every plan.<br/>- directory\_url: the ACME directory, for example<br/>  "https://acme-v02.api.letsencrypt.org/directory".<br/>- ca\_bundle: root certificate (PEM) of an authority that is not publicly trusted.<br/>- email: contact of the ACME account.<br/>- dns.provider: a lego DNS provider code, for example "rfc2136".<br/>- dns.settings: for rfc2136, nameserver ("host:port"), tsig\_key\_name, tsig\_algorithm and<br/>  tsig\_secret; for any other provider, its lego environment variables, as documented by lego.<br/>- dns.resolvers: name servers ("host:port") lego checks the TXT record on, and only on;<br/>  empty uses the instance's resolvers and the zone's authoritative servers.<br/>The settings reach the instances through their user data, readable by the members of the<br/>project: give a key restricted to the \_acme-challenge records of these domains. | <pre>object({<br/>    directory_url = string<br/>    ca_bundle     = optional(string)<br/>    email         = string<br/>    dns = object({<br/>      provider  = string<br/>      settings  = map(string)<br/>      resolvers = optional(list(string), [])<br/>    })<br/>  })</pre> | `null` | no |
 | dns\_nameservers | DNS resolvers of the tenant network, reachable through its routes. | `list(string)` | `[]` | no |
 | domains | Domains served by the instances and published through the entry point. | `list(string)` | <pre>[<br/>  "site-a.example.org",<br/>  "site-b.example.org"<br/>]</pre> | no |
 | edge\_sources | Ranges the entry point connects from on svc\_public, in CIDR notation: output<br/>svc\_public\_sources of stack shared/entry-point. Only they may reach the service address.<br/>Required with exposure = "entry-point". | `list(string)` | `[]` | no |
 | exposure | How the service address is published (ADR-0006, D2):<br/>- "entry-point": through the shared entry point (output published\_domains), reachable from<br/>  the entry point only;<br/>- "public": a floating IP of egress\_network, reachable from anywhere; the shared entry point<br/>  is not used. | `string` | `"entry-point"` | no |
 | instance\_count | Number of instances. Above one, a load balancer is the service address (ADR-0006, D1); with one, the instance itself. | `number` | `2` | no |
+| lego\_version | Version of lego installed on the instances (release archive from GitHub), pinned. | `string` | `"5.6.0"` | no |
 | monitoring | Monitoring as a push integration point (ADR-0007): each instance runs its exporters and a<br/>Prometheus agent that pushes to the receiver through the monitoring plane. Nothing connects<br/>into the instances for their metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null runs no agent. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the networks of this stack. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes they join (planes contract): a larger value creates a<br/>path MTU black hole, since OVN routers do not send "fragmentation needed" unless the operator<br/>enables it. null keeps the cloud default. | `number` | `null` | no |
 | server\_group\_policy | Placement of the instances: "anti-affinity" or "soft-anti-affinity". | `string` | `"anti-affinity"` | no |
@@ -104,6 +112,7 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | bastion | Floating IP of the bastion on the administration network, or null. |
 | edge\_sources | Addresses of the entry point admitted on the service address. |
 | instances | Web instances and their private addresses. |
+| intranet\_sources | Addresses the tenant reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on an operator plane, the tenant range on an interface plane. Empty when the tenant does not join the plane. |
 | published\_domains | Domains to publish through the entry point and their service address, for its domains input (scripts/publish-domains.sh). Empty with exposure = "public". |
 | service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its load balancer, or its only instance. On svc\_public through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = "public". |
 <!-- END_TF_DOCS -->

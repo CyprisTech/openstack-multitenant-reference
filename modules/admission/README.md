@@ -26,7 +26,7 @@ module "admission" {
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| allow | Who may reach the instances, keyed by a name for the flow (https, ssh):<br/>TCP ports and the source ranges admitted on each of them. | <pre>map(object({<br/>    ports   = list(number)<br/>    sources = list(string)<br/>  }))</pre> | n/a | yes |
+| allow | Who may reach the instances, keyed by a name for the flow (https, ssh):<br/>ports, the source ranges admitted on each of them, and the protocol (tcp by default). | <pre>map(object({<br/>    ports    = list(number)<br/>    sources  = list(string)<br/>    protocol = optional(string, "tcp")<br/>  }))</pre> | n/a | yes |
 
 ### Outputs
 

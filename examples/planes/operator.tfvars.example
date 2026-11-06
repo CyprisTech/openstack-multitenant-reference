@@ -17,7 +17,8 @@ attachments = {
   edge             = { project_id = "<entry point project>", cidr = "10.20.0.0/24", planes = { svc_public = "shared", monitoring = "tenant" } }
   receiver         = { project_id = "<shared services project>", cidr = "10.34.0.0/28", planes = { monitoring = "shared" } }
   intranet-service = { project_id = "<shared services project>", cidr = "10.35.0.0/28", planes = { intranet = "shared" } }
-  web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant" } }
+  acme             = { project_id = "<shared services project>", cidr = "10.37.0.0/28", planes = { intranet = "shared" } }
+  web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
   isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { monitoring = "tenant" } }
   platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { svc_public = "tenant", monitoring = "tenant", intranet = "tenant" } }
 }

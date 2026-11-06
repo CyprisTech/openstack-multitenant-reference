@@ -71,5 +71,5 @@ The tests use step-ca and a private Knot server: they exercise the tools, DNS-01
 - The tenants serve certificates a client can verify; the self-signed demonstration certificates go away.
 - **Not breaking**: `certificates` is optional; without it, the `v0.3` behaviour remains, with a warning.
 - Two paths to keep consistent in each tenant stack: demonstration (self-signed) and ACME. The tests use the ACME path; the demonstration mode is checked to start.
-- Two test fixtures: `tests/fixtures/dns` (Knot) and `tests/fixtures/acme` (step-ca), on the internal services plane; new isolation rows.
+- A test fixture `tests/fixtures/acme` (Knot and step-ca) on the internal services plane, which the `vm` tenant joins as an optional plane; new isolation rows.
 - What depends on the public Internet (propagation, validation from several points, rate limits, CAA records) is documented and reported by users, not tested.

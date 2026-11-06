@@ -77,13 +77,24 @@ A reverse-proxy tier in front of the application instances (load balancer, two p
 
 The same mechanism with the internal authority: `directory_url` and `ca_bundle` point to it, and the DNS zone can be private. Clients trust the authority's root, distributed by the organisation. This is the default the [shared-services spec](kubernetes-shared-services.md) assumes for shared services.
 
-### 6. Tests
+### 6. Credentials of the DNS provider
+
+Each tool reads the provider settings from **one place on its platform**, whatever delivers them:
+
+- `vm`: a local environment file, `/etc/lego/dns.env`, readable by root only; the renewal service reads nothing else.
+- `kubernetes`: a Secret in the cert-manager namespace, referenced by the `Issuer`.
+
+In this release, the stack writes them: the file through the instance's user data, the Secret when the cluster is created. User data is readable by the members of the project, and from inside the instance through the metadata service; the exposure is bounded by the key itself, one per tenant, allowed to change only the TXT records `_acme-challenge` of its names.
+
+A secrets manager plugs into the same places, as part of the secrets integration point (the README's [status](../../README.md#status)): on virtual machines, a command run at boot writes the file, for example from Vault or OpenBao with a response-wrapped, single-use secret ID, or from Barbican with an application credential restricted to that secret (OpenStack gives instances no identity of their own, so a first token is always delivered; wrapping makes it useless once used); in Kubernetes, External Secrets Operator keeps the Secret in sync. The certificate logic does not change.
+
+### 7. Tests
 
 The reference tests the internal-authority path, which exercises everything Let's Encrypt uses except the public Internet:
 
 | Setup | What it proves |
 |---|---|
-| A test fixture `tests/fixtures/dns`: an authoritative DNS server (Knot) with RFC 2136 and TSIG, on the internal services plane, one key per tenant. A test fixture `tests/fixtures/acme` running **step-ca**, an open-source ACME authority, validating against it | lego (`vm`) and cert-manager (`kubernetes`) obtain, serve and renew certificates through DNS-01; a client trusting the root sees a valid certificate on every published domain; a tenant's key cannot update another tenant's names |
+| A test fixture `tests/fixtures/acme`, a shared service of the internal services plane standing for the organisation's DNS and authority: an authoritative DNS server (Knot) with RFC 2136 and TSIG, one key per tenant, and **step-ca**, an open-source ACME authority, validating against it. The `vm` tenant joins the internal services plane to reach it, as the `kubernetes` tenant already does | lego (`vm`) and cert-manager (`kubernetes`) obtain, serve and renew certificates through DNS-01; a client trusting the root sees a valid certificate on every published domain; a tenant's key cannot update another tenant's names |
 
 Let's Encrypt takes the same path; only the directory URL changes, and no root is given. What the tests do not cover belongs to the public Internet and to the DNS provider: propagation of the TXT record and validation from several points of the Internet, Let's Encrypt's rate limits, CAA records. The README's status and the test results say so: *tested with an internal ACME authority; Let's Encrypt uses the same path, not tested by the maintainers*. The documentation of the examples shows the Let's Encrypt configuration (staging, then production) with these points of attention; users report what fails in an issue.
 
@@ -92,7 +103,7 @@ The isolation test gains rows: each published domain presents a certificate for 
 ## Dependencies and order
 
 1. [ADR-0008](../adr/0008-tenant-certificates.md).
-2. `tests/fixtures/dns` (Knot, private) and `tests/fixtures/acme` (step-ca).
+2. `tests/fixtures/acme` (Knot and step-ca, private); the internal services plane as an optional plane of the `vm` tenant.
 3. `vm` tenant: lego, configuration, health monitor; tests.
 4. `kubernetes` tenant: `Issuer` and `Certificate`; tests.
 5. Isolation rows; test results.

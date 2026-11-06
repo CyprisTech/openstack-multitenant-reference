@@ -60,7 +60,7 @@ A second Traefik entry point and Service on the plane where HTTP services are of
 
 ### 5. Consumers join the plane
 
-`vm` and `isolated` do not join the internal services plane today. They get it as an optional plane (one more entry in their `plane-attachment` call) and the matching `<plane>_sources` output, as the Kubernetes tenant has.
+The `vm` tenant joins the internal services plane as an optional plane, with the matching `<plane>_sources` output, as the Kubernetes tenant does ([certificates spec](tenant-certificates.md)). The `isolated` tenant does not join it today; it gets it the same way when it consumes a service.
 
 ### 6. Inside the cluster
 

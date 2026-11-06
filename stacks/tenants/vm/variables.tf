@@ -177,3 +177,41 @@ variable "monitoring" {
   })
   default = {}
 }
+
+variable "certificates" {
+  description = <<-EOT
+    Certificates of the domains (ADR-0008): obtained and renewed by lego on each instance, through
+    the ACME DNS-01 challenge, from any ACME directory (Let's Encrypt, or the organisation's
+    authority). null runs the demonstration mode: a self-signed certificate, with a warning at
+    every plan.
+    - directory_url: the ACME directory, for example
+      "https://acme-v02.api.letsencrypt.org/directory".
+    - ca_bundle: root certificate (PEM) of an authority that is not publicly trusted.
+    - email: contact of the ACME account.
+    - dns.provider: a lego DNS provider code, for example "rfc2136".
+    - dns.settings: for rfc2136, nameserver ("host:port"), tsig_key_name, tsig_algorithm and
+      tsig_secret; for any other provider, its lego environment variables, as documented by lego.
+    - dns.resolvers: name servers ("host:port") lego checks the TXT record on, and only on;
+      empty uses the instance's resolvers and the zone's authoritative servers.
+    The settings reach the instances through their user data, readable by the members of the
+    project: give a key restricted to the _acme-challenge records of these domains.
+  EOT
+  type = object({
+    directory_url = string
+    ca_bundle     = optional(string)
+    email         = string
+    dns = object({
+      provider  = string
+      settings  = map(string)
+      resolvers = optional(list(string), [])
+    })
+  })
+  default   = null
+  sensitive = true
+}
+
+variable "lego_version" {
+  description = "Version of lego installed on the instances (release archive from GitHub), pinned."
+  type        = string
+  default     = "5.6.0"
+}
