@@ -116,7 +116,7 @@ Every stack describes its project with the [terraform-openstack-tenant](https://
 
 | In the reference | Integration points (your tools) | Out of scope |
 |---|---|---|
-| Resource organisation, planes in one or several regions, network services, isolation and its test, exposure and certificates, administration paths, resilience and recovery of the architecture, VM and Kubernetes tenants and their day-to-day operations | Metrics, logs, audit, backups of tenant data, secrets, a GitOps pipeline | The cloud's foundation (projects, quotas, identity federation, cost), the operation of the cloud itself, the workloads, projects administered by several organisations |
+| Resource organisation, planes in one or several regions, network services, isolation and its test, exposure and certificates, administration paths, resilience and recovery of the architecture, VM and Kubernetes tenants and the lifecycle the landing zone requires of them | Metrics, logs, audit, backups of tenant data, secrets, a GitOps pipeline | The cloud's foundation (projects, quotas, identity federation, cost), the operation of the cloud itself, the workloads, projects administered by several organisations |
 
 Who it is for, profile by profile: [who it is for](docs/concepts/audiences.md). For a single project, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly.
 
@@ -214,12 +214,13 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 |---|---|---|
 | `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
 | **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | released |
-| `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); Kubernetes day-to-day operations; a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)) | in progress: certificates done |
+| `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)); the Kubernetes lifecycle the landing zone requires ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)) | in progress: certificates done |
 | `v0.5` | Availability zones; recovery of the architecture | |
 | `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with `cloud-baseline`) | |
 | `v0.7` | Observability: logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
 | `v0.8` | Several regions joined by an encrypted overlay; failover of the entry point between regions | |
 | `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
+| after `v1.0` | Integrations of platform tools (level 3) in a separate repository, when users ask for them | |
 
 The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, certificates from an internal ACME authority on both tenant types, isolation test (38/38), destroy without leftover. Let's Encrypt takes the same path with another directory; it is not tested by the maintainers. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
 

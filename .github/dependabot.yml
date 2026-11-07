@@ -12,5 +12,6 @@ updates:
       - /stacks/tenants/isolated
       - /tests/fixtures/receiver
       - /tests/fixtures/acme
+      - /tests/fixtures/internal-service
     schedule:
       interval: weekly
