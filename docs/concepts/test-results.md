@@ -6,12 +6,12 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Tests of 2026-11-05 and 2026-11-06, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
+Tests of 2026-11-05 to 2026-11-07, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
 | Deployment | 8 stacks (with the test ACME authority); empty plan after apply | ✅ | ✅ |
-| Isolation | executable matrix: tenants, shared services, administrators, certificates, DNS keys (38 rows) | ✅ 38/38 | ✅ 38/38 |
+| Isolation | executable matrix: tenants, shared services and their reach, administrators, certificates, DNS keys (46 rows) | ✅ 46/46 | ✅ 46/46 |
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed on 443, 22, 9100 |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root (3 domains × 12) | ✅ 36/36 | ✅ 36/36 |
 | Certificates | ACME DNS-01 from an internal authority: lego on the `vm` instances, cert-manager in the cluster; a tenant's DNS key changes its own names only | ✅ | ✅ |
@@ -34,6 +34,24 @@ The isolation matrix of the earlier designs had 45 rows; the counts are not comp
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: plane keys by role, lateral movement (2026-11-06)
+
+The planes keyed by role (`publication`, `observability`, `internal`), the 8 isolation rows on the reach of the shared services, and the certificates, from empty projects, in both plane modes. Times below: operator planes (gateway).
+
+| Stack | Apply | Plan after apply |
+|---|---|---|
+| `shared/planes` | 8 s | empty |
+| receiver fixture | 2 min 14 s | empty |
+| ACME fixture | 1 min 50 s | empty |
+| `shared/entry-point` | 3 min 40 s | empty |
+| `tenants/vm` | 2 min 30 s | empty |
+| `tenants/isolated` | 1 min 11 s | empty |
+| `tenants/kubernetes` (stack), then the cluster | 1 min 50 s, then 26 min 47 s | empty |
+| internal service fixture | 17 s | empty |
+
+- Isolation: 46/46 rows as expected in both modes. HTTPS through the entry point, verified with the authority's root: 36/36 in both modes, client address kept. Hub planes: a tenant routing to another through the transit router stays closed on 443, 22 and 9100. All plans empty at the end. Teardown: no leftover; deleting the cluster took 6 min 26 s (gateway) and 5 min 53 s (interface).
+- **Finding: the Cluster API webhooks.** `clusterctl init --wait-providers` returned while the webhook of the kubeadm control plane still refused connections, and the ClusterClass was rejected. `create-cluster.sh` now waits until the API server validates the manifests, before the ClusterClass and before `clusterctl move`.
 
 ## Detailed results: certificates of the tenants (2026-11-05)
 
