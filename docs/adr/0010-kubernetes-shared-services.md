@@ -1,6 +1,6 @@
 # ADR-0010: A Kubernetes cluster for shared services
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-08
 - **Deciders:** maintainers
 - **Refines:** [ADR-0002](0002-platform-kubernetes.md) (Kubernetes cluster), [ADR-0006](0006-exposure.md) (exposure), [ADR-0008](0008-tenant-certificates.md) (certificates). Design details: [spec](../specs/kubernetes-shared-services.md).
@@ -26,7 +26,7 @@ Each ingress has its own Traefik deployment, Gateway and Service. With one Traef
 
 ### D3 — Certificates and names go through the organisation's services
 
-Certificates come from the organisation's ACME authority through cert-manager, as for the tenants ([ADR-0008](0008-tenant-certificates.md)). The consumers trust its root. The names of the services are written in a zone through the DNS provider of the certificates.
+Certificates come from the organisation's ACME authority through cert-manager, as for the tenants ([ADR-0008](0008-tenant-certificates.md)). The consumers trust its root. The names of the services are records of a zone of the internal names. The stack writes them when the cloud has Designate and the zone is owned by or shared with its project: the names follow the addresses without a manual step. Otherwise the stack outputs them for the organisation's DNS provider. The certificates keep the DNS provider of ADR-0008, since public zones are rarely in Designate.
 
 ### D4 — The boundary between services is the cluster's
 

@@ -224,3 +224,25 @@ variable "service_addresses" {
   })
   default = {}
 }
+
+variable "internal_zone" {
+  description = <<-EOT
+    Designate zone of the internal names, owned by or shared with this project: the stack writes
+    the records of cluster.domains in it. null: write them yourself from the domains output.
+    - id, name (with its trailing dot): the zone.
+    - ttl: of the records.
+  EOT
+  type = object({
+    id   = string
+    name = string
+    ttl  = optional(number, 300)
+  })
+  default = null
+
+  validation {
+    condition = var.internal_zone == null || alltrue([
+      for d in var.cluster.domains : endswith(d, ".${trimsuffix(try(var.internal_zone.name, "."), ".")}")
+    ])
+    error_message = "Every name of cluster.domains must be in internal_zone."
+  }
+}

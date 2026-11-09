@@ -39,8 +39,9 @@ PY
 # source, then run this script again.
 if ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
   echo "The Kubernetes API does not admit this instance. From an administration source, run:" >&2
-  echo "  sed 's|BOOTSTRAP_SOURCE|$(bootstrap_source)|' manifests/cluster.yaml | kubectl --kubeconfig <cluster kubeconfig> apply -f -" >&2
-  echo "(manifests/cluster.yaml: tofu output -json manifests), wait about a minute, then run this script again." >&2
+  echo "  kubectl --kubeconfig <cluster kubeconfig> -n platform patch cluster ${cluster.name} --type=json \\" >&2
+  echo "    -p '[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"$(bootstrap_source)\"}]'" >&2
+  echo "wait about a minute, then run this script again." >&2
   exit 1
 fi
 
@@ -48,8 +49,9 @@ fi
 # while the cloud controller manager still runs.
 kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
 
-# Keep this instance admitted: the operator's change above is replaced by the same list.
-sed "s|BOOTSTRAP_SOURCE|$(bootstrap_source)|" manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
+# The operator admitted this instance with a patch of the API sources (variable 0), not by
+# applying manifests/cluster.yaml again: after an upgrade, its version and image are older than
+# the cluster's.
 
 kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
 kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml

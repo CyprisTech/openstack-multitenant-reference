@@ -57,3 +57,22 @@ module "cluster" {
   monitoring       = var.monitoring
   certificates     = var.certificates
 }
+
+# The names of the HTTP services, in the zone of the internal names, when the cloud has Designate
+# and the zone is owned by or shared with this project (ADR-0010, D3). Otherwise the domains output
+# gives the records to write with your DNS provider.
+module "names" {
+  count  = var.internal_zone == null ? 0 : 1
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns?ref=v0.1.5"
+
+  records = {
+    for d in var.cluster.domains : d => {
+      zone_id   = var.internal_zone.id
+      zone_name = var.internal_zone.name
+      name      = trimsuffix(d, ".${trimsuffix(var.internal_zone.name, ".")}")
+      type      = "A"
+      records   = [module.cluster.entries.internal]
+      ttl       = var.internal_zone.ttl
+    }
+  }
+}

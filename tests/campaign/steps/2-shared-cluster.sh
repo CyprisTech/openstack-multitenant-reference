@@ -11,22 +11,10 @@ step_k8s_shared() {
 
 step_cluster_shared() {
   create_cluster "${SHARED}" "${W}/shared-clouds.yaml" "${SITE}-shared" "${SHARED_KUBECONFIG}"
-  show kubectl --kubeconfig "${SHARED_KUBECONFIG}" apply -f "${SHARED}/demo/whoami.yaml" -f "${SHARED}/demo/echo.yaml"
+  demo_manifest "${SHARED}/demo/whoami.yaml" | kubectl --kubeconfig "${SHARED_KUBECONFIG}" apply -f -
+  show kubectl --kubeconfig "${SHARED_KUBECONFIG}" apply -f "${SHARED}/demo/echo.yaml"
   kubectl --kubeconfig "${SHARED_KUBECONFIG}" -n whoami rollout status deploy/whoami
   kubectl --kubeconfig "${SHARED_KUBECONFIG}" -n echo rollout status deploy/echo
-}
-
-# The records of the internal names, written in the test zone. An organisation writes them with
-# its DNS provider, from the same output.
-step_names() {
-  local zone name address bastion authority
-  zone=$(output_raw "${ACME}" zone)
-  bastion=$(output_raw "${ACME}" bastion)
-  authority=$(output_raw "${ACME}" instance_address)
-  output_json "${SHARED}" domains | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r name address; do
-    show on_instance "${bastion}" "${authority}" \
-      "sudo knotc zone-begin ${zone} && sudo knotc zone-set ${zone} ${name}. 300 A ${address} && sudo knotc zone-commit ${zone}"
-  done
 }
 
 step_tour_shared() {
@@ -44,11 +32,11 @@ step_accept_shared() {
   service=$(shared_service_address)
   bastion=$(output_raw "${VM}" bastion)
   vm=$(first_instance_of "${VM}")
-  resolved=$(on_instance "${bastion}" "${vm}" "dig +short @$(output_raw "${ACME}" address) services.example.org A | tail -1")
-  echo "services.example.org resolves to ${resolved}" | tee -a "${W}/https.txt"
+  resolved=$(on_instance "${bastion}" "${vm}" "dig +short @${NAME_SERVER} ${SHARED_NAME} A | tail -1")
+  echo "${SHARED_NAME} resolves to ${resolved}" | tee -a "${W}/https.txt"
   [[ "${resolved}" == "${service}" ]]
   results=$(for _ in 1 2 3 4 5 6; do
-    on_instance "${bastion}" "${vm}" "curl -s --cacert /etc/lego/ca.pem --max-time 10 --resolve services.example.org:443:${service} https://services.example.org/ | grep -E '^Hostname' || echo FAIL"
+    on_instance "${bastion}" "${vm}" "curl -s --cacert /etc/lego/ca.pem --max-time 10 --resolve ${SHARED_NAME}:443:${service} https://${SHARED_NAME}/ | grep -E '^Hostname' || echo FAIL"
   done | sort | uniq -c | sed 's/^/shared https /')
   echo "${results}" | tee -a "${W}/https.txt"
   ! grep -q FAIL <<<"${results}"
@@ -57,7 +45,7 @@ step_accept_shared() {
 
 try_shared_service() {
   local status=0
-  show curl -sS --cacert "${W}/root.pem" --max-time 8 --resolve "services.example.org:443:$1" https://services.example.org/ || status=$?
+  show curl -sS --cacert "${W}/root.pem" --max-time 8 --resolve "${SHARED_NAME}:443:$1" https://${SHARED_NAME}/ || status=$?
   echo "curl exit=${status}"
   return "${status}"
 }
@@ -114,6 +102,14 @@ step_rotate() {
     | jq --arg c "$(base64 -w0 <<<"${conf}")" '.data["cloud.conf"] = $c' | kubectl apply -f -
   kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' | xargs kubectl -n kube-system rollout restart
   kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' | xargs -n1 kubectl -n kube-system rollout status --timeout=10m
+
+  comment "The bootstrap instance deletes the cluster later: it needs the new credential too"
+  local bootstrap
+  bootstrap=$(output_raw "${SHARED}" bootstrap)
+  if [[ -n "${bootstrap}" && "${bootstrap}" != null ]]; then
+    copy "${next}" "${bootstrap}:/tmp/clouds.yaml"
+    remote "${bootstrap}" 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml; rm -f /tmp/clouds.yaml'
+  fi
 
   comment "A load balancer created with the new credential"
   kubectl create service loadbalancer rotation-check --tcp=80:80
@@ -174,7 +170,7 @@ expected_nodes() { kubectl -n platform get machines --no-headers | wc -l; }
 load_on_shared_service() {  # load_on_shared_service <bastion> <instance> <address>
   local ok=0 failed=0
   while [[ ! -f "${W}/stop-load" ]]; do
-    if on_instance "$1" "$2" "curl -sf -o /dev/null --cacert /etc/lego/ca.pem --max-time 5 --resolve services.example.org:443:$3 https://services.example.org/" 2>/dev/null; then
+    if on_instance "$1" "$2" "curl -sf -o /dev/null --cacert /etc/lego/ca.pem --max-time 5 --resolve ${SHARED_NAME}:443:$3 https://${SHARED_NAME}/" 2>/dev/null; then
       ok=$((ok + 1))
     else
       failed=$((failed + 1))

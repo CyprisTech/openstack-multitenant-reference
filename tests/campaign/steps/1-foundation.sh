@@ -121,7 +121,7 @@ load_during_publication() {
   local address ok=0 failed=0
   address=$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)
   while [[ ! -f "${W}/stop-load" ]]; do
-    if curl -sf -o /dev/null --cacert "${W}/root.pem" --max-time 5 --resolve "site-a.example.org:443:${address}" https://site-a.example.org/; then
+    if curl -sf -o /dev/null --cacert "${W}/root.pem" --max-time 5 --resolve "site-a.${TEST_ZONE}:443:${address}" "https://site-a.${TEST_ZONE}/"; then
       ok=$((ok + 1))
     else
       failed=$((failed + 1))

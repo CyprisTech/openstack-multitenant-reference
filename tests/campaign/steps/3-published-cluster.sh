@@ -29,7 +29,7 @@ step_tour() {
 # HTTPS through the entry point to the three domains, then the isolation test.
 step_accept() {
   local address domain
-  kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" apply -f "${PUBLISHED}/demo/whoami.yaml" >/dev/null
+  demo_manifest "${PUBLISHED}/demo/whoami.yaml" | kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" apply -f - >/dev/null
   kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" -n demo rollout status deploy/whoami
   for _ in $(seq 60); do
     [[ -n "$(kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" ]] && break
@@ -38,7 +38,7 @@ step_accept() {
   sleep 30   # the routes reach Traefik within seconds; the agents push every 30 s
 
   address=$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)
-  for domain in site-a.example.org site-b.example.org apps.published.example.org; do
+  for domain in "site-a.${TEST_ZONE}" "site-b.${TEST_ZONE}" "apps.published.${TEST_ZONE}"; do
     https_probe "${domain}" "${address}"
   done
   isolation_test published

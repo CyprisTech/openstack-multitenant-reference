@@ -61,20 +61,13 @@ tofu init && tofu apply
 kubectl apply -f demo/whoami.yaml -f demo/echo.yaml
 ```
 
-The `services` output gives what the consumers reach; the `domains` output, the records of the zone of the internal names.
+The `services` output gives what the consumers reach; the `domains` output, the names and their address (written in `internal_zone` when it is set).
 
 ## Names and root certificate for the consumers
 
 The consumers need two things the cluster does not give them.
 
-- **The names.** The `domains` output lists each name and its address. Write them in the zone of the internal names with your DNS provider, for example over RFC 2136:
-
-  ```bash
-  tofu output -json domains | jq -r 'to_entries[] | "update add \(.key). 300 A \(.value)"' \
-    | { cat; echo send; } | nsupdate -k tsig.key   # add "server <your DNS server>" as the first line if needed
-  ```
-
-  The records hold internal addresses: a public zone reveals them but gives no access. To keep them private, use a zone served on the internal services plane.
+- **The names.** With Designate, set `internal_zone` to a zone owned by or shared with the project: the stack writes the record of each name of `cluster.domains`, and updates it with the address. Otherwise, the `domains` output lists each name and its address, to write with your DNS provider (for example `nsupdate` over RFC 2136). The records hold internal addresses: a public zone reveals them but gives no access.
 - **The root**, when the authority is not publicly trusted. It is the `ca_bundle` of the `certificates` input. A `vm` tenant with this input receives it at boot, in `/etc/lego/ca.pem`. For a Kubernetes tenant, the input only reaches cert-manager: mount the root in the workloads that call the service. Any other consumer gets it from your configuration management. With Let's Encrypt there is nothing to distribute.
 
 ## Add a consumer
@@ -105,6 +98,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | cluster | ../../../modules/kubernetes-cluster | n/a |
+| names | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns | v0.1.5 |
 
 ### Inputs
 
@@ -126,6 +120,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | cluster\_cidr | Range of the cluster network (nodes, load balancer VIPs, bootstrap instance). | `string` | `"10.36.0.0/24"` | no |
 | consumers | Who may use the services of the cluster on the internal services plane, as CIDRs: the<br/>internal\_sources output of each consuming tenant, and the ranges of the users (a VPN, the<br/>corporate network) as the cluster sees them. Admitted by the internal ingress and the layer 4<br/>services. Empty keeps the services closed: only the cluster network is admitted. Network<br/>admission does not identify a user: authentication belongs to the service. | `list(string)` | `[]` | no |
 | dns\_nameservers | DNS resolvers of the cluster network, reachable through its routes. They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images. | `list(string)` | `[]` | no |
+| internal\_zone | Designate zone of the internal names, owned by or shared with this project: the stack writes<br/>the records of cluster.domains in it. null: write them yourself from the domains output.<br/>- id, name (with its trailing dot): the zone.<br/>- ttl: of the records. | <pre>object({<br/>    id   = string<br/>    name = string<br/>    ttl  = optional(number, 300)<br/>  })</pre> | `null` | no |
 | monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |
 | service\_addresses | Host numbers, in the cluster network, of the entries on a plane without NAT: the internal<br/>ingress and the demonstrated TCP service. Neutron does not allocate the host numbers below<br/>reserved\_hosts to anything else, so these addresses are known before the cluster exists. | <pre>object({<br/>    ingress        = optional(number, 10)<br/>    echo           = optional(number, 11)<br/>    reserved_hosts = optional(number, 32)<br/>  })</pre> | `{}` | no |
@@ -135,7 +130,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | Name | Description |
 | ---- | ----------- |
 | bootstrap | Floating IP of the bootstrap instance on the administration network, or null once it is removed. |
-| domains | Names of the HTTP services and the address they resolve to, for the DNS zone of the internal names. |
+| domains | Names of the HTTP services and the address they resolve to: written in internal\_zone when it is set, to write with your DNS provider otherwise. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
 | scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
 | services | What the consumers reach, on the internal services plane: the internal ingress (HTTPS, names of cluster.domains) and the TCP echo, at a floating IP of the plane with NAT, at their address in the cluster network otherwise. The consumers admit nothing from the cluster for them. |

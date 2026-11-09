@@ -12,7 +12,7 @@ output "services" {
 }
 
 output "domains" {
-  description = "Names of the HTTP services and the address they resolve to, for the DNS zone of the internal names."
+  description = "Names of the HTTP services and the address they resolve to: written in internal_zone when it is set, to write with your DNS provider otherwise."
   value       = { for d in var.cluster.domains : d => module.cluster.entries.internal }
 }
 

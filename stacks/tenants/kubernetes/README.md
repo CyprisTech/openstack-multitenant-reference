@@ -108,8 +108,9 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 ```bash
 # 1. The bootstrap instance must exist (bootstrap = true) and be admitted on the API again:
 #    after the move, the cluster no longer admits it, and it cannot admit itself.
-tofu output -json manifests | jq -r '."cluster.yaml"' \
-  | sed "s|BOOTSTRAP_SOURCE|$(tofu output -raw bootstrap)/32|" | kubectl --kubeconfig published.kubeconfig apply -f -
+#    A patch of the API sources only: manifests/cluster.yaml may describe an older version.
+kubectl --kubeconfig published.kubeconfig -n platform patch cluster <site>-published --type=json \
+  -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$(tofu output -raw bootstrap)"'/32"}]'
 
 # 2. Delete the cluster from the bootstrap instance, then the stack.
 ssh ops@$(tofu output -raw bootstrap) 'sudo /opt/platform/delete-cluster.sh'

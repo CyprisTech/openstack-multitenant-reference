@@ -15,7 +15,7 @@ root="$(cd "${here}/../.." && pwd)"
 # The two clusters are deployed one after the other, so that the campaign fits a small test cloud.
 declare -A SEQUENCES=(
   [foundation]="prep planes receiver acme edge web isolated publish"
-  [shared]="k8s-shared cluster-shared names tour-shared accept-shared consumer rotate upgrade shared-down"
+  [shared]="k8s-shared cluster-shared tour-shared accept-shared consumer rotate upgrade shared-down"
   [published]="k8s cluster internal tour publish accept transit hostile"
   [end]="plans teardown"
   [full]="foundation shared published end"

@@ -11,6 +11,12 @@ RECEIVER=tests/fixtures/receiver
 ACME=tests/fixtures/acme
 INTERNAL_SERVICE=tests/fixtures/internal-service
 
+# The names of the test, under the zone of the test (example.org in the examples).
+TEST_ZONE=${TEST_ZONE:-example.org}
+SHARED_NAME="services.${TEST_ZONE}"
+# The demonstration manifests name example.org: the names of the test instead.
+demo_manifest() { sed "s/example\.org/${TEST_ZONE}/g" "$1"; }
+
 # --- Output ---------------------------------------------------------------------------------------
 
 heading() { printf '\n\033[1;34m== [%s %s] %s\033[0m\n' "$(date -u +%T)" "${mode}" "$*"; }
@@ -164,8 +170,9 @@ delete_cluster() {  # delete_cluster <stack> <kubeconfig>
   bootstrap=$(output_raw "${stack}" bootstrap 2>/dev/null) || return 0
   [[ -n "${bootstrap}" && "${bootstrap}" != null ]] || return 0
   kubectl --kubeconfig "${kubeconfig}" get cluster -A >/dev/null 2>&1 || return 0
-  output_json "${stack}" manifests | jq -r '."cluster.yaml"' | sed "s|BOOTSTRAP_SOURCE|${bootstrap}/32|" \
-    | kubectl --kubeconfig "${kubeconfig}" apply -f - || return 1
+  # A patch of the API sources only: after an upgrade, cluster.yaml describes an older version.
+  kubectl --kubeconfig "${kubeconfig}" -n platform get cluster -o name | xargs -I{} kubectl --kubeconfig "${kubeconfig}" -n platform \
+    patch {} --type=json -p "[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"${bootstrap}/32\"}]" || return 1
   sleep 60
   start=$(date +%s)
   remote -t "${bootstrap}" sudo /opt/platform/delete-cluster.sh || return 1

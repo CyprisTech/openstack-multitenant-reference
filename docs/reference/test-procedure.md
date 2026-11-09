@@ -348,8 +348,8 @@ Expected: closed. The packet may reach the web instance, whose security group ad
 ```bash
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
-tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.yaml"' \
-  | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig published.kubeconfig apply -f -
+kubectl --kubeconfig published.kubeconfig -n platform patch cluster t1-published --type=json \
+  -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$B"'/32"}]'
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
 for s in tests/fixtures/internal-service stacks/tenants/kubernetes stacks/tenants/isolated \
@@ -361,3 +361,30 @@ done
 | Checkpoint | How |
 |---|---|
 | no leftover, in every project | servers, volumes, load balancers, floating IPs, routers, networks, ports, security groups, server groups, and the records of the DNS zones: all empty, except the node image if you keep it. `openstack loadbalancer list` needs the Octavia client plugin: an error is not an empty list |
+
+## 11. Cluster for shared services
+
+The test cloud holds one Kubernetes cluster at a time, so this cluster is tested on its own, in the middle of the cycle:
+
+1. Steps 1 to 4 without the Kubernetes tenant, then step 8 for the domains of the `vm` tenant.
+2. This section: the cluster for shared services, with the `vm` tenant as its consumer, then its teardown.
+3. The Kubernetes tenant: its stack (step 4), then steps 5 to 10.
+
+The campaign script follows this order (sequence `full`). Deploy this cluster with the previous minor Kubernetes version, its node image shared with the project: the **Lifecycle** step below upgrades it.
+
+1. **Stack and cluster**: `consumers` = `tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then `create-cluster.sh` as in step 5, and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
+2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
+3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
+4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
+5. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer created with the new one, the old one revoked; then the minor upgrade, while a consumer sends requests.
+6. **Teardown** of the cluster and the stack, as in step 10.
+
+| Checkpoint | How | If it fails |
+|---|---|---|
+| the name resolves to the service address | `dig +short @<zone server> <name>` from a consumer | the record, and the zone server's admission of the consumer |
+| HTTPS from a consumer, certificate verified | `curl --cacert /etc/lego/ca.pem https://<name>/` | the certificate in `traefik-internal` (`kubectl get certificate -A`) |
+| closed to an undeclared consumer, open once added | `curl` before and after | the manifests applied again after the apply |
+| after the rotation: a new load balancer | a Service of type `LoadBalancer` gets an address | the logs of the cloud controller manager |
+| after the upgrade: every node at the new version, the API and service addresses unchanged | `kubectl get nodes`, kubeconfig, `services` output | `kubectl -n platform get machines`, the capacity of the project |
+
+Durations: measured in the next campaign.
