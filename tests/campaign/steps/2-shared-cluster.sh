@@ -16,6 +16,19 @@ step_cluster_shared() {
   kubectl --kubeconfig "${SHARED_KUBECONFIG}" -n echo rollout status deploy/echo
 }
 
+# The records of the internal names, written in the test zone. An organisation writes them with
+# its DNS provider, from the same output.
+step_names() {
+  local zone name address bastion authority
+  zone=$(output_raw "${ACME}" zone)
+  bastion=$(output_raw "${ACME}" bastion)
+  authority=$(output_raw "${ACME}" instance_address)
+  output_json "${SHARED}" domains | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r name address; do
+    show on_instance "${bastion}" "${authority}" \
+      "sudo knotc zone-begin ${zone} && sudo knotc zone-set ${zone} ${name}. 300 A ${address} && sudo knotc zone-commit ${zone}"
+  done
+}
+
 step_tour_shared() {
   # shellcheck disable=SC2086
   python3 tests/tour/capture.py --kubeconfig "${SHARED_KUBECONFIG}" --cluster "${SITE}-shared" ${CAPTURE_REPLACE:-} > "${W}/tour-shared.md"
@@ -24,12 +37,16 @@ step_tour_shared() {
   show kubectl --kubeconfig "${SHARED_KUBECONFIG}" get networkpolicy -A
 }
 
-# A consumer reaches the HTTPS service of the shared cluster, certificate verified.
+# A consumer finds the service by its name in the zone, and reaches it over HTTPS with the root it
+# received at boot (certificates.ca_bundle).
 step_accept_shared() {
-  local service bastion vm results
+  local service bastion vm results resolved
   service=$(shared_service_address)
   bastion=$(output_raw "${VM}" bastion)
   vm=$(first_instance_of "${VM}")
+  resolved=$(on_instance "${bastion}" "${vm}" "dig +short @$(output_raw "${ACME}" address) services.example.org A | tail -1")
+  echo "services.example.org resolves to ${resolved}" | tee -a "${W}/https.txt"
+  [[ "${resolved}" == "${service}" ]]
   results=$(for _ in 1 2 3 4 5 6; do
     on_instance "${bastion}" "${vm}" "curl -s --cacert /etc/lego/ca.pem --max-time 10 --resolve services.example.org:443:${service} https://services.example.org/ | grep -E '^Hostname' || echo FAIL"
   done | sort | uniq -c | sed 's/^/shared https /')

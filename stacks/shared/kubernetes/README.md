@@ -63,6 +63,20 @@ kubectl apply -f demo/whoami.yaml -f demo/echo.yaml
 
 The `services` output gives what the consumers reach; the `domains` output, the records of the zone of the internal names.
 
+## Names and root certificate for the consumers
+
+The consumers need two things the cluster does not give them.
+
+- **The names.** The `domains` output lists each name and its address. Write them in the zone of the internal names with your DNS provider, for example over RFC 2136:
+
+  ```bash
+  tofu output -json domains | jq -r 'to_entries[] | "update add \(.key). 300 A \(.value)"' \
+    | { cat; echo send; } | nsupdate -k tsig.key   # add "server <your DNS server>" as the first line if needed
+  ```
+
+  The records hold internal addresses: a public zone reveals them but gives no access. To keep them private, use a zone served on the internal services plane.
+- **The root**, when the authority is not publicly trusted. It is the `ca_bundle` of the `certificates` input. A `vm` tenant with this input receives it at boot, in `/etc/lego/ca.pem`. For a Kubernetes tenant, the input only reaches cert-manager: mount the root in the workloads that call the service. Any other consumer gets it from your configuration management. With Let's Encrypt there is nothing to distribute.
+
 ## Add a consumer
 
 The sources are written in the manifests, which `create-cluster.sh` applies once. A consumer is a tenant, once it has joined the internal services plane, or a range of users ([how they reach the plane](../../../docs/reference/integration-points.md#users-of-internal-services)):
