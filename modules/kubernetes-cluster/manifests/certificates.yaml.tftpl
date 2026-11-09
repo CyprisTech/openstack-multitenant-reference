@@ -1,5 +1,5 @@
 # Certificates of the domains (ADR-0008): cert-manager obtains them from an ACME directory through
-# the DNS-01 challenge and writes the secret the ingress listener uses (platform-tls).
+# the DNS-01 challenge and writes the secret of each ingress listener.
 %{ if certificates.dns.provider == "rfc2136" ~}
 apiVersion: v1
 kind: Secret
@@ -37,15 +37,17 @@ spec:
 %{ else ~}
       - dns01: ${jsonencode(certificates.dns.solver)}
 %{ endif ~}
+%{ for name, i in ingresses ~}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: platform-tls
-  namespace: traefik
+  name: ${i.tls_secret}
+  namespace: ${i.namespace}
 spec:
-  secretName: platform-tls
-  dnsNames: ${jsonencode(cluster.domains)}
+  secretName: ${i.tls_secret}
+  dnsNames: ${jsonencode(i.domains)}
   issuerRef:
     name: tenant-acme
     kind: ClusterIssuer
+%{ endfor ~}

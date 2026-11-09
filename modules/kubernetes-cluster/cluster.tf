@@ -29,32 +29,49 @@ locals {
   ])), 0, 8)
 
   manifest_vars = {
-    revision               = local.revision
-    cluster                = var.cluster
-    prefix                 = local.prefix
-    az                     = var.az
-    network                = local.network
-    subnet                 = local.subnet
-    router                 = local.router
-    admin_network          = local.admin_network.network
-    admin_sources          = var.admin.sources
-    ssh_key_name           = var.admin.ssh_key_name
-    pod_mtu                = local.pod_mtu
-    versions               = local.versions
-    edge_sources           = var.edge_sources
-    receiver               = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
-    site                   = var.site
-    cluster_cidr           = var.cluster_cidr
-    publication_network_id = local.ingress_internal ? "" : var.plane_attachment.publication.network_id
-    ingress_ip             = local.ingress_address
-    ingress_internal       = local.ingress_internal
-    certificates           = var.certificates
+    revision      = local.revision
+    cluster       = var.cluster
+    prefix        = local.prefix
+    az            = var.az
+    network       = local.network
+    subnet        = local.subnet
+    router        = local.router
+    admin_network = local.admin_network.network
+    admin_sources = var.admin.sources
+    ssh_key_name  = var.admin.ssh_key_name
+    pod_mtu       = local.pod_mtu
+    versions      = local.versions
+    receiver      = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
+    site          = var.site
+    cluster_cidr  = var.cluster_cidr
+    ingresses     = local.ingresses
+    services = { for k, sv in var.services : k => merge(sv, {
+      nat        = local.entry_nat["service-${k}"]
+      network_id = var.plane_attachment[sv.plane].network_id
+      address    = local.entry_address["service-${k}"]
+    }) }
+    ingress_charts = { for k, i in local.ingresses : i.namespace => {
+      repo = "https://traefik.github.io/charts", chart = "traefik", version = local.versions.traefik_chart, namespace = i.namespace
+      values = templatefile("${path.module}/manifests/traefik-values.yaml.tftpl", {
+        namespace      = i.namespace
+        tls_secret     = i.tls_secret
+        proxy_protocol = i.proxy_protocol
+        cluster_cidr   = var.cluster_cidr
+        nat            = local.entry_nat[k]
+        network_id     = var.plane_attachment[i.plane].network_id
+        address        = local.entry_address[k]
+        sources        = i.sources
+      })
+    } }
+    certificates = var.certificates
   }
 
   manifests = merge({
     "cluster-class.yaml" = templatefile("${path.module}/manifests/cluster-class.yaml.tftpl", local.manifest_vars)
     "cluster.yaml"       = templatefile("${path.module}/manifests/cluster.yaml.tftpl", local.manifest_vars)
     "addons.yaml"        = templatefile("${path.module}/manifests/addons.yaml.tftpl", local.manifest_vars)
+    }, length(var.services) == 0 ? {} : {
+    "services.yaml" = templatefile("${path.module}/manifests/services.yaml.tftpl", local.manifest_vars)
     }, var.certificates == null ? {} : {
     "certificates.yaml" = templatefile("${path.module}/manifests/certificates.yaml.tftpl", local.manifest_vars)
   })

@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - OpenSSF Best Practices badge (passing).
 - `CODEOWNERS`: the maintainers team reviews every change; ADRs name the maintainers as deciders.
 - CodeQL workflow: static analysis of the GitHub Actions workflows and the Python scripts (HCL is not supported by CodeQL).
+- Module `kubernetes-cluster`, extracted from the `kubernetes` stack ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)): the planes it joins, `ingresses` (one Traefik deployment, Gateway and Service each) and layer 4 `services` as inputs, each at an address prepared by Terraform; outputs `entries` and `sources` per plane. The `kubernetes` stack calls it with its public ingress; its inputs and outputs are unchanged, `moved` blocks keep existing resources. The template revision changes once: Cluster API replaces the machines one by one at the next apply.
 
 ### Changed
 

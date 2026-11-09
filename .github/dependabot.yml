@@ -10,6 +10,7 @@ updates:
       - /stacks/shared/entry-point
       - /stacks/tenants/vm
       - /stacks/tenants/isolated
+      - /modules/kubernetes-cluster
       - /tests/fixtures/receiver
       - /tests/fixtures/acme
       - /tests/fixtures/internal-service

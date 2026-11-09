@@ -1,0 +1,48 @@
+# Demonstration layer 4 service: a TCP echo on port 7000, exposed by the Service echo the stack
+# renders (input services of modules/kubernetes-cluster), admitted to the consumers by its load
+# balancer. Its namespace denies every ingress except through that load balancer, whose members
+# receive the connections from the cluster network.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: echo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: echo}
+  template:
+    metadata:
+      labels: {app: echo}
+    spec:
+      containers:
+      - name: echo
+        image: docker.io/alpine/socat:1.8.1.3
+        args: ["TCP-LISTEN:7000,fork,reuseaddr", "EXEC:cat"]
+        ports:
+        - containerPort: 7000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: echo
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-load-balancer
+  namespace: echo
+spec:
+  podSelector:
+    matchLabels: {app: echo}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 10.36.0.0/24 # cluster_cidr: the load balancer's members address
+    ports:
+    - port: 7000

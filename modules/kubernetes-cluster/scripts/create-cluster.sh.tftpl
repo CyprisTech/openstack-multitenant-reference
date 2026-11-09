@@ -89,14 +89,19 @@ EOF
 kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-config \
   --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
-kubectl --kubeconfig "$workload" create namespace traefik --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+%{ for name, i in ingresses ~}
+kubectl --kubeconfig "$workload" create namespace ${i.namespace} --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
 %{ if certificates == null ~}
-if ! kubectl --kubeconfig "$workload" -n traefik get secret platform-tls >/dev/null 2>&1; then
-  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${cluster.domains[0]}" \
-    -addext "subjectAltName=${join(",", [for d in cluster.domains : "DNS:${d}"])}" -keyout /tmp/tls.key -out /tmp/tls.crt
-  kubectl --kubeconfig "$workload" -n traefik create secret tls platform-tls --cert=/tmp/tls.crt --key=/tmp/tls.key
+if ! kubectl --kubeconfig "$workload" -n ${i.namespace} get secret ${i.tls_secret} >/dev/null 2>&1; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${i.domains[0]}" \
+    -addext "subjectAltName=${join(",", [for d in i.domains : "DNS:${d}"])}" -keyout /tmp/tls.key -out /tmp/tls.crt
+  kubectl --kubeconfig "$workload" -n ${i.namespace} create secret tls ${i.tls_secret} --cert=/tmp/tls.crt --key=/tmp/tls.key
   rm -f /tmp/tls.key /tmp/tls.crt
 fi
+%{ endif ~}
+%{ endfor ~}
+%{ if length(services) > 0 ~}
+kubectl --kubeconfig "$workload" apply -f manifests/services.yaml
 %{ endif ~}
 
 kubectl -n platform wait cluster/${cluster.name} --for=condition=Available --timeout=30m
@@ -112,6 +117,8 @@ kubectl --kubeconfig "$workload" wait nodes --all --for=condition=Ready --timeou
 kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || clusterctl init --kubeconfig "$workload" --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+# The manifests are validated in the namespace they are moved to.
+kubectl --kubeconfig "$workload" create namespace platform --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
 wait_webhooks --kubeconfig "$workload" -f manifests/cluster-class.yaml
 clusterctl move -n platform --to-kubeconfig "$workload"
 # clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
@@ -132,7 +139,9 @@ fi
 %{ endif ~}
 kubectl --kubeconfig "$workload" wait --for=condition=Available -n cert-manager deployment --all --timeout=10m
 kubectl --kubeconfig "$workload" apply -f manifests/certificates.yaml
-kubectl --kubeconfig "$workload" -n traefik wait certificate/platform-tls --for=condition=Ready --timeout=15m
+%{ for name, i in ingresses ~}
+kubectl --kubeconfig "$workload" -n ${i.namespace} wait certificate/${i.tls_secret} --for=condition=Ready --timeout=15m
+%{ endfor ~}
 %{ endif ~}
 
 # The bootstrap instance no longer manages the cluster: its address leaves the API sources.

@@ -1,8 +1,8 @@
-# Add-ons of the platform cluster, installed by Cluster API Add-on Provider Helm (ADR-0002, D1).
+# Add-ons of the cluster, one Traefik per ingress among them, installed by Cluster API Add-on Provider Helm (ADR-0002, D1).
 # They apply to the clusters labelled platform.example.org/addons=true. The cloud credentials
 # of the cloud controller manager and of the Cinder CSI driver are the Secret cloud-config of
 # kube-system, created in the workload cluster by create-cluster.sh.
-%{ for name, chart in {
+%{ for name, chart in merge({
   cilium = {
     repo = "https://helm.cilium.io/", chart = "cilium", version = versions.cilium, namespace = "kube-system",
     values = <<-EOT
@@ -52,69 +52,6 @@
           isDefault: true
     EOT
   }
-  traefik = {
-    repo = "https://traefik.github.io/charts", chart = "traefik", version = versions.traefik_chart, namespace = "traefik",
-    values = <<-EOT
-      providers:
-        kubernetesGateway:
-          enabled: true
-      gateway:
-        listeners:
-          web:
-            port: 8000
-            protocol: HTTP
-            namespacePolicy:
-              from: All
-          websecure:
-            port: 8443
-            protocol: HTTPS
-            namespacePolicy:
-              from: All
-            certificateRefs:
-            - name: platform-tls
-      ports:
-        web:
-          proxyProtocol:
-            trustedIPs: ["${cluster_cidr}"]
-        websecure:
-          proxyProtocol:
-            trustedIPs: ["${cluster_cidr}"]
-      # Two replicas on two nodes: with externalTrafficPolicy Local, only nodes running Traefik
-      # receive traffic.
-      deployment:
-        replicas: 2
-      topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/name: traefik
-      service:
-        annotations:
-%{ if ingress_internal ~}
-          # Interface plane: no floating IP, the load balancer address in the cluster network
-          # (spec.loadBalancerIP) is published by the entry point through the transit router.
-          service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
-%{ else ~}
-          loadbalancer.openstack.org/floating-network-id: "${publication_network_id}"
-          # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
-          # Service is deleted.
-          loadbalancer.openstack.org/keep-floatingip: "true"
-%{ endif ~}
-          # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
-          # header, which the TCP listener passes through. A second header from the load
-          # balancer would break the TLS handshake.
-        spec:
-          type: LoadBalancer
-          loadBalancerIP: ${ingress_ip}
-          # Local: the connection reaches Traefik from the load balancer address, inside the
-          # trusted range, so Traefik accepts the PROXY header of the entry point.
-          externalTrafficPolicy: Local
-          # The entry point only (ADR-0002, D5).
-          loadBalancerSourceRanges: ${jsonencode(edge_sources)}
-    EOT
-  }
   # Kubelet serving certificates (rotate-server-certificates) are requested from the cluster CA
   # and approved here, only for node names of this cluster and addresses of the cluster network.
   kubelet-csr-approver = {
@@ -152,7 +89,7 @@
         global:
           external_labels:
             site: ${site}
-            tenant: platform
+            tenant: ${cluster.name}
 %{ if receiver != "" ~}
         # Pushed to the receiver of the shared services (ADR-0007); nothing connects into the
         # cluster for its metrics.
@@ -161,7 +98,7 @@
 %{ endif ~}
     EOT
   }
-} ~}
+}, ingress_charts) ~}
 ---
 apiVersion: addons.cluster.x-k8s.io/v1alpha1
 kind: HelmChartProxy

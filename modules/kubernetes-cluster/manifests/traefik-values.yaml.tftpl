@@ -1,0 +1,62 @@
+providers:
+  kubernetesGateway:
+    enabled: true
+gateway:
+  name: ${namespace}-gateway
+  listeners:
+    web:
+      port: 8000
+      protocol: HTTP
+      namespacePolicy:
+        from: All
+    websecure:
+      port: 8443
+      protocol: HTTPS
+      namespacePolicy:
+        from: All
+      certificateRefs:
+      - name: ${tls_secret}
+%{ if proxy_protocol ~}
+ports:
+  web:
+    proxyProtocol:
+      trustedIPs: ["${cluster_cidr}"]
+  websecure:
+    proxyProtocol:
+      trustedIPs: ["${cluster_cidr}"]
+%{ endif ~}
+# Two replicas on two nodes: with externalTrafficPolicy Local, only nodes running Traefik
+# receive traffic.
+deployment:
+  replicas: 2
+topologySpreadConstraints:
+- maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: DoNotSchedule
+  labelSelector:
+    matchLabels:
+      app.kubernetes.io/instance: ${namespace}-${namespace}
+service:
+  annotations:
+%{ if nat ~}
+    loadbalancer.openstack.org/floating-network-id: "${network_id}"
+    # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
+    # Service is deleted.
+    loadbalancer.openstack.org/keep-floatingip: "true"
+%{ else ~}
+    # Plane without NAT: no floating IP; the load balancer address in the cluster network
+    # (spec.loadBalancerIP) is reached through the plane's routes.
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+%{ endif ~}
+%{ if proxy_protocol ~}
+    # No PROXY protocol on the load balancer: the entry point already sends a PROXY v2
+    # header, which the TCP listener passes through. A second header from the load
+    # balancer would break the TLS handshake.
+%{ endif ~}
+  spec:
+    type: LoadBalancer
+    loadBalancerIP: ${address}
+    # Local: the connection reaches Traefik from the load balancer address, inside the
+    # cluster network, so Traefik sees the PROXY header or the client address.
+    externalTrafficPolicy: Local
+    loadBalancerSourceRanges: ${jsonencode(sources)}

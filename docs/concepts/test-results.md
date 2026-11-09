@@ -35,6 +35,16 @@ The isolation matrix of the earlier designs had 45 rows; the counts are not comp
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
+## Detailed results: Kubernetes cluster for shared services (2026-11-08)
+
+`modules/kubernetes-cluster` extracted from the Kubernetes tenant, and `stacks/shared/kubernetes` ([spec](../specs/kubernetes-shared-services.md)), on operator planes (gateway), from empty projects.
+
+- **The Kubernetes tenant after the extraction:** every stack applied with an empty plan; the tenant's cluster created and moved into itself; the isolation rows of the tenant as expected.
+- **The cluster for shared services:** created and moved into itself (3 control-plane nodes, 2 workers). From the `web` tenant, its consumer: HTTPS to `services.example.org` through the internal ingress, certificate verified with the authority's root, 6/6 across both replicas; the TCP echo reached. The other tenants, the entry point, the receiver and the test runner do not reach its services; a pod of the cluster reaches no tenant instance, service address or bastion; a pod of another namespace reaches no backend (default-deny); the cluster's series reach the receiver.
+- **Hub planes (interface):** checked offline only for this change: the rendered manifests and scripts of the tenant are identical before and after the extraction, apart from the expected changes (the Gateway named explicitly, the replicas spread by instance label); the same fixed address and internal load balancer.
+- **Findings:** `create-cluster.sh` validated the manifests in a namespace that did not exist yet in the workload cluster and stopped before `clusterctl move`; the network policies of the demonstrated services needed `matchLabels`; the certificate of an internal name was checked through the entry point. All three fixed. Two clusters at once exceed the capacity of the test cloud: the tenant cluster was removed after its rows passed, before the shared cluster's.
+- Teardown: no leftover.
+
 ## Detailed results: plane keys by role, lateral movement (2026-11-06)
 
 The planes keyed by role (`publication`, `observability`, `internal`), the 8 isolation rows on the reach of the shared services, and the certificates, from empty projects, in both plane modes. Times below: operator planes (gateway).

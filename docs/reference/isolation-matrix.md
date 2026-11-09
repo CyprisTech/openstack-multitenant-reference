@@ -23,6 +23,10 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | the entry point, the receiver | an internal service | its port | denied | the service admits only its consumers |
 | the receiver | the Kubernetes tenant's ingress | 443 | denied | sources of the ingress = entry point only |
 | the Kubernetes tenant | the bastions of the other stacks | 22 | denied | bastions admit the administrator addresses only |
+| a consumer (the `web` tenant) | the shared cluster's internal ingress and TCP service | 443, 7000 | allowed | route to the internal services plane; load balancer sources = the consumers' `internal_sources` |
+| a tenant that is not a consumer, the entry point, the receiver, the Internet | the shared cluster's services | 443, 7000 | denied | load balancer sources = the consumers only; the entry point and the receiver have no route to the plane |
+| a pod of the shared cluster | a tenant's instances, service address and bastions | 443, 22 | denied | the cluster's role `shared` routes to the tenants of the plane, but their security groups and load balancers admit neither the plane nor the cluster |
+| a pod of the shared cluster, in another namespace | the backends of a service | its port | denied | default-deny network policy of each service's namespace; ingress from the internal ingress or the service's own load balancer only |
 | a client trusting the authority | each published domain, through the entry point | 443 | certificate for the name, issued by the authority | the tenant's ACME client (lego, cert-manager) and DNS-01 ([ADR-0008](../adr/0008-tenant-certificates.md)) |
 | a tenant, with its TSIG key | the `_acme-challenge` records of its own names | 53 | allowed | DNS server ACL: key, record type TXT, owner names, sources |
 | a tenant, with its TSIG key | the `_acme-challenge` records of another tenant's names | 53 | denied | DNS server ACL: each key covers its tenant's names only |

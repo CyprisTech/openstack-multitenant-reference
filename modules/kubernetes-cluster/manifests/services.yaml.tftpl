@@ -1,0 +1,35 @@
+# Layer 4 entries of the cluster: a Service of type LoadBalancer for each workload declared in
+# the services input, at the address prepared by the stack.
+%{ for name, s in services ~}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${s.namespace}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  namespace: ${s.namespace}
+  annotations:
+%{ if s.nat ~}
+    loadbalancer.openstack.org/floating-network-id: "${s.network_id}"
+    loadbalancer.openstack.org/keep-floatingip: "true"
+%{ else ~}
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+%{ endif ~}
+spec:
+  type: LoadBalancer
+  loadBalancerIP: ${s.address}
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges: ${jsonencode(s.sources)}
+  selector: ${jsonencode(s.selector)}
+  ports:
+%{ for p in s.ports ~}
+  - name: tcp-${p}
+    port: ${p}
+    targetPort: ${p}
+    protocol: TCP
+%{ endfor ~}
+%{ endfor ~}

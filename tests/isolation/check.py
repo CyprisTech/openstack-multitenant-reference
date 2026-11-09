@@ -12,7 +12,7 @@ outputs. Each stack may live in its own project; the test only reads their outpu
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
         [--platform-kubeconfig platform.kubeconfig --internal-service tests/fixtures/internal-service] \
-        [--acme tests/fixtures/acme]
+        [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 
 Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions and pushing to the test receiver, and the receiver applied. With
@@ -20,6 +20,11 @@ bastions and pushing to the test receiver, and the receiver applied. With
 in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
 use.
+
+With --shared-kubeconfig, the rows of the Kubernetes cluster for shared services are added
+(stacks/shared/kubernetes, its demonstration services applied): the web tenant, its consumer,
+reaches the internal ingress and the TCP echo; the other tenants do not; a pod of the cluster
+reaches no tenant and, from another namespace, no backend of a service.
 
 With --acme, the rows of the certificates are added (ADR-0008): each published domain, reached
 through the entry point, presents a certificate for its name issued by the test authority, and
@@ -97,6 +102,7 @@ def main():
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
+    ap.add_argument("--shared-kubeconfig", help="kubeconfig of the cluster for shared services (stacks/shared/kubernetes)")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
@@ -135,6 +141,23 @@ def main():
         except (ValueError, KeyError):
             return "error: " + out[:60]
 
+    probe_pods = []
+
+    def start_probe(kubeconfig):
+        """Starts the probe pod in the default namespace of a cluster; returns its kubectl."""
+        kubectl = [args.kubectl, "--kubeconfig", kubeconfig, "--request-timeout=30s"]
+        # A probe pod left by an interrupted run would block the new one.
+        for a in (["-n", "default", "delete", "pod", "isolation-probe", "--ignore-not-found", "--wait=true"],
+                  ["run", "isolation-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
+                   "--restart=Never", "--command", "--", "sleep", "600"],
+                  ["wait", "-n", "default", "--for=condition=Ready", "pod/isolation-probe", "--timeout=120s"]):
+            subprocess.run(kubectl + a, check=True, capture_output=True, text=True)
+        probe_pods.append(kubectl)
+        return kubectl
+
+    def kget(kubectl, *a):
+        return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
+
     rows = []  # (from, to, port, expected, probe)
     # Publication (ADR-0006): the entry point reaches the tenant's service address, and only it.
     rows.append(("test runner", "entry point (public IP)", 443, "open", lambda: p.local(public_ip, 443)))
@@ -166,24 +189,16 @@ def main():
     if args.platform_kubeconfig:
         kubectl = [args.kubectl, "--kubeconfig", args.platform_kubeconfig, "--request-timeout=30s"]
 
-        def kget(*a):
-            return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
-
         # The ingress address created by the stack, and the one the Service carries: the cloud
         # controller manager silently allocates another address when the requested one is
         # unavailable.
         plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
         ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
-        svc_ingress = kget("get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
+        svc_ingress = kget(kubectl, "get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
-        api = kget("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
+        api = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
         internal = outputs(args.tool, args.internal_service)["address"]
-        # A probe pod left by an interrupted run would block the new one.
-        kget("-n", "default", "delete", "pod", "isolation-probe", "--ignore-not-found", "--wait=true")
-        kget("run", "isolation-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
-             "--restart=Never", "--command", "--", "sleep", "600")
-        kget("wait", "-n", "default", "--for=condition=Ready", "pod/isolation-probe", "--timeout=120s")
-        probe_pod = kubectl
+        probe_pod = start_probe(args.platform_kubeconfig)
 
         rows.append(("platform Service", "ingress on the stack address", "-", "yes",
                      lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"))
@@ -203,6 +218,37 @@ def main():
         rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
         rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
         rows.append(("receiver", f"platform ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
+
+    if args.shared_kubeconfig:
+        # The cluster for shared services (spec: a Kubernetes cluster for shared services): the web
+        # tenant is its consumer; the others are not.
+        shared = outputs(args.tool, os.path.join(args.stacks, "shared", "kubernetes"))
+        sk = start_probe(args.shared_kubeconfig)
+        s_ingress = shared["services"]["ingress"].split(":")[0]
+        s_echo = shared["services"]["echo"].split(":")[0]
+        svc_internal = kget(sk, "-n", "traefik-internal", "get", "svc", "-l", "app.kubernetes.io/name=traefik", "-o",
+                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
+        whoami_pod = kget(sk, "-n", "whoami", "get", "pod", "-l", "app=whoami", "-o", "jsonpath={.items[0].status.podIP}")
+        echo_pod = kget(sk, "-n", "echo", "get", "pod", "-l", "app=echo", "-o", "jsonpath={.items[0].status.podIP}")
+        rows.append(("shared Service", "internal ingress on the stack address", "-", "yes",
+                     lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"))
+        rows.append((f"web {web_vm[0]}", f"shared internal ingress {s_ingress}", 443, "open", from_web(s_ingress, 443)))
+        rows.append((f"web {web_vm[0]}", f"shared TCP echo {s_echo}", 7000, "open", from_web(s_echo, 7000)))
+        rows.append((f"isolated {iso_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_iso(s_ingress, 443)))
+        rows.append((f"edge {edge_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_edge(s_ingress, 443)))
+        rows.append(("receiver", f"shared TCP echo {s_echo}", 7000, "closed", from_receiver(s_echo, 7000)))
+        rows.append(("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)))
+        if probe_pod:
+            rows.append(("platform pod", f"shared internal ingress {s_ingress}", 443, "closed",
+                         lambda: p.pod(probe_pod, s_ingress, 443)))
+        rows.append(("shared pod", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", lambda: p.pod(sk, web_vm[1], 443)))
+        rows.append(("shared pod", f"web service address {service}", 443, "closed", lambda: p.pod(sk, service, 443)))
+        for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
+            rows.append(("shared pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
+                         lambda b=out["bastion"]: p.pod(sk, b, 22)))
+        rows.append(("shared pod (default)", f"whoami backend {whoami_pod}", 80, "closed", lambda: p.pod(sk, whoami_pod, 80)))
+        rows.append(("shared pod (default)", f"echo backend {echo_pod}", 7000, "closed", lambda: p.pod(sk, echo_pod, 7000)))
+        rows.append(("receiver", "series pushed by shared", "-", "yes", lambda: pushed("shared")))
 
     if args.acme:
         acme = outputs(args.tool, args.acme)
@@ -234,7 +280,11 @@ def main():
                 return "accepted"
             return "refused" if "REFUSED" in out or "NOTAUTH" in out else "error: " + out[-60:]
 
+        # The domains published through the entry point; the names of the shared cluster are
+        # served on the internal services plane only (their certificate is checked by its consumer).
         for tenant, names in sorted(acme["tenants"].items()):
+            if tenant == "shared":
+                continue
             for d in names:
                 rows.append(("test runner", f"{tenant} certificate of {d}", 443, "valid", lambda d=d: certificate(d)))
         own = acme["tenants"]["web"][0]
@@ -253,8 +303,8 @@ def main():
         failures += 0 if ok else 1
         print(f"{src:<22} {dst:<52} {port:>5}  {expected:<8} {actual:<8} {'✅' if ok else '❌'}")
     print(f"\n{len(rows) - failures}/{len(rows)} rows as expected")
-    if probe_pod:
-        subprocess.run(probe_pod + ["-n", "default", "delete", "pod", "isolation-probe", "--wait=false"], capture_output=True)
+    for kubectl in probe_pods:
+        subprocess.run(kubectl + ["-n", "default", "delete", "pod", "isolation-probe", "--wait=false"], capture_output=True)
     return 1 if failures else 0
 
 

@@ -8,7 +8,7 @@ A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), 
 | `create-cluster.sh` on the bootstrap instance | kind, Cluster API with CAPO, ORC and CAAPH, then the cluster: 3 control-plane nodes behind the API load balancer, workers, add-ons |
 | the add-ons (CAAPH) | Cilium, OpenStack cloud controller manager, Cinder CSI, metrics-server, kubelet-csr-approver, Traefik (Gateway API) behind a load balancer that takes the address prepared by this stack, and Prometheus, which pushes to the receiver (remote write) |
 
-Every version is pinned in [`cluster.tf`](cluster.tf).
+Every version is pinned in [`modules/kubernetes-cluster/cluster.tf`](../../../modules/kubernetes-cluster/cluster.tf).
 
 ```mermaid
 flowchart LR
@@ -133,29 +133,11 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | terraform | >= 1.9 |
 | openstack | ~> 3.2 |
 
-### Providers
-
-| Name | Version |
-| ---- | ------- |
-| openstack | ~> 3.2 |
-| terraform | n/a |
-
 ### Modules
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
-| admission | ../../../modules/admission | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
-| planes | ../../../modules/plane-attachment | n/a |
-| platform | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
-
-### Resources
-
-| Name | Type |
-| ---- | ---- |
-| [openstack_networking_floatingip_v2.ingress](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/networking_floatingip_v2) | resource |
-| [terraform_data.checks](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
-| [openstack_networking_router_v2.internal](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/data-sources/networking_router_v2) | data source |
+| cluster | ../../../modules/kubernetes-cluster | n/a |
 
 ### Inputs
 

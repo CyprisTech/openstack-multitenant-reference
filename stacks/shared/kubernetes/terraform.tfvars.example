@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a-shared"
+site  = "site-a"
+az    = "nova"
+image = "ubuntu-24.04"
+
+flavor           = "m1.medium-nodisk" # bootstrap instance: kind runs there
+boot_volume_size = 20
+
+egress_network = { network = "public", subnet = "public" }
+# admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the internal services plane
+
+network_mtu = 1362
+# Must resolve the cloud API endpoints (an intranet resolver when they are internal names).
+dns_nameservers = ["192.0.2.53"]
+
+# Operators as seen on the administration network (specific addresses, never a network range).
+admin = {
+  users   = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+  sources = ["192.0.2.10/32"]
+}
+
+cluster = {
+  node_image           = "ubuntu-2404-kube-v1.36.5"
+  control_plane_flavor = "m1.medium-nodisk"
+  worker_flavor        = "m1.medium-nodisk"
+  # Root disks: container images, ephemeral storage, logs, etcd. Defaults 30 and 40 GiB.
+  # control_plane_root_volume_size = 30
+  # worker_root_volume_size        = 40
+  domains = ["services.example.org"]
+}
+
+monitoring = { receiver = "http://203.0.113.10:9090" }
+
+# The consumers of the services: output internal_sources of each consuming tenant.
+consumers = ["198.51.100.20/32"]
+
+# How this stack joins the planes: its entry of the attachments output of stack shared/planes,
+# whether the planes are the operator's or built in a hub project. For example:
+#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .shared.planes}' > planes.auto.tfvars.json

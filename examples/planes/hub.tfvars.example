@@ -22,11 +22,12 @@ attachments = {
   web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
   isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
   platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
+  k8s-shared       = { project_id = "<shared services cluster project>", cidr = "10.36.0.0/24", planes = { internal = "shared", observability = "tenant" } }
 }
 
 # The shared services route these aggregates: a new tenant inside them changes no shared service.
 tenant_ranges = {
   publication   = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
-  observability = ["10.20.0.0/14", "10.24.0.0/14"]
+  observability = ["10.20.0.0/14", "10.24.0.0/14", "10.36.0.0/24"]
   internal      = ["10.20.0.0/14", "10.24.0.0/14"]
 }

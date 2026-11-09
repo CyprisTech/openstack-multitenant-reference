@@ -1,0 +1,80 @@
+# Demonstration HTTP service, offered to the consumers through the internal ingress: Traefik of
+# the namespace traefik-internal terminates TLS for services.example.org and answers with the
+# request it received. Its namespace denies every ingress except from that Traefik.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: whoami
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+  namespace: whoami
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: whoami}
+  template:
+    metadata:
+      labels: {app: whoami}
+    spec:
+      containers:
+      - name: whoami
+        image: docker.io/traefik/whoami:v1.12.0
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  namespace: whoami
+spec:
+  selector: {app: whoami}
+  ports:
+  - port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: whoami
+  namespace: whoami
+spec:
+  parentRefs:
+  - name: traefik-internal-gateway
+    namespace: traefik-internal
+    sectionName: websecure
+  hostnames:
+  - services.example.org
+  rules:
+  - backendRefs:
+    - name: whoami
+      port: 80
+---
+# The boundary between services is the cluster's (spec, 6): nothing reaches the service but the
+# internal ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: whoami
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-internal-ingress
+  namespace: whoami
+spec:
+  podSelector:
+    matchLabels: {app: whoami}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: traefik-internal}
+    ports:
+    - port: 80
