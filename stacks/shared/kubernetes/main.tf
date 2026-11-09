@@ -5,6 +5,11 @@
 # consumers only; it is not published on the publication plane. Its Prometheus pushes to the
 # receiver through the observability plane.
 
+locals {
+  # Closed by default: an empty list of source ranges would admit every source.
+  sources = length(var.consumers) > 0 ? var.consumers : [var.cluster_cidr]
+}
+
 module "cluster" {
   source = "../../../modules/kubernetes-cluster"
 
@@ -16,7 +21,7 @@ module "cluster" {
   ingresses = {
     internal = {
       plane   = "internal"
-      sources = var.consumers
+      sources = local.sources
       domains = var.cluster.domains
       host    = var.service_addresses.ingress
     }
@@ -29,7 +34,7 @@ module "cluster" {
       namespace = "echo"
       selector  = { app = "echo" }
       ports     = [7000]
-      sources   = var.consumers
+      sources   = local.sources
       host      = var.service_addresses.echo
     }
   }

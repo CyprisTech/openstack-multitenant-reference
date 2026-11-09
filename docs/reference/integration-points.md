@@ -30,6 +30,17 @@ The contract is [ADR-0007](../adr/0007-monitoring.md); the receiver is yours.
 | You provide | The services and their admission rules |
 | Checked by | The internal service rows of the [isolation matrix](isolation-matrix.md): the Kubernetes tenant reaches the service, the other tenants do not |
 
+## Users of internal services
+
+People, not tenants, using a service on the internal services plane.
+
+| | |
+|---|---|
+| Operator plane | The corporate network or the VPN is already routed to this external network |
+| Hub plane | No route from outside: a VPN gateway you provide, attached to the plane with the role `shared` |
+| Admitted | The range of the VPN or corporate network, as the service sees it. Not the administration path: a user is not an administrator |
+| You provide | The VPN or the corporate route, and the authentication of the users: network admission lets a whole range in and identifies nobody |
+
 ## Publication through the entry point
 
 The design is [ADR-0006](../adr/0006-exposure.md).

@@ -32,7 +32,8 @@ cluster = {
 
 monitoring = { receiver = "http://203.0.113.10:9090" }
 
-# The consumers of the services: output internal_sources of each consuming tenant.
+# The consumers of the services: output internal_sources of each consuming tenant, and the
+# ranges of the users. Empty keeps the services closed.
 consumers = ["198.51.100.20/32"]
 
 # How this stack joins the planes: its entry of the attachments output of stack shared/planes,

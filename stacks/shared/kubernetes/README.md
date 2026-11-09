@@ -5,11 +5,50 @@ A Kubernetes cluster that offers services to the tenants ([spec](../../../docs/s
 - **Not published:** it does not join the publication plane. A cluster for published applications is another cluster ([lateral movement](../../../docs/concepts/architecture.md#lateral-movement)).
 - **HTTP services** behind an **internal ingress**: its own Traefik deployment, Gateway (`traefik-internal-gateway`) and Service, one `HTTPRoute` per service, TLS for the names of `cluster.domains` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)).
 - **Layer 4 services**: a Service of type `LoadBalancer` per service, at an address the stack prepares.
-- **Admitted to the consumers only** (`consumers`, the `internal_sources` output of each consuming tenant): the load balancers admit them and nothing else.
+- **Closed by default, then admitted to its consumers only** (`consumers`): the `internal_sources` output of each consuming tenant, and the ranges of the users. Deploy the cluster first, then [add its consumers](#add-a-consumer). Network admission does not identify a user: authentication belongs to the service.
 - **Between services, the cluster's boundary**: one namespace per service, a default-deny network policy, ingress from the internal ingress or the service's own load balancer only.
 - Its Prometheus pushes to the receiver through the observability plane ([ADR-0007](../../../docs/adr/0007-monitoring.md)).
 
 The reference demonstrates two services, not operated ([`demo/`](demo)): `whoami` over HTTPS behind the internal ingress, and a TCP echo on port 7000. Real products are yours ([ADR-0003](../../../docs/adr/0003-scope-and-boundary.md), D4).
+
+```mermaid
+flowchart LR
+    CT["consumers<br/>declared tenants"] --> INI[["internal services plane"]]
+    subgraph CL["cluster · created by Cluster API"]
+        IE["internal ingress<br/>Traefik, Gateway API"] --> WK["workers<br/>one namespace per service"]
+        L4["layer 4 services"] --> WK
+        API["API load balancer"] --> CP["control plane × 3"]
+    end
+    INI --> IE
+    INI --> L4
+    WK -->|"metrics, remote write"| MON[["observability plane"]]
+    MON --> RCV["receiver"]
+    WK -->|"cert-manager: ACME,<br/>DNS-01 updates"| INT[["internal services plane"]]
+    INT --> SVC["certificate authority, DNS"]
+    ADM(["Administrators"]) -->|"administration network"| API
+    BS["bootstrap instance<br/>kind, Cluster API, CAPO"] -->|"creates"| CL
+
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class IE,L4,WK,API,CP,BS tenant
+    class INI,MON,INT plane
+    class CT,RCV,SVC other
+    class ADM outside
+```
+
+Arrows show who opens the connection. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Solid boxes: created by this stack; dashed boxes: provided by other stacks; grey: planes.
+
+## Prerequisites
+
+- The attachment of the cluster in `shared/planes`: role `shared` on the internal services plane, `tenant` on the observability plane.
+- The node image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md).
+- An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project, created by an administrator ([Kubernetes tenant](../../tenants/kubernetes/README.md#prerequisites)).
+- Resolvers (`dns_nameservers`) that resolve the cloud API endpoints, and, when the cloud APIs use a private certificate authority, its certificates in a file.
+- For `certificates`: an ACME directory and a DNS provider for the names of `cluster.domains` ([guide](../../../docs/guides/certificates.md)).
+
+The entry point is not a prerequisite: this cluster is not published.
 
 ## Usage
 
@@ -23,6 +62,19 @@ kubectl apply -f demo/whoami.yaml -f demo/echo.yaml
 ```
 
 The `services` output gives what the consumers reach; the `domains` output, the records of the zone of the internal names.
+
+## Add a consumer
+
+The sources are written in the manifests, which `create-cluster.sh` applies once. A consumer is a tenant, once it has joined the internal services plane, or a range of users ([how they reach the plane](../../../docs/reference/integration-points.md#users-of-internal-services)):
+
+```bash
+# Add its internal_sources output, or the users' range, to consumers in terraform.tfvars, then:
+tofu apply
+tofu output -json manifests | jq -r '."addons.yaml"'   | kubectl --kubeconfig shared.kubeconfig apply -f -
+tofu output -json manifests | jq -r '."services.yaml"' | kubectl --kubeconfig shared.kubeconfig apply -f -
+```
+
+The load balancers then admit the new sources; their addresses do not change.
 
 ## Inputs and outputs
 
@@ -48,7 +100,6 @@ The `services` output gives what the consumers reach; the `domains` output, the 
 | az | Availability zone of the bootstrap instance and of the cluster machines. | `string` | n/a | yes |
 | cloud | Entry of clouds.yaml used by this stack (the shared-services project of the cluster). | `string` | n/a | yes |
 | cluster | The Kubernetes cluster created by Cluster API.<br/>- node\_image: name of the image built by images/kubernetes-node.<br/>- kubernetes\_version: must match the node image.<br/>- control\_plane\_count: 3 for a highly available control plane.<br/>- control\_plane\_root\_volume\_size, worker\_root\_volume\_size: GiB of the root volume of each<br/>  machine (container images, ephemeral storage, logs, and etcd on the control plane). They<br/>  must not be smaller than the virtual size of the node image.<br/>- domains: names of the HTTP services, served by the internal ingress, with a certificate.<br/>- pod\_cidr, service\_cidr: must not overlap the cluster network nor the planes. | <pre>object({<br/>    name                           = optional(string, "shared")<br/>    node_image                     = string<br/>    kubernetes_version             = optional(string, "v1.36.5")<br/>    control_plane_flavor           = string<br/>    worker_flavor                  = string<br/>    control_plane_count            = optional(number, 3)<br/>    worker_count                   = optional(number, 2)<br/>    control_plane_root_volume_size = optional(number, 30)<br/>    worker_root_volume_size        = optional(number, 40)<br/>    domains                        = optional(list(string), ["services.example.org"])<br/>    pod_cidr                       = optional(string, "10.244.0.0/16")<br/>    service_cidr                   = optional(string, "10.96.0.0/12")<br/>  })</pre> | n/a | yes |
-| consumers | Who may use the services of the cluster on the internal services plane: the internal\_sources<br/>output of each consuming tenant (its router's gateway address on a plane with NAT, its range<br/>otherwise). Admitted by the internal ingress and the layer 4 services, nothing else is. | `list(string)` | n/a | yes |
 | egress\_network | External network giving the default route (packages, container images). The cluster gets no public address on it. | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | Flavor name of the bootstrap instance (kind runs there: 2 vCPU and 4 GiB at least). | `string` | n/a | yes |
 | image | Image name of the bootstrap instance (an Ubuntu LTS cloud image). | `string` | n/a | yes |
@@ -59,6 +110,7 @@ The `services` output gives what the consumers reach; the `domains` output, the 
 | bootstrap | Create the bootstrap instance. Set to false once the cluster manages itself (ADR-0002, D3); set back to true before tearing the cluster down. | `bool` | `true` | no |
 | certificates | Certificates of the domains of the cluster (ADR-0008): cert-manager obtains and renews them<br/>through the ACME DNS-01 challenge, from any ACME directory (Let's Encrypt, or the<br/>organisation's authority), and writes the secret of the ingress listener. null runs the<br/>demonstration mode: a self-signed certificate, with a warning at every plan.<br/>- directory\_url, ca\_bundle (PEM, for an authority that is not publicly trusted), email.<br/>- dns.provider "rfc2136" with dns.settings nameserver ("host:port"), tsig\_key\_name,<br/>  tsig\_algorithm, tsig\_secret: the stack writes the TSIG secret in the cert-manager<br/>  namespace. Any other provider: dns.solver, a cert-manager dns01 solver, whose credentials<br/>  Secret you create in the cert-manager namespace.<br/>- dns.resolvers: name servers ("host:port") cert-manager checks the TXT record on; empty<br/>  uses the cluster's resolvers.<br/>The settings reach the cluster through the bootstrap instance's user data, readable by the<br/>members of the project: give a key restricted to the \_acme-challenge records of the domains. | <pre>object({<br/>    directory_url = string<br/>    ca_bundle     = optional(string)<br/>    email         = string<br/>    dns = object({<br/>      provider  = string<br/>      settings  = optional(map(string), {})<br/>      solver    = optional(any)<br/>      resolvers = optional(list(string), [])<br/>    })<br/>  })</pre> | `null` | no |
 | cluster\_cidr | Range of the cluster network (nodes, load balancer VIPs, bootstrap instance). | `string` | `"10.36.0.0/24"` | no |
+| consumers | Who may use the services of the cluster on the internal services plane, as CIDRs: the<br/>internal\_sources output of each consuming tenant, and the ranges of the users (a VPN, the<br/>corporate network) as the cluster sees them. Admitted by the internal ingress and the layer 4<br/>services. Empty keeps the services closed: only the cluster network is admitted. Network<br/>admission does not identify a user: authentication belongs to the service. | `list(string)` | `[]` | no |
 | dns\_nameservers | DNS resolvers of the cluster network, reachable through its routes. They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images. | `list(string)` | `[]` | no |
 | monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |

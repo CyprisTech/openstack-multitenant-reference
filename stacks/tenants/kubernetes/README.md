@@ -13,14 +13,11 @@ Every version is pinned in [`modules/kubernetes-cluster/cluster.tf`](../../../mo
 ```mermaid
 flowchart LR
     EP["entry point"] --> PUB[["publication plane"]]
-    CT["other tenants<br/>consumers"] --> INI[["internal services plane"]]
     subgraph CL["cluster · created by Cluster API"]
-        IN["public ingress<br/>Traefik, optional"] --> WK["workers"]
-        IE["internal ingress<br/>Traefik, optional"] --> WK
+        IN["public ingress<br/>Traefik, Gateway API"] --> WK["workers"]
         API["API load balancer"] --> CP["control plane × 3"]
     end
-    PUB -.-> IN
-    INI -.-> IE
+    PUB --> IN
     WK -->|"metrics, remote write"| MON[["observability plane"]]
     MON --> RCV["receiver"]
     WK -->|"cert-manager: ACME,<br/>DNS-01 updates"| INT[["internal services plane"]]
@@ -34,13 +31,13 @@ flowchart LR
     classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
     classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
     classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
-    class IN,IE,WK,API,CP,BS tenant
-    class PUB,INI,MON,INT plane
-    class EP,RCV,SVC,CT other
+    class IN,WK,API,CP,BS tenant
+    class PUB,MON,INT plane
+    class EP,RCV,SVC other
     class ADM,OS outside
 ```
 
-Arrows show who opens the connection. Both ingresses are optional, together or alone (dotted arrows): a public ingress, published on the publication plane through the entry point, and an internal ingress, when the cluster runs shared services and is attached as `shared` to the internal services plane ([spec](../../../docs/specs/kubernetes-shared-services.md)); without it, the cluster is only a client of that plane. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Terraform creates the network, its routers, the bootstrap instance and the addresses of the entries; the bootstrap instance creates the cluster, which then manages itself. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+Arrows show who opens the connection. The cluster is published through the entry point. On the internal services plane it is only a client; a cluster that offers services to the tenants is [another cluster](../../shared/kubernetes/README.md), not this one with a second ingress. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Terraform creates the network, its routers, the bootstrap instance and the addresses of the entries; the bootstrap instance creates the cluster, which then manages itself. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
 
 ## Prerequisites
 

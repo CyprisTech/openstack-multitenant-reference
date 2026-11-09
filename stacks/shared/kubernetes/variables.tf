@@ -196,11 +196,14 @@ variable "certificates" {
 
 variable "consumers" {
   description = <<-EOT
-    Who may use the services of the cluster on the internal services plane: the internal_sources
-    output of each consuming tenant (its router's gateway address on a plane with NAT, its range
-    otherwise). Admitted by the internal ingress and the layer 4 services, nothing else is.
+    Who may use the services of the cluster on the internal services plane, as CIDRs: the
+    internal_sources output of each consuming tenant, and the ranges of the users (a VPN, the
+    corporate network) as the cluster sees them. Admitted by the internal ingress and the layer 4
+    services. Empty keeps the services closed: only the cluster network is admitted. Network
+    admission does not identify a user: authentication belongs to the service.
   EOT
   type        = list(string)
+  default     = []
 
   validation {
     condition     = alltrue([for c in var.consumers : can(cidrhost(c, 0)) && !endswith(c, "/0")])

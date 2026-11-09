@@ -25,7 +25,7 @@ The same stack, deployed in a shared-services project, offers services to the te
 - TCP services (PostgreSQL, Redis, plain TCP): one exposed Service each;
 - each service admitted to its consumers only, named in DNS, reachable in both plane modes;
 - the cluster may also be the metrics receiver: the tenants push to it;
-- every entry is optional: a shared-services cluster is usually not published on the publication plane, a published cluster need not offer internal services.
+- it is not published: a cluster is either published or shared.
 
 The reference demonstrates two services, not operated: an HTTP service behind the internal ingress and a TCP service with its own entry. Real products (a registry, a database service, a directory) are yours (level 3, [ADR-0003](../adr/0003-scope-and-boundary.md) D4).
 
@@ -71,11 +71,11 @@ The `vm` tenant joins the internal services plane as an optional plane, with the
 
 The boundary between services is the cluster's: one namespace per service, default-deny network policies, ingress allowed from the internal ingress or the service's own load balancer only. The stack ships the default-deny policy and documents the rest.
 
-A cluster both published and offering shared services puts an entry from the Internet on a cluster that every tenant of the internal services plane reaches, and that reaches them ([lateral movement](../concepts/architecture.md#lateral-movement)). The reference recommends one cluster for published applications and another for shared services; when they are combined, the separate ingresses and the default-deny policies are what keep a published pod from the internal backends.
+A cluster is published or shared, not both: an entry from the Internet must not sit on a cluster that every tenant of the internal services plane reaches, and that reaches them ([lateral movement](../concepts/architecture.md#lateral-movement)).
 
 ### 7. Isolation test
 
-New rows: a declared consumer reaches its service; a tenant that is not a consumer does not; the cluster reaches no tenant; a pod of the cluster does not reach the tenants' bastions; when the cluster is also published, a pod behind the public ingress does not reach an internal backend.
+New rows: a declared consumer reaches its service; a tenant that is not a consumer does not; the cluster reaches no tenant; a pod of the cluster does not reach the tenants' bastions.
 
 ## Dependencies and order
 
