@@ -23,7 +23,7 @@ STEPS = [
      [["kubectl", "cluster-info"], ["kubectl", "version"], ["kubectl", "auth", "whoami"]]),
     ("How the cluster is built", "Cluster API objects live in the cluster itself after `clusterctl move`: "
      "one Machine per server, created from the ClusterClass.",
-     [["clusterctl", "describe", "cluster", "published", "-n", "platform"],
+     [["clusterctl", "describe", "cluster", "CLUSTER", "-n", "platform"],
       ["kubectl", "-n", "platform", "get", "clusterclass,cluster,kubeadmcontrolplane,machinedeployment"],
       ["kubectl", "-n", "platform", "get", "machines,openstackmachines"]]),
     ("Nodes", "Three control-plane nodes and two workers, all on the cluster network; the cloud "
@@ -73,6 +73,7 @@ class Sanitizer:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--kubeconfig", required=True)
+    ap.add_argument("--cluster", default="published", help="name of the Cluster API cluster")
     ap.add_argument("--kubectl", default="kubectl")
     ap.add_argument("--clusterctl", default="clusterctl")
     ap.add_argument("--replace", action="append", default=[], help="real=example, applied before addresses")
@@ -90,6 +91,7 @@ def main():
     for title, text, commands in STEPS:
         print(f"## {title}\n\n{text}\n")
         for cmd in commands:
+            cmd = [args.cluster if word == "CLUSTER" else word for word in cmd]
             run = [tools[cmd[0]]] + cmd[1:] + ["--kubeconfig", args.kubeconfig]
             r = subprocess.run(run, capture_output=True, text=True, timeout=120)
             out = (r.stdout + r.stderr).rstrip()

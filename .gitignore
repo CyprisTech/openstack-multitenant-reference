@@ -38,3 +38,6 @@ images/kubernetes-node/build.json
 images/kubernetes-node/.work/
 # Interrupted domain publication (scripts/publish-domains.sh)
 stacks/shared/entry-point/.domains-publication-pending
+# Test campaign: local configuration, outputs and recordings
+tests/campaign/campaign.env
+tests/campaign/work/

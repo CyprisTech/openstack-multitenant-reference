@@ -4,6 +4,8 @@ Every step of a full test cycle, with the checkpoint that must pass before the n
 
 Run everything from a machine that is an administration source of the stacks (`admin.sources`, `bastion.ssh_cidrs`), with a `clouds.yaml` entry per project and **no `OS_*` variable in the shell**.
 
+`tests/campaign/run.sh` runs this procedure end to end ([usage](../../tests/campaign/README.md)).
+
 ## Overview
 
 ```mermaid
