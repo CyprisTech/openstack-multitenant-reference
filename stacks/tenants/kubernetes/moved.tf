@@ -19,6 +19,8 @@ moved {
   to   = module.cluster.openstack_networking_floatingip_v2.entry["public"]
 }
 
+# Up to v0.3 state: chained with the moved block of the module (module.platform to module.tenant).
+# Targeting module.cluster.module.tenant directly is rejected at plan: "Ambiguous move statements".
 moved {
   from = module.platform
   to   = module.cluster.module.platform

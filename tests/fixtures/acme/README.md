@@ -18,7 +18,7 @@ users          = { debug = ["ssh-ed25519 AAAA..."] }
 zone           = "example.org"
 tenants = {
   web      = ["site-a.example.org", "site-b.example.org"]
-  platform = ["apps.platform.example.org"]
+  published = ["apps.published.example.org"]
 }
 VARS
 tofu -chdir=../../../stacks/shared/planes output -json attachments | jq '{plane_attachment: .acme.planes}' > planes.auto.tfvars.json

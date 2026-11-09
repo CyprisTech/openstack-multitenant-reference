@@ -1,5 +1,5 @@
 variable "cloud" {
-  description = "Entry of clouds.yaml used by this configuration: the project that will own the image (the platform project)."
+  description = "Entry of clouds.yaml used by this configuration: the project that will own the image (the published project)."
   type        = string
 }
 

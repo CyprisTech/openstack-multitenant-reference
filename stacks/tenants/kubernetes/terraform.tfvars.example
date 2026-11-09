@@ -1,5 +1,5 @@
 # Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
-cloud = "example-site-a-platform"
+cloud = "example-site-a-published"
 site  = "site-a"
 az    = "nova"
 image = "ubuntu-24.04"
@@ -27,7 +27,7 @@ cluster = {
   # Root disks: container images, ephemeral storage, logs, etcd. Defaults 30 and 40 GiB.
   # control_plane_root_volume_size = 30
   # worker_root_volume_size        = 40
-  domains = ["apps.platform.example.org"]
+  domains = ["apps.published.example.org"]
 }
 
 monitoring = { receiver = "http://203.0.113.10:9090" }
@@ -37,4 +37,4 @@ edge_sources = ["198.51.100.5/32"]
 
 # How this stack joins the planes: its entry of the attachments output of stack shared/planes,
 # whether the planes are the operator's or built in a hub project. For example:
-#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .platform.planes}' > planes.auto.tfvars.json
+#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .published.planes}' > planes.auto.tfvars.json

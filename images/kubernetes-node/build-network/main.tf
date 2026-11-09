@@ -3,7 +3,7 @@
 # into a private image of the project.
 #
 # The network has its own state and lifecycle: the image outlives the cluster, and rebuilding
-# it does not touch the platform stack. Two routers:
+# it does not touch the published stack. Two routers:
 # - egress, the default route: the build downloads packages and container images;
 # - admin, which carries the floating IP Packer connects to, on the administration network.
 #   Only the administration sources are routed through it (advertised by DHCP), so that the

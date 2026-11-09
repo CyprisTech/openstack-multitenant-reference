@@ -48,7 +48,7 @@ Certificates are obtained with the ACME DNS-01 challenge: it works for published
 
 A tenant's configuration gives the directory URL, an optional root certificate, and the DNS provider. Let's Encrypt for names published on the Internet; the organisation's authority for names served on internal planes only. cert-manager's other issuers (CA, Vault) remain available on the `kubernetes` tenant.
 
-**Without `certificates`, a tenant runs in demonstration mode**: it serves a self-signed certificate, as up to `v0.3`, and every plan and apply warns *certificates not set: self-signed certificate, for evaluation only* (a `check` block). The mode lets a reader evaluate the reference without a DNS provider or an authority; the getting-started guide names it, and the production guide requires `certificates`. Both paths produce the same artefact in the same place (the certificate files of nginx, the `platform-tls` secret of the ingress): only how it is obtained differs.
+**Without `certificates`, a tenant runs in demonstration mode**: it serves a self-signed certificate, as up to `v0.3`, and every plan and apply warns *certificates not set: self-signed certificate, for evaluation only* (a `check` block). The mode lets a reader evaluate the reference without a DNS provider or an authority; the getting-started guide names it, and the production guide requires `certificates`. Both paths produce the same artefact in the same place (the certificate files of nginx, the `published-tls` secret of the ingress): only how it is obtained differs.
 
 ### D3 — The standard tool per platform
 

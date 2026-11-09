@@ -1,5 +1,5 @@
 # Demonstration application published through the Gateway API (ADR-0002, D5): the entry point
-# routes apps.platform.example.org to the ingress floating IP, Traefik terminates TLS and
+# routes apps.published.example.org to the ingress floating IP, Traefik terminates TLS and
 # answers with the request it received, including the client address carried by PROXY v2.
 apiVersion: v1
 kind: Namespace
@@ -46,7 +46,7 @@ spec:
     namespace: traefik
     sectionName: websecure
   hostnames:
-  - apps.platform.example.org
+  - apps.published.example.org
   rules:
   - backendRefs:
     - name: whoami

@@ -54,7 +54,7 @@ No stack reads an object of another project: each passes what the next ones need
 | `monitoring.receiver` | entry point, `vm`, `isolated`, `kubernetes` | output `receiver_url` of the receiver |
 | `edge_sources` | `vm`, `kubernetes` | output `publication_sources` of the entry point |
 | `allowed_sources` | internal service | output `internal_sources` of `kubernetes` |
-| `certificates` | `vm`, `kubernetes` | output `certificates` of the ACME authority, keyed by tenant (`jq .web`, `jq .platform`) |
+| `certificates` | `vm`, `kubernetes` | output `certificates` of the ACME authority, keyed by tenant (`jq .web`, `jq .published`) |
 
 ## 0. Projects and prerequisites
 
@@ -106,7 +106,7 @@ The **ACME authority** (Knot and step-ca, [`tests/fixtures/acme`](../../tests/fi
 ```bash
 cd tests/fixtures/acme && tofu init && tofu apply && tofu plan -detailed-exitcode
 tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/tenants/vm/certificates.auto.tfvars.json
-tofu output -json certificates | jq '{certificates: .platform}' > ../../../stacks/tenants/kubernetes/certificates.auto.tfvars.json
+tofu output -json certificates | jq '{certificates: .published}' > ../../../stacks/tenants/kubernetes/certificates.auto.tfvars.json
 tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
 ```
 
@@ -156,7 +156,7 @@ B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
 scp cluster-clouds.yaml ops@$B:/tmp/clouds.yaml; scp cacert.pem ops@$B:/tmp/cacert.pem   # private CA only
 ssh ops@$B 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem'
 ssh -t ops@$B 'sudo /opt/platform/create-cluster.sh'
-ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
+ssh ops@$B 'sudo cat /opt/platform/published.kubeconfig' > published.kubeconfig
 ```
 
 `cluster-clouds.yaml` is the cluster credential's `clouds.yaml` entry, renamed `openstack`; it never goes through Terraform.
@@ -171,20 +171,20 @@ ssh ops@$B 'sudo cat /opt/platform/platform.kubeconfig' > platform.kubeconfig
 ```console
 $ kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[-1].type,VERSION:.status.nodeInfo.kubeletVersion
 NAME                              STATUS   VERSION
-platform-md-0-9xfjf-pcbmb-gzwj4   Ready    v1.36.5
-platform-md-0-9xfjf-pcbmb-mwxj4   Ready    v1.36.5
-platform-tsk82-5l6t4              Ready    v1.36.5
-platform-tsk82-pcqrh              Ready    v1.36.5
-platform-tsk82-ws9mp              Ready    v1.36.5
+published-md-0-9xfjf-pcbmb-gzwj4  Ready    v1.36.5
+published-md-0-9xfjf-pcbmb-mwxj4  Ready    v1.36.5
+published-tsk82-5l6t4             Ready    v1.36.5
+published-tsk82-pcqrh             Ready    v1.36.5
+published-tsk82-ws9mp             Ready    v1.36.5
 $ kubectl -n platform get helmreleaseproxy     # one per chart
 NAME                                               CLUSTER   READY  STATUS
-cilium-platform-75wl7                              platform  True   deployed
-kubelet-csr-approver-platform-4dvwn                platform  True   deployed
-metrics-server-platform-tkrvw                      platform  True   deployed
-openstack-cinder-csi-platform-77nmh                platform  True   deployed
-openstack-cloud-controller-manager-platform-nzwqf  platform  True   deployed
-prometheus-platform-hpz6g                          platform  True   deployed
-traefik-platform-vsj99                             platform  True   deployed
+cilium-published-75wl7                             published True   deployed
+kubelet-csr-approver-published-4dvwn               published True   deployed
+metrics-server-published-tkrvw                     published True   deployed
+openstack-cinder-csi-published-77nmh               published True   deployed
+openstack-cloud-controller-manager-published-nzwqf published True   deployed
+prometheus-published-hpz6g                         published True   deployed
+traefik-published-vsj99                            published True   deployed
 $ kubectl get svc -A --field-selector spec.type=LoadBalancer
 NAMESPACE   NAME      TYPE           EXTERNAL-IP   PORT(S)
 traefik     traefik   LoadBalancer   10.24.0.10    80:32745/TCP,443:31426/TCP
@@ -216,7 +216,7 @@ $ tofu output -json transit
     "routes": {
       "edge": "10.20.0.0/24 via 172.31.1.254",
       "isolated": "10.22.0.0/24 via 172.31.1.252",
-      "platform": "10.24.0.0/24 via 172.31.1.162",
+      "published": "10.24.0.0/24 via 172.31.1.162",
       "receiver": "10.34.0.0/28 via 172.31.1.197",
       "web": "10.21.0.0/24 via 172.31.1.52"
     }
@@ -225,7 +225,7 @@ $ tofu output -json transit
     "address": "172.31.0.1",
     "routes": {
       "edge": "10.20.0.0/24 via 172.31.0.9",
-      "platform": "10.24.0.0/24 via 172.31.0.246",
+      "published": "10.24.0.0/24 via 172.31.0.246",
       "web": "10.21.0.0/24 via 172.31.0.190"
     }
   }
@@ -247,10 +247,10 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 
 ```console
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
-domains from kubernetes: apps.platform.example.org
+domains from kubernetes: apps.published.example.org
 domains from vm: site-a.example.org, site-b.example.org
 ...
-domains published: apps.platform.example.org, site-a.example.org, site-b.example.org
+domains published: apps.published.example.org, site-a.example.org, site-b.example.org
 ```
 
 Publication under load, measured: a new domain added while a client sends two requests per second to another — the apply takes 19 s, the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails.
@@ -258,12 +258,12 @@ Publication under load, measured: a new domain added while a client sends two re
 ## 9. Acceptance
 
 ```bash
-kubectl --kubeconfig platform.kubeconfig apply -f stacks/tenants/kubernetes/demo/whoami.yaml
+kubectl --kubeconfig published.kubeconfig apply -f stacks/tenants/kubernetes/demo/whoami.yaml
 LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .floating_ip)
-for d in site-a.example.org site-b.example.org apps.platform.example.org; do
+for d in site-a.example.org site-b.example.org apps.published.example.org; do
   for i in $(seq 12); do curl -s --cacert tests/fixtures/acme/root.pem --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
 done
-python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --platform-kubeconfig platform.kubeconfig \
+python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --published-kubeconfig published.kubeconfig \
   --acme tests/fixtures/acme
 ```
 
@@ -279,7 +279,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig
 from                   to                                                    port  expected actual
 edge t1-edge-1         web service address 10.21.0.90                         443  open     open     ok
 edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
@@ -347,7 +347,7 @@ Expected: closed. The packet may reach the web instance, whose security group ad
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
 tofu -chdir=stacks/tenants/kubernetes output -json manifests | jq -r '."cluster.yaml"' \
-  | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig platform.kubeconfig apply -f -
+  | sed "s|BOOTSTRAP_SOURCE|$B/32|" | kubectl --kubeconfig published.kubeconfig apply -f -
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
 for s in tests/fixtures/internal-service stacks/tenants/kubernetes stacks/tenants/isolated \

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Create the platform cluster from the bootstrap instance (ADR-0002, D3). Run as root, after
-# copying a clouds.yaml with an entry "openstack" for the platform project to
+# Create the cluster from the bootstrap instance (ADR-0002, D3). Run as root, after
+# copying a clouds.yaml with an entry "openstack" for the project of the cluster to
 # /opt/platform/clouds.yaml (application credential scoped to the project), and, when the
 # cloud API uses a private certificate authority, its certificates to /opt/platform/cacert.pem.
 # The script can be run again: each step skips what already exists.

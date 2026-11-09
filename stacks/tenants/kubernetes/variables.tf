@@ -1,5 +1,5 @@
 variable "cloud" {
-  description = "Entry of clouds.yaml used by this stack (the platform project)."
+  description = "Entry of clouds.yaml used by this stack (the published project)."
   type        = string
 }
 
@@ -147,7 +147,7 @@ variable "cluster" {
     - pod_cidr, service_cidr: must not overlap the cluster network nor the planes.
   EOT
   type = object({
-    name                           = optional(string, "platform")
+    name                           = optional(string, "published")
     node_image                     = string
     kubernetes_version             = optional(string, "v1.36.5")
     control_plane_flavor           = string

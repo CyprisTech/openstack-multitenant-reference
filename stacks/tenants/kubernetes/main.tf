@@ -5,7 +5,7 @@
 module "cluster" {
   source = "../../../modules/kubernetes-cluster"
 
-  name   = "${var.site}-platform"
+  name   = "${var.site}-published"
   planes = ["publication", "observability", "internal"]
 
   # The tenant's service address (ADR-0006, D1): its public ingress, reached by the entry point
@@ -17,7 +17,7 @@ module "cluster" {
       proxy_protocol = true
       domains        = var.cluster.domains
       namespace      = "traefik"
-      tls_secret     = "platform-tls"
+      tls_secret     = "published-tls"
       host           = var.service_addresses.ingress
     }
   }

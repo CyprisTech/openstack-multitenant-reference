@@ -21,7 +21,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
   --user ops --key ~/.ssh/id_ed25519 \
-  --platform-kubeconfig platform.kubeconfig   # with a Kubernetes tenant
+  --published-kubeconfig published.kubeconfig # with a Kubernetes tenant
 ```
 
 Each row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs. A probe that cannot run (SSH failure) is reported as an error, never as `closed`.

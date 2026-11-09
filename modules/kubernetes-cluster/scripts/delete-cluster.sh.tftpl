@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Delete the platform cluster (ADR-0002, D3): move Cluster API back to a kind cluster on the
+# Delete the cluster (ADR-0002, D3): move Cluster API back to a kind cluster on the
 # bootstrap instance, delete the Cluster, wait for its servers and load balancers to go, then
 # destroy the stack. Run as root with the kubeconfig of the workload cluster in place.
 set -euo pipefail

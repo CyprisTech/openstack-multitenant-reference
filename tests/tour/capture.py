@@ -6,7 +6,7 @@ not a private address of the cluster (10.0.0.0/8) with an address of the documen
 (RFC 5737), consistently, and replaces the names given with --replace. Run it after each test
 cycle, read the diff, commit.
 
-    tests/tour/capture.py --kubeconfig platform.kubeconfig [--replace real=example ...] \
+    tests/tour/capture.py --kubeconfig published.kubeconfig [--replace real=example ...] \
         [--kubectl kubectl] [--clusterctl clusterctl] > docs/guides/kubernetes-tour.md
 """
 
@@ -23,7 +23,7 @@ STEPS = [
      [["kubectl", "cluster-info"], ["kubectl", "version"], ["kubectl", "auth", "whoami"]]),
     ("How the cluster is built", "Cluster API objects live in the cluster itself after `clusterctl move`: "
      "one Machine per server, created from the ClusterClass.",
-     [["clusterctl", "describe", "cluster", "platform", "-n", "platform"],
+     [["clusterctl", "describe", "cluster", "published", "-n", "platform"],
       ["kubectl", "-n", "platform", "get", "clusterclass,cluster,kubeadmcontrolplane,machinedeployment"],
       ["kubectl", "-n", "platform", "get", "machines,openstackmachines"]]),
     ("Nodes", "Three control-plane nodes and two workers, all on the cluster network; the cloud "

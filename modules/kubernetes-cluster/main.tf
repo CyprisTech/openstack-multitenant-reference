@@ -84,7 +84,7 @@ resource "terraform_data" "entries" {
   }
 }
 
-module "platform" {
+module "tenant" {
   source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
 
   tenant = {
@@ -160,6 +160,11 @@ module "platform" {
       }
     }
   }
+}
+
+moved {
+  from = module.platform
+  to   = module.tenant
 }
 
 # Demonstration mode: a warning at every plan and apply, without failing (ADR-0008).

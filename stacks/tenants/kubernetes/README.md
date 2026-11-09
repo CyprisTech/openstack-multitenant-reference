@@ -49,7 +49,7 @@ Arrows show who opens the connection. Both ingresses are optional, together or a
 - An application credential **dedicated to the cluster**, restricted, with the `member` and `load-balancer_member` roles of the project. Created by an administrator, never by OpenTofu or Terraform (ADR-0002, D1):
 
   ```bash
-  openstack application credential create platform-cluster \
+  openstack application credential create published-cluster \
     --role member --role load-balancer_member --expiration 2027-01-01T00:00:00
   ```
 
@@ -87,21 +87,21 @@ The ingress Service requests this address (`loadBalancerIP`) and keeps it when i
 
 ### Certificates
 
-With `certificates` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)), the script's last step configures cert-manager, already in the cluster for Cluster API: a `ClusterIssuer` for the ACME directory with a DNS-01 solver (RFC 2136, or the cert-manager solver you give), and a `Certificate` for `cluster.domains` that writes `platform-tls`, the secret of the ingress listener; cert-manager renews it.
+With `certificates` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)), the script's last step configures cert-manager, already in the cluster for Cluster API: a `ClusterIssuer` for the ACME directory with a DNS-01 solver (RFC 2136, or the cert-manager solver you give), and a `Certificate` for `cluster.domains` that writes `published-tls`, the secret of the ingress listener; cert-manager renews it.
 
 - The TSIG key is written in the `cert-manager` namespace; it reaches the cluster through the bootstrap instance's user data, readable by the members of the project, so give a key restricted to the `_acme-challenge` records of the domains.
 - With `dns.resolvers`, cert-manager checks the TXT record on these name servers only.
-- Without `certificates`, the tenant runs in **demonstration mode**: a self-signed `platform-tls`, and a warning at every plan.
+- Without `certificates`, the tenant runs in **demonstration mode**: a self-signed `published-tls`, and a warning at every plan.
 
 ## Checks
 
 ```bash
 # Demonstration application behind the Gateway API, then the domain routed by the entry point
 kubectl apply -f demo/whoami.yaml
-curl -k --resolve apps.platform.example.org:443:<public IP of the entry point> https://apps.platform.example.org/
+curl -k --resolve apps.published.example.org:443:<public IP of the entry point> https://apps.published.example.org/
 
 # Isolation test with the Kubernetes rows; needs tests/fixtures/receiver and tests/fixtures/internal-service
-tests/isolation/check.py --key <ssh key> --platform-kubeconfig platform.kubeconfig
+tests/isolation/check.py --key <ssh key> --published-kubeconfig published.kubeconfig
 ```
 
 A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour](../../../docs/guides/kubernetes-tour.md).
@@ -112,7 +112,7 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 # 1. The bootstrap instance must exist (bootstrap = true) and be admitted on the API again:
 #    after the move, the cluster no longer admits it, and it cannot admit itself.
 tofu output -json manifests | jq -r '."cluster.yaml"' \
-  | sed "s|BOOTSTRAP_SOURCE|$(tofu output -raw bootstrap)/32|" | kubectl --kubeconfig platform.kubeconfig apply -f -
+  | sed "s|BOOTSTRAP_SOURCE|$(tofu output -raw bootstrap)/32|" | kubectl --kubeconfig published.kubeconfig apply -f -
 
 # 2. Delete the cluster from the bootstrap instance, then the stack.
 ssh ops@$(tofu output -raw bootstrap) 'sudo /opt/platform/delete-cluster.sh'
@@ -145,8 +145,8 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | ---- | ----------- | ---- | ------- | :------: |
 | admin | Administration access.<br/>- users: login => SSH public keys, created on the bootstrap instance with sudo.<br/>- sources: addresses of the operators as seen on the administration network (with source NAT,<br/>  the address of a router). They reach the bootstrap instance on port 22 and the Kubernetes<br/>  API on port 6443, and nothing else does.<br/>- ssh\_key\_name: Nova key pair injected in the cluster machines, or null for none. | <pre>object({<br/>    users        = optional(map(list(string)), {})<br/>    sources      = list(string)<br/>    ssh_key_name = optional(string)<br/>  })</pre> | n/a | yes |
 | az | Availability zone of the bootstrap instance and of the cluster machines. | `string` | n/a | yes |
-| cloud | Entry of clouds.yaml used by this stack (the platform project). | `string` | n/a | yes |
-| cluster | The Kubernetes cluster created by Cluster API.<br/>- node\_image: name of the image built by images/kubernetes-node.<br/>- kubernetes\_version: must match the node image.<br/>- control\_plane\_count: 3 for a highly available control plane.<br/>- control\_plane\_root\_volume\_size, worker\_root\_volume\_size: GiB of the root volume of each<br/>  machine (container images, ephemeral storage, logs, and etcd on the control plane). They<br/>  must not be smaller than the virtual size of the node image.<br/>- domains: domains served by the ingress and published through the entry point.<br/>- pod\_cidr, service\_cidr: must not overlap the cluster network nor the planes. | <pre>object({<br/>    name                           = optional(string, "platform")<br/>    node_image                     = string<br/>    kubernetes_version             = optional(string, "v1.36.5")<br/>    control_plane_flavor           = string<br/>    worker_flavor                  = string<br/>    control_plane_count            = optional(number, 3)<br/>    worker_count                   = optional(number, 2)<br/>    control_plane_root_volume_size = optional(number, 30)<br/>    worker_root_volume_size        = optional(number, 40)<br/>    domains                        = optional(list(string), ["apps.example.org"])<br/>    pod_cidr                       = optional(string, "10.244.0.0/16")<br/>    service_cidr                   = optional(string, "10.96.0.0/12")<br/>  })</pre> | n/a | yes |
+| cloud | Entry of clouds.yaml used by this stack (the published project). | `string` | n/a | yes |
+| cluster | The Kubernetes cluster created by Cluster API.<br/>- node\_image: name of the image built by images/kubernetes-node.<br/>- kubernetes\_version: must match the node image.<br/>- control\_plane\_count: 3 for a highly available control plane.<br/>- control\_plane\_root\_volume\_size, worker\_root\_volume\_size: GiB of the root volume of each<br/>  machine (container images, ephemeral storage, logs, and etcd on the control plane). They<br/>  must not be smaller than the virtual size of the node image.<br/>- domains: domains served by the ingress and published through the entry point.<br/>- pod\_cidr, service\_cidr: must not overlap the cluster network nor the planes. | <pre>object({<br/>    name                           = optional(string, "published")<br/>    node_image                     = string<br/>    kubernetes_version             = optional(string, "v1.36.5")<br/>    control_plane_flavor           = string<br/>    worker_flavor                  = string<br/>    control_plane_count            = optional(number, 3)<br/>    worker_count                   = optional(number, 2)<br/>    control_plane_root_volume_size = optional(number, 30)<br/>    worker_root_volume_size        = optional(number, 40)<br/>    domains                        = optional(list(string), ["apps.example.org"])<br/>    pod_cidr                       = optional(string, "10.244.0.0/16")<br/>    service_cidr                   = optional(string, "10.96.0.0/12")<br/>  })</pre> | n/a | yes |
 | edge\_sources | Ranges the entry point connects from on publication: output publication\_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header. | `list(string)` | n/a | yes |
 | egress\_network | External network giving the default route (packages, container images). The cluster gets no public address on it. | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | Flavor name of the bootstrap instance (kind runs there: 2 vCPU and 4 GiB at least). | `string` | n/a | yes |

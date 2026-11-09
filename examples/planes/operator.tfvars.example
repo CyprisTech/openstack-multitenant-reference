@@ -20,6 +20,6 @@ attachments = {
   acme             = { project_id = "<shared services project>", cidr = "10.37.0.0/28", planes = { internal = "shared" } }
   web              = { project_id = "<web project>", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
   isolated         = { project_id = "<isolated project>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
-  platform         = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
+  published        = { project_id = "<kubernetes project>", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
   k8s-shared       = { project_id = "<shared services cluster project>", cidr = "10.36.0.0/24", planes = { internal = "shared", observability = "tenant" } }
 }

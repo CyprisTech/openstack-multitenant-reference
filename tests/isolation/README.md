@@ -13,7 +13,7 @@
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
   --user ops --key ~/.ssh/id_ed25519 \
-  [--platform-kubeconfig platform.kubeconfig --internal-service tests/fixtures/internal-service] \
+  [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
   [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 ```
 

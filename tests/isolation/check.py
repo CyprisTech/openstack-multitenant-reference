@@ -11,12 +11,12 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
-        [--platform-kubeconfig platform.kubeconfig --internal-service tests/fixtures/internal-service] \
+        [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
         [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 
 Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions and pushing to the test receiver, and the receiver applied. With
---platform-kubeconfig, the rows of the Kubernetes tenant are added: probes from the cluster run
+--published-kubeconfig, the rows of the Kubernetes tenant are added: probes from the cluster run
 in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
 use.
@@ -56,7 +56,7 @@ class Prober:
         self.user = user
 
     def pod(self, kubectl, target, port):
-        """TCP probe run from a pod of the platform cluster."""
+        """TCP probe run from a pod of the cluster."""
         r = subprocess.run(kubectl + ["-n", "default", "exec", "isolation-probe", "--", "sh", "-c",
                                       f"nc -z -w 5 {target} {port} && echo open || echo closed"],
                            capture_output=True, text=True, timeout=60)
@@ -96,7 +96,7 @@ def main():
     ap.add_argument("--stacks", default="stacks")
     ap.add_argument("--receiver", default="tests/fixtures/receiver")
     ap.add_argument("--user", default="ops")
-    ap.add_argument("--platform-kubeconfig")
+    ap.add_argument("--published-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
     ap.add_argument("--internal-service", default="tests/fixtures/internal-service")
     ap.add_argument("--key", required=True)
@@ -186,8 +186,8 @@ def main():
     rows.append((f"isolated {iso_vm[0]}", "Internet (1.1.1.1)", 443, "closed", from_iso("1.1.1.1", 443)))
 
     probe_pod = None
-    if args.platform_kubeconfig:
-        kubectl = [args.kubectl, "--kubeconfig", args.platform_kubeconfig, "--request-timeout=30s"]
+    if args.published_kubeconfig:
+        kubectl = [args.kubectl, "--kubeconfig", args.published_kubeconfig, "--request-timeout=30s"]
 
         # The ingress address created by the stack, and the one the Service carries: the cloud
         # controller manager silently allocates another address when the requested one is
@@ -198,26 +198,26 @@ def main():
                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
         api = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
         internal = outputs(args.tool, args.internal_service)["address"]
-        probe_pod = start_probe(args.platform_kubeconfig)
+        probe_pod = start_probe(args.published_kubeconfig)
 
-        rows.append(("platform Service", "ingress on the stack address", "-", "yes",
+        rows.append(("published Service", "ingress on the stack address", "-", "yes",
                      lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"))
-        rows.append((f"edge {edge_vm[0]}", f"platform ingress {ingress}", 443, "open", from_edge(ingress, 443)))
-        rows.append(("test runner", f"platform ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)))
-        rows.append((f"web {web_vm[0]}", f"platform ingress {ingress}", 443, "closed", from_web(ingress, 443)))
-        rows.append((f"isolated {iso_vm[0]}", f"platform ingress {ingress}", 443, "closed", from_iso(ingress, 443)))
-        rows.append(("platform pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(probe_pod, receiver, 9090)))
-        rows.append(("receiver", "series pushed by platform", "-", "yes", lambda: pushed("platform")))
-        rows.append(("test runner (administrator)", f"platform Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
+        rows.append((f"edge {edge_vm[0]}", f"published ingress {ingress}", 443, "open", from_edge(ingress, 443)))
+        rows.append(("test runner", f"published ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)))
+        rows.append((f"web {web_vm[0]}", f"published ingress {ingress}", 443, "closed", from_web(ingress, 443)))
+        rows.append((f"isolated {iso_vm[0]}", f"published ingress {ingress}", 443, "closed", from_iso(ingress, 443)))
+        rows.append(("published pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(probe_pod, receiver, 9090)))
+        rows.append(("receiver", "series pushed by published", "-", "yes", lambda: pushed("published")))
+        rows.append(("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
         for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
-            rows.append(("platform pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
+            rows.append(("published pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(probe_pod, b, 22)))
-        rows.append(("platform pod", f"internal service {internal}", 8080, "open", lambda: p.pod(probe_pod, internal, 8080)))
+        rows.append(("published pod", f"internal service {internal}", 8080, "open", lambda: p.pod(probe_pod, internal, 8080)))
         rows.append((f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", from_web(internal, 8080)))
         rows.append((f"isolated {iso_vm[0]}", f"internal service {internal}", 8080, "closed", from_iso(internal, 8080)))
         rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
         rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
-        rows.append(("receiver", f"platform ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
+        rows.append(("receiver", f"published ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
 
     if args.shared_kubeconfig:
         # The cluster for shared services (spec: a Kubernetes cluster for shared services): the web
@@ -239,7 +239,7 @@ def main():
         rows.append(("receiver", f"shared TCP echo {s_echo}", 7000, "closed", from_receiver(s_echo, 7000)))
         rows.append(("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)))
         if probe_pod:
-            rows.append(("platform pod", f"shared internal ingress {s_ingress}", 443, "closed",
+            rows.append(("published pod", f"shared internal ingress {s_ingress}", 443, "closed",
                          lambda: p.pod(probe_pod, s_ingress, 443)))
         rows.append(("shared pod", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", lambda: p.pod(sk, web_vm[1], 443)))
         rows.append(("shared pod", f"web service address {service}", 443, "closed", lambda: p.pod(sk, service, 443)))

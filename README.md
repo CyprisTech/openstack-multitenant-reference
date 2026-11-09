@@ -129,12 +129,12 @@ Who it is for, profile by profile: [who it is for](docs/concepts/audiences.md). 
 <summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-03)</summary>
 
 ```console
-$ for d in site-a.example.org site-b.example.org apps.platform.example.org; do
+$ for d in site-a.example.org site-b.example.org apps.published.example.org; do
     for i in $(seq 12); do curl -sk --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c; done
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --platform-kubeconfig platform.kubeconfig
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig
 from                   to                                                    port  expected actual
 test runner            entry point (public IP)                                443  open     open     ok
 test runner            entry point (public IP)                                 80  open     open     ok
@@ -155,18 +155,18 @@ receiver               series pushed by isolated                                
 web t1-web-1           isolated t1-isolated-1 (private 10.22.0.127)            22  closed   closed   ok
 isolated t1-isolated-1 web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
 isolated t1-isolated-1 Internet (192.0.2.1)                                     443  closed   closed   ok
-platform Service       ingress on the stack address                             -  yes      yes      ok
-edge t1-edge-1         platform ingress 10.24.0.10                            443  open     open     ok
-test runner            platform ingress 10.24.0.10                            443  closed   closed   ok
-web t1-web-1           platform ingress 10.24.0.10                            443  closed   closed   ok
-isolated t1-isolated-1 platform ingress 10.24.0.10                            443  closed   closed   ok
-platform pod           receiver 10.34.0.12                                   9090  open     open     ok
-receiver               series pushed by platform                                -  yes      yes      ok
-test runner (administrator) platform Kubernetes API 198.51.100.1              6443  open     open     ok
-platform pod           edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
-platform pod           web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
-platform pod           isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
-platform pod           internal service 198.51.100.3                          8080  open     open     ok
+published Service      ingress on the stack address                             -  yes      yes      ok
+edge t1-edge-1         published ingress 10.24.0.10                           443  open     open     ok
+test runner            published ingress 10.24.0.10                           443  closed   closed   ok
+web t1-web-1           published ingress 10.24.0.10                           443  closed   closed   ok
+isolated t1-isolated-1 published ingress 10.24.0.10                           443  closed   closed   ok
+published pod          receiver 10.34.0.12                                   9090  open     open     ok
+receiver               series pushed by published                               -  yes      yes      ok
+test runner (administrator) published Kubernetes API 198.51.100.1             6443  open     open     ok
+published pod          edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
+published pod          web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
+published pod          isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
+published pod          internal service 198.51.100.3                          8080  open     open     ok
 web t1-web-1           internal service 198.51.100.3                          8080  closed   closed   ok
 isolated t1-isolated-1 internal service 198.51.100.3                          8080  closed   closed   ok
 

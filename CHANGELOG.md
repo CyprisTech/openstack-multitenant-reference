@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Plane keys named by role: `svc_public` → `publication`, `monitoring` → `observability`, `intranet` → `internal`, in `shared/planes`, the stacks and the fixtures. Outputs `publication_sources` (entry point, was `svc_public_sources`) and `internal_sources` (`vm`, `kubernetes`, was `intranet_sources`); test fixture `tests/fixtures/internal-service` (was `intranet-service`), `check.py --internal-service`. The scenario's network names remain only as the names of the operator networks in the examples. Existing deployments: re-key the planes and the attachments in the `terraform.tfvars` of `shared/planes`, then give each stack its new `plane_attachment`; the routers of the planes are recreated (no `moved` blocks before `v1.0.0`).
 - `kubernetes`: outputs `manifests` and `scripts` are sensitive (they may hold the DNS provider's key).
 - README badges: tested OpenStack release, OpenSSF Scorecard; OpenSSF Scorecard workflow (weekly and on every push to `main`).
+- Kubernetes tenant: the cluster, the attachment key, the TLS secret and the resource prefix are renamed from `platform` to `published`, and `tests/isolation/check.py --platform-kubeconfig` becomes `--published-kubeconfig`. Existing deployments: re-key the attachment in `shared/planes`; the resources named after the prefix are recreated.
 - ADR-0003 to ADR-0007 accepted; ADR-0001 and ADR-0002 superseded in part by ADR-0006 and ADR-0007.
 
 ## [0.3.0] - 2026-11-04

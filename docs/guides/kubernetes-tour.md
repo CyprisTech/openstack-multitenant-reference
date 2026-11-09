@@ -36,47 +36,47 @@ Extra: authentication.kubernetes.io/credential-id   [X509SHA256=...]
 Cluster API objects live in the cluster itself after `clusterctl move`: one Machine per server, created from the ClusterClass.
 
 ```console
-$ clusterctl describe cluster platform -n platform
+$ clusterctl describe cluster published -n platform
 NAME                                                         REPLICAS AVAILABLE READY UP TO DATE STATUS REASON     SINCE MESSAGE                                                               
-Cluster platform/platform, v1.36.5                           5/5      5         5     5          True   Available  15m                                                                         
-├─KubeadmControlPlane platform/platform-29l75, v1.36.5       3/3      3         3     3          True   Available  15m                                                                         
-│ └─3 Machines...                                                     3         3     3          True   Ready      15m   See platform-29l75-24n2v, platform-29l75-7h5x5, ...                   
-├─OpenStackCluster platform/platform-69vfv                                                       True   Ready      15m                                                                         
+Cluster platform/published, v1.36.5                          5/5      5         5     5          True   Available  15m                                                                         
+├─KubeadmControlPlane platform/published-29l75, v1.36.5      3/3      3         3     3          True   Available  15m                                                                         
+│ └─3 Machines...                                                     3         3     3          True   Ready      15m   See published-29l75-24n2v, published-29l75-7h5x5, ...                 
+├─OpenStackCluster platform/published-69vfv                                                      True   Ready      15m                                                                         
 └─Workers                                                                                                                                                                                      
-  └─MachineDeployment platform/platform-md-0-plhch, v1.36.5  2/2      2         2     2          True   Available  15m                                                                         
-    └─2 Machines...                                                   2         2     2          True   Ready      15m   See platform-md-0-plhch-zml6v-cknqb, platform-md-0-plhch-zml6v-czbhf
+  └─MachineDeployment platform/published-md-0-plhch, v1.36.5 2/2      2         2     2          True   Available  15m                                                                         
+    └─2 Machines...                                                   2         2     2          True   Ready      15m   See published-md-0-plhch-zml6v-cknqb, published-md-0-plhch-zml6v-czbhf
 ```
 
 ```console
 $ kubectl -n platform get clusterclass,cluster,kubeadmcontrolplane,machinedeployment
 NAME                                        VARIABLES READY   AGE
-clusterclass.cluster.x-k8s.io/t1-platform   True              16m
+clusterclass.cluster.x-k8s.io/t1-published  True              16m
 
 NAME                                CLUSTERCLASS   AVAILABLE   CP DESIRED   CP AVAILABLE   CP UP-TO-DATE   W DESIRED   W AVAILABLE   W UP-TO-DATE   PHASE         AGE   VERSION
-cluster.cluster.x-k8s.io/platform   t1-platform    True        3            3              3               2           2             2              Provisioned   16m   v1.36.5
+cluster.cluster.x-k8s.io/published  t1-published   True        3            3              3               2           2             2              Provisioned   16m   v1.36.5
 
 NAME                                                               CLUSTER    AVAILABLE   DESIRED   CURRENT   READY   AVAILABLE   UP-TO-DATE   INITIALIZED   AGE   VERSION
-kubeadmcontrolplane.controlplane.cluster.x-k8s.io/platform-29l75   platform   True        3         3         3       3           3            true          15m   v1.36.5
+kubeadmcontrolplane.controlplane.cluster.x-k8s.io/published-29l75  published  True        3         3         3       3           3            true          15m   v1.36.5
 
 NAME                                                     CLUSTER    AVAILABLE   DESIRED   CURRENT   READY   AVAILABLE   UP-TO-DATE   PHASE     AGE   VERSION
-machinedeployment.cluster.x-k8s.io/platform-md-0-plhch   platform   True        2         2         2       2           2            Running   15m   v1.36.5
+machinedeployment.cluster.x-k8s.io/published-md-0-plhch  published  True        2         2         2       2           2            Running   15m   v1.36.5
 ```
 
 ```console
 $ kubectl -n platform get machines,openstackmachines
 NAME                                                       CLUSTER    NODE NAME                         FAILURE DOMAIN   READY   AVAILABLE   UP-TO-DATE   PHASE     AGE   VERSION
-machine.cluster.x-k8s.io/platform-29l75-24n2v              platform   platform-29l75-24n2v                               True    True        True         Running   15m   v1.36.5
-machine.cluster.x-k8s.io/platform-29l75-7h5x5              platform   platform-29l75-7h5x5                               True    True        True         Running   15m   v1.36.5
-machine.cluster.x-k8s.io/platform-29l75-q96d9              platform   platform-29l75-q96d9                               True    True        True         Running   15m   v1.36.5
-machine.cluster.x-k8s.io/platform-md-0-plhch-zml6v-cknqb   platform   platform-md-0-plhch-zml6v-cknqb                    True    True        True         Running   15m   v1.36.5
-machine.cluster.x-k8s.io/platform-md-0-plhch-zml6v-czbhf   platform   platform-md-0-plhch-zml6v-czbhf                    True    True        True         Running   15m   v1.36.5
+machine.cluster.x-k8s.io/published-29l75-24n2v             published  published-29l75-24n2v                              True    True        True         Running   15m   v1.36.5
+machine.cluster.x-k8s.io/published-29l75-7h5x5             published  published-29l75-7h5x5                              True    True        True         Running   15m   v1.36.5
+machine.cluster.x-k8s.io/published-29l75-q96d9             published  published-29l75-q96d9                              True    True        True         Running   15m   v1.36.5
+machine.cluster.x-k8s.io/published-md-0-plhch-zml6v-cknqb  published  published-md-0-plhch-zml6v-cknqb                   True    True        True         Running   15m   v1.36.5
+machine.cluster.x-k8s.io/published-md-0-plhch-zml6v-czbhf  published  published-md-0-plhch-zml6v-czbhf                   True    True        True         Running   15m   v1.36.5
 
 NAME                                                                               CLUSTER    PROVIDERID                                          MACHINE                           AGE
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-29l75-24n2v              platform   openstack:///243bc1cc-2926-4c20-b17e-612fc89b872b   platform-29l75-24n2v              15m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-29l75-7h5x5              platform   openstack:///b16c7414-88e7-4285-befc-34263aed05d6   platform-29l75-7h5x5              15m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-29l75-q96d9              platform   openstack:///75100eb0-a8ab-4dd7-bf61-7c9cc22292a6   platform-29l75-q96d9              15m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-plhch-zml6v-cknqb   platform   openstack:///c0eb32c2-7040-409c-bb6e-fbe6f5e9c76c   platform-md-0-plhch-zml6v-cknqb   15m
-openstackmachine.infrastructure.cluster.x-k8s.io/platform-md-0-plhch-zml6v-czbhf   platform   openstack:///235960b9-aae4-4b9b-9c30-612ae096b6f5   platform-md-0-plhch-zml6v-czbhf   15m
+openstackmachine.infrastructure.cluster.x-k8s.io/published-29l75-24n2v             published  openstack:///243bc1cc-2926-4c20-b17e-612fc89b872b   published-29l75-24n2v             15m
+openstackmachine.infrastructure.cluster.x-k8s.io/published-29l75-7h5x5             published  openstack:///b16c7414-88e7-4285-befc-34263aed05d6   published-29l75-7h5x5             15m
+openstackmachine.infrastructure.cluster.x-k8s.io/published-29l75-q96d9             published  openstack:///75100eb0-a8ab-4dd7-bf61-7c9cc22292a6   published-29l75-q96d9             15m
+openstackmachine.infrastructure.cluster.x-k8s.io/published-md-0-plhch-zml6v-cknqb  published  openstack:///c0eb32c2-7040-409c-bb6e-fbe6f5e9c76c   published-md-0-plhch-zml6v-cknqb  15m
+openstackmachine.infrastructure.cluster.x-k8s.io/published-md-0-plhch-zml6v-czbhf  published  openstack:///235960b9-aae4-4b9b-9c30-612ae096b6f5   published-md-0-plhch-zml6v-czbhf  15m
 ```
 
 ## Nodes
@@ -86,11 +86,11 @@ Three control-plane nodes and two workers, all on the cluster network; the cloud
 ```console
 $ kubectl get nodes -o wide
 NAME                              STATUS   ROLES           AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION              CONTAINER-RUNTIME
-platform-29l75-24n2v              Ready    control-plane   21m   v1.36.5   10.24.0.188   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-29l75-7h5x5              Ready    control-plane   17m   v1.36.5   10.24.0.207   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-29l75-q96d9              Ready    control-plane   25m   v1.36.5   10.24.0.143   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-md-0-plhch-zml6v-cknqb   Ready    <none>          21m   v1.36.5   10.24.0.234   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
-platform-md-0-plhch-zml6v-czbhf   Ready    <none>          21m   v1.36.5   10.24.0.13    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+published-29l75-24n2v             Ready    control-plane   21m   v1.36.5   10.24.0.188   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+published-29l75-7h5x5             Ready    control-plane   17m   v1.36.5   10.24.0.207   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+published-29l75-q96d9             Ready    control-plane   25m   v1.36.5   10.24.0.143   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+published-md-0-plhch-zml6v-cknqb  Ready    <none>          21m   v1.36.5   10.24.0.234   <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
+published-md-0-plhch-zml6v-czbhf  Ready    <none>          21m   v1.36.5   10.24.0.13    <none>        Ubuntu 24.04.5 LTS   6.8.0-147-generic (amd64)   containerd://2.3.2
 ```
 
 ## What runs
@@ -161,13 +161,13 @@ helmchartproxy.addons.cluster.x-k8s.io/prometheus             True    InfoReport
 helmchartproxy.addons.cluster.x-k8s.io/traefik                True    InfoReported
 
 NAME                                                                                         CLUSTER    READY   REASON         STATUS     REVISION
-helmreleaseproxy.addons.cluster.x-k8s.io/cilium-platform-qdr9v                               platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/kubelet-csr-approver-platform-sldfg                 platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/metrics-server-platform-5mhjq                       platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cinder-csi-platform-xps6l                 platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cloud-controller-manager-platform-bnb2c   platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/prometheus-platform-jv4vd                           platform   True    InfoReported   deployed   1
-helmreleaseproxy.addons.cluster.x-k8s.io/traefik-platform-5qjzw                              platform   True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/cilium-published-qdr9v                              published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/kubelet-csr-approver-published-sldfg                published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/metrics-server-published-5mhjq                      published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cinder-csi-published-xps6l                published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/openstack-cloud-controller-manager-published-bnb2c  published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/prometheus-published-jv4vd                          published  True    InfoReported   deployed   1
+helmreleaseproxy.addons.cluster.x-k8s.io/traefik-published-5qjzw                             published  True    InfoReported   deployed   1
 ```
 
 ## How it is exposed
@@ -189,7 +189,7 @@ NAMESPACE   NAME                                                CLASS     ADDRES
 traefik     gateway.gateway.networking.k8s.io/traefik-gateway   traefik   198.51.100.1   True         24m
 
 NAMESPACE   NAME                                         HOSTNAMES                       AGE
-demo        httproute.gateway.networking.k8s.io/whoami   ["apps.platform.example.org"]   14m
+demo        httproute.gateway.networking.k8s.io/whoami   ["apps.published.example.org"]  14m
 ```
 
 ## Storage
@@ -210,10 +210,10 @@ metrics-server feeds `kubectl top`.
 ```console
 $ kubectl top nodes
 NAME                              CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
-platform-29l75-24n2v              313m         15%      1840Mi          48%         
-platform-29l75-7h5x5              376m         18%      1795Mi          47%         
-platform-29l75-q96d9              128m         6%       2213Mi          58%         
-platform-md-0-plhch-zml6v-cknqb   158m         7%       898Mi           23%         
-platform-md-0-plhch-zml6v-czbhf   221m         11%      1451Mi          38%
+published-29l75-24n2v             313m         15%      1840Mi          48%         
+published-29l75-7h5x5             376m         18%      1795Mi          47%         
+published-29l75-q96d9             128m         6%       2213Mi          58%         
+published-md-0-plhch-zml6v-cknqb  158m         7%       898Mi           23%         
+published-md-0-plhch-zml6v-czbhf  221m         11%      1451Mi          38%
 ```
 

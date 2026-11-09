@@ -1,6 +1,6 @@
 output "bootstrap" {
   description = "Floating IP of the bootstrap instance on the administration network, or null once it is removed."
-  value       = var.bootstrap ? module.platform.instances[local.instance].ports["main"].floating_ip : null
+  value       = var.bootstrap ? module.tenant.instances[local.instance].ports["main"].floating_ip : null
 }
 
 output "sources" {
@@ -32,5 +32,5 @@ output "entries" {
 
 data "openstack_networking_router_v2" "plane" {
   for_each  = toset([for p in var.planes : p if module.planes.nat[p]])
-  router_id = module.platform.networks[local.network].routers[each.key].id
+  router_id = module.tenant.networks[local.network].routers[each.key].id
 }
