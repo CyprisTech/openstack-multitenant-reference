@@ -25,7 +25,7 @@ The contract is [ADR-0007](../adr/0007-monitoring.md); the receiver is yours.
 |---|---|
 | Plane | `internal` |
 | Direction | Tenants connect to internal services published on the plane (registry, database, directory…) |
-| Who joins | Only the tenants that need it; in the scenario, the Kubernetes tenant |
+| Who joins | Only the tenants that need it; in the scenario, the Kubernetes tenant and the `vm` tenant |
 | Admitted | Each internal service admits the addresses of the tenants allowed to use it, output by the tenant stack (`internal_sources`): the tenant's router address on an operator plane with address translation, the tenant's range on a hub plane |
 | You provide | The services and their admission rules |
 | Checked by | The internal service rows of the [isolation matrix](isolation-matrix.md): the Kubernetes tenant reaches the service, the other tenants do not |
@@ -86,7 +86,8 @@ The design is [ADR-0006](../adr/0006-exposure.md).
 |---|---|
 | Plane | `internal`, or a plane of their own |
 | Direction | Tenants query the resolvers, time servers and mirrors; the tenants' subnets point to them |
-| You provide | The services, or those of the cloud operator ([network services](../concepts/architecture.md#network-services)) |
+| Provided by | The architecture, as level 2 network services ([ADR-0003](../adr/0003-scope-and-boundary.md), D4), or the cloud operator ([network services](../concepts/architecture.md#network-services)) |
+| Reflection | Name resolution and time answer on UDP: a project able to send spoofed sources can use them for reflection ([lateral movement](../concepts/architecture.md#lateral-movement)) |
 
 ## Automation: a GitOps pipeline
 

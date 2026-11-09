@@ -53,7 +53,7 @@ flowchart LR
 
 ## What isolates tenants, in both modes
 
-The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the operators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
+The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the administrators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
 
 ## The alternative not used: ports of the instances on the planes
 
@@ -76,4 +76,4 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 |---|---|---|
 | Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
 | Public, planes built with a member role | private networks shared by RBAC | 2 — interface, through the hub's transit router |
-| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with cloud-baseline ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |
+| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |

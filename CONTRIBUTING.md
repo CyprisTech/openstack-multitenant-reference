@@ -17,13 +17,14 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 |---|---|
 | `stacks/shared/planes` | The planes: adopted from the cloud operator, or built in a hub project |
 | `stacks/shared/entry-point` | The shared public entry point |
+| `stacks/shared/kubernetes` | A Kubernetes cluster for shared services |
 | `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
-| `modules/` | Building blocks of the stacks: joining a plane, admission rules, bastion, metrics agent, discovery and range checks of `shared/planes` |
+| `modules/` | Building blocks of the stacks: joining a plane, admission rules, bastion, metrics agent, ACME client, Kubernetes cluster, discovery and range checks of `shared/planes` |
 | `images/kubernetes-node` | The node image of the Kubernetes tenant |
 | `examples/planes` | Configurations of `shared/planes` |
 | `scripts/` | Domain publication |
 | `tests/isolation` | The isolation test |
-| `tests/fixtures/receiver`, `tests/fixtures/internal-service` | Stand-ins for your platform services, used by the tests and the isolation test |
+| `tests/fixtures/receiver`, `tests/fixtures/internal-service`, `tests/fixtures/acme` | Stand-ins for your platform services, used by the tests and the isolation test |
 | `docs/` | Architecture specification, trade-offs, ADRs, test results |
 
 Every directory under `stacks/`, `tests/fixtures/` and `tests/integration/` is a root configuration with its own state. The modules under `modules/` compose those of [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant), pinned by tag.

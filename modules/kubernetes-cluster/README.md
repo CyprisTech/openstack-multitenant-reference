@@ -1,6 +1,6 @@
 # kubernetes-cluster
 
-A Kubernetes cluster created by Cluster API with the OpenStack provider ([ADR-0002](../../docs/adr/0002-platform-kubernetes.md)), in its own project: the cluster network and its routers to the planes, the server groups of the machines, the bootstrap instance, and the Cluster API manifests and scripts written on it. The stacks that deploy a cluster call it: [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md) for a tenant cluster. Every version is pinned in [`cluster.tf`](cluster.tf).
+A Kubernetes cluster created by Cluster API with the OpenStack provider ([ADR-0002](../../docs/adr/0002-platform-kubernetes.md)), in its own project: the cluster network and its routers to the planes, the server groups of the machines, the bootstrap instance, and the Cluster API manifests and scripts written on it. The stacks that deploy a cluster call it: [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md) for a tenant cluster, [`stacks/shared/kubernetes`](../../stacks/shared/kubernetes/README.md) for a cluster of shared services. Every version is pinned in [`cluster.tf`](cluster.tf).
 
 What the module owns of the cluster's lifecycle, and what it leaves to Cluster API: [ADR-0009](../../docs/adr/0009-kubernetes-lifecycle.md).
 

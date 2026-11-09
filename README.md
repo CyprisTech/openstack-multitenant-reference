@@ -58,9 +58,9 @@ The design areas of a landing zone, and the answer of this reference to each. Th
 | Observability | How are isolated projects observed? | Metrics, logs and audit events pushed by each project to receivers of your choice; nothing connects into a project ([ADR-0007](docs/adr/0007-monitoring.md)) |
 | Identity and access | Who administers what, from where? | One least-privilege credential per stack and project; bastions and APIs open to named administrator addresses only ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
 | Resilience and continuity | What survives the loss of a host, a zone, a site? | Instances and load balancers spread over hosts and availability zones; an entry point per region with failover by DNS; the architecture rebuilt from code and protected states; tenant data backed up through an integration point ([resilience](docs/concepts/architecture.md#resilience-and-continuity)) |
-| Automation | How is it all described and changed? | Independent stacks, one state and one credential each, contracts passed as outputs, a tested procedure, a GitOps pipeline as an example ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
-| Workload platforms | What runs in a project? | Virtual machines, or Kubernetes created and maintained with Cluster API — upgrades, scaling, credential rotation — both in the same isolation model ([ADR-0003](docs/adr/0003-scope-and-boundary.md) D3, [ADR-0002](docs/adr/0002-platform-kubernetes.md)) |
-| Governance, identity federation, cost | Quotas, single sign-on, budgets | Out of scope: the cloud's own foundation ([scope](#scope)) |
+| Automation | How is it all described and changed? | Independent stacks, one state and one credential each, contracts passed as outputs, a tested procedure, a GitOps pipeline as an integration point ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
+| Workload platforms | What runs in a project? | Virtual machines, or Kubernetes created with Cluster API, both in the same isolation model. The reference owns what the landing zone requires of the cluster lifecycle; upgrades and scaling are Cluster API's ([ADR-0003](docs/adr/0003-scope-and-boundary.md) D3, [ADR-0002](docs/adr/0002-platform-kubernetes.md), [ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)) |
+| Governance, identity federation, cost | Quotas, single sign-on, budgets | Level 1, not in this repository: projects, quotas and roles through the module's [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) on a private cloud, or the provider's IAM on a public one; single sign-on and budgets are yours ([scope](#scope)) |
 
 ## Principles
 
@@ -81,7 +81,7 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 |---|---|---|
 | Decisions | [ADRs](docs/adr/README.md), [trade-offs](docs/concepts/trade-offs.md), [who it is for](docs/concepts/audiences.md) | read, challenge, adapt |
 | Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent, ACME client, [Kubernetes cluster](modules/kubernetes-cluster/README.md)) | use as they are |
-| Reference scenario | Three planes (publication, observability, internal services); a shared entry point, a metrics receiver, an internal service and a [Kubernetes cluster for shared services](stacks/shared/kubernetes/README.md); three tenant types ([`vm`](stacks/tenants/vm/README.md), [`isolated`](stacks/tenants/isolated/README.md), [`kubernetes`](stacks/tenants/kubernetes/README.md)); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
+| Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; a [Kubernetes cluster for shared services](stacks/shared/kubernetes/README.md), whose services are demonstrated, not operated; three tenant types ([`vm`](stacks/tenants/vm/README.md), [`isolated`](stacks/tenants/isolated/README.md), [`kubernetes`](stacks/tenants/kubernetes/README.md)); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
 
 The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
 
@@ -97,6 +97,7 @@ Another plane or shared service is declared in `shared/planes`; the stacks that 
 |---|---|
 | [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the cloud operator's external networks, or builds shared networks in the hub project with a transit router; derives the routes of every project |
 | [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | A load balancer and two proxies routing by TLS server name to the tenants' service addresses, without decrypting |
+| [`stacks/shared/kubernetes`](stacks/shared/kubernetes/README.md) | A Kubernetes cluster for shared services, not published: an internal ingress and layer 4 services, admitted to their consumers only |
 | [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Virtual machines behind a load balancer, published through the entry point or with their own address |
 | [`stacks/tenants/isolated`](stacks/tenants/isolated/README.md) | A workload with no exposure and no way out but the observability plane |
 | [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | A Kubernetes cluster created with Cluster API ([node image](images/kubernetes-node/README.md)) |
@@ -110,7 +111,7 @@ Every stack describes its project with the [terraform-openstack-tenant](https://
 - **Safe day-to-day changes.** Every resource key comes from the input: one plan, no `-target`, and an empty plan after apply. Lifecycle behaviours are fixed and documented, and inputs are validated before anything is created.
 - **Least privilege by construction.** A member role on the project is enough; the module reads no other project and creates no unnecessary secret.
 - **No imposed tooling.** No backend, secret store or CI tool; OpenTofu and Terraform on equal footing; tested on a real cloud before every release.
-- **The same model down to the foundation.** Its `cloud-baseline` module describes what needs the administrator role — projects, quotas, users, shared networks — with the same model, for private clouds.
+- **The same model down to the foundation.** Its [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) module describes what needs the administrator role — projects, quotas, users, shared networks — with the same model, for private clouds.
 
 ## Scope
 
@@ -213,16 +214,16 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 | Release | Design areas delivered | |
 |---|---|---|
 | `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
-| **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; observability: metrics; identity and access; automation; VM and Kubernetes tenants | released |
+| **`v0.3`** | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; the integration point for metrics (push contract, the receiver is yours); identity and access; automation; VM and Kubernetes tenants | released |
 | `v0.4` | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)); the Kubernetes lifecycle the landing zone requires ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)) | in progress: certificates done |
 | `v0.5` | Availability zones; recovery of the architecture | |
-| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with `cloud-baseline`) | |
-| `v0.7` | Observability: logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
+| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant)) | |
+| `v0.7` | Integration points, contracts only (the tools are yours): logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
 | `v0.8` | Several regions joined by an encrypted overlay; failover of the entry point between regions | |
 | `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
 | after `v1.0` | Integrations of platform tools (level 3) in a separate repository, when users ask for them | |
 
-The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, certificates from an internal ACME authority on both tenant types, isolation test (38/38), destroy without leftover. Let's Encrypt takes the same path with another directory; it is not tested by the maintainers. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
+The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, certificates from an internal ACME authority on both tenant types, isolation test (46/46 on both kinds of planes), destroy without leftover. The Kubernetes cluster for shared services and its isolation rows were run on operator planes (2026-11-08); for that change, hub planes were checked offline only. Let's Encrypt takes the same path with another directory; it is not tested by the maintainers. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
 
 ## Requirements
 

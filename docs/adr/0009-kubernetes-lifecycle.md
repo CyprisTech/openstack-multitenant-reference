@@ -1,6 +1,6 @@
 # ADR-0009: Kubernetes lifecycle, what the landing zone owns
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-07
 - **Deciders:** maintainers
 - **Refines:** [ADR-0003](0003-scope-and-boundary.md) D3 (day-to-day operations of the `kubernetes` tenant) and D4 (in scope: the day-to-day operations of the Kubernetes clusters)

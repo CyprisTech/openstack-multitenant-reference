@@ -38,7 +38,7 @@ An IT department or a host running its own OpenStack, with administrator rights,
 |---|---|
 | Needs | Planes with a stable contract for its tenants, and a frame to consume them |
 | What is hard | Names, ranges and MTU that tenants can rely on; address translation or routing; creating projects and quotas; shared DNS zones |
-| Answered | Operator planes as external networks, with address translation or routed in a shared address scope; the [planes contract](../reference/planes-contract.md) (MTU, reserved ranges); projects, quotas, flavors and images with the module's `cloud-baseline` |
+| Answered | Operator planes as external networks, with address translation or routed in a shared address scope; the [planes contract](../reference/planes-contract.md) (MTU, reserved ranges); projects, quotas, flavors and images with the module's [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) |
 | Not covered | Operating the cloud itself: deployment, upgrades, databases of OpenStack |
 
 ## Tenant type, not a profile
@@ -50,7 +50,7 @@ Kubernetes is a tenant type of the reference ([ADR-0003](../adr/0003-scope-and-b
 | | |
 |---|---|
 | What is hard | Cluster API and moving its management into the cluster; building the node image; the cloud controller manager and Octavia; the CNI's MTU; a clean teardown |
-| Answered | Self-managed cluster, ClusterClass, node image built with image-builder, Cilium with its MTU, Gateway API ingress, metrics pushed by the cluster's Prometheus, upgrade, scaling and credential rotation, creation and teardown scripted; a cluster for shared services ([spec](../specs/kubernetes-shared-services.md)) |
+| Answered | Self-managed cluster, ClusterClass, node image built with image-builder, Cilium with its MTU, Gateway API ingress, metrics pushed by the cluster's Prometheus, creation and teardown scripted; the lifecycle the landing zone requires (addresses kept, credential rotation, administration path), upgrades and scaling left to Cluster API; a cluster for shared services ([spec](../specs/kubernetes-shared-services.md)) |
 | Not covered | Clusters on demand; multi-tenancy inside a cluster; application GitOps |
 
 ## The reader

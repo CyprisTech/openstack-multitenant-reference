@@ -1,6 +1,6 @@
 # ADR-0002: The `platform` tenant — Kubernetes with Cluster API
 
-- **Status:** Accepted; refined by [ADR-0003](0003-scope-and-boundary.md), D3 (Kubernetes as a tenant type, day-to-day operations in scope), and [ADR-0005](0005-stacks-contracts-and-access.md), D5 (administration paths); D5 superseded in part by [ADR-0007](0007-monitoring.md) for monitoring
+- **Status:** Accepted; refined by [ADR-0003](0003-scope-and-boundary.md), D3 (Kubernetes as a tenant type, day-to-day operations in scope), and [ADR-0005](0005-stacks-contracts-and-access.md), D5 (administration paths); D5 superseded in part by [ADR-0007](0007-monitoring.md) for monitoring; the Kubernetes lifecycle in scope refined by [ADR-0009](0009-kubernetes-lifecycle.md)
 - **Date:** 2026-10-27
 - **Deciders:** maintainers
 - **Refines:** ADR-0001, D4 (the management cluster becomes the workload cluster itself; Terraform no longer handles the cluster credential)

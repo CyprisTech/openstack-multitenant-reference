@@ -16,7 +16,7 @@ Private image of the Kubernetes tenant's project, built with [image-builder](htt
 
 ## Image size
 
-The virtual size of the image is the size of the build volume (`volume_size` in `build.json`), and it is the **minimum root disk of every node**: a machine cannot boot from a volume smaller than its image. Keep it close to what the image holds (about 3.5 GiB): 8 GiB leaves room for the build itself. cloud-init grows the root partition to the disk each machine gets, so the size of the node disks is a choice of each cluster (`control_plane_root_volume_size`, `worker_root_volume_size` of the platform stack), not of the image.
+The virtual size of the image is the size of the build volume (`volume_size` in `build.json`), and it is the **minimum root disk of every node**: a machine cannot boot from a volume smaller than its image. Keep it close to what the image holds (about 3.5 GiB): 8 GiB leaves room for the build itself. cloud-init grows the root partition to the disk each machine gets, so the size of the node disks is a choice of each cluster (`control_plane_root_volume_size`, `worker_root_volume_size` of the `cluster` input of the Kubernetes stacks), not of the image.
 
 ## Usage
 

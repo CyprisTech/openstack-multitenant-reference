@@ -112,7 +112,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 8. Tenant-owned security groups or a central catalogue
 
-**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option, with cloud-baseline.
+**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant).
 
 **Why.** It works on any cloud, with one project or many, and needs no admin rights. Rules between tenants use CIDRs because `remote_group_id` only works inside one project.
 
@@ -128,7 +128,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** Cluster API handles the lifecycle Terraform handles badly: rolling upgrades, node replacement, scaling. It needs only project-level rights.
 
-**Cost.** Two tools and two states: Terraform for the infrastructure, Cluster API objects for the clusters. Node images must be built and kept current with image-builder. This reference makes the cluster **self-managed** (`clusterctl move`): no management cluster to run, but a broken cluster cannot repair itself; the repair path is to move Cluster API back to a temporary kind cluster (what `delete-cluster.sh` does). The glue between Terraform and Cluster API is a shell script on a bootstrap instance, and the cluster credential is created by the operator, outside Terraform, so that no secret is in the state.
+**Cost.** Two tools and two states: Terraform for the infrastructure, Cluster API objects for the clusters. Node images must be built and kept current with image-builder. This reference makes the cluster **self-managed** (`clusterctl move`): no management cluster to run, but a broken cluster cannot repair itself; the repair path is to move Cluster API back to a temporary kind cluster (what `delete-cluster.sh` does). The glue between Terraform and Cluster API is a shell script on a bootstrap instance, and the cluster credential is created by an administrator, outside Terraform, so that no secret is in the state.
 
 **Choose a dedicated management cluster when** you run several clusters: it manages them all and survives the loss of any one.
 

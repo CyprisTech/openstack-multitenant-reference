@@ -61,7 +61,7 @@ One row per concern of the design: what is used, what was considered instead, an
 | Several regions | An encrypted overlay between the hubs of the regions; an entry point per region, failover by DNS | Provider features (OVHcloud's vRack); active-active with global load balancing | Works on any OpenStack cloud; failover rehearsed with the isolation test | [ADR-0003](../adr/0003-scope-and-boundary.md), D2 |
 | Network services | Resolvers, time, mirrors and a registry as shared services on a plane; declared egress; dual stack | Each tenant on its own resolvers and the Internet | Tenants without Internet access can still be built and updated | [ADR-0003](../adr/0003-scope-and-boundary.md), D4 |
 | Backups and secrets | Integration points: the tenants push to your backup and secret stores | A backup or secret tool chosen by the reference | Tool choices stay yours | [ADR-0003](../adr/0003-scope-and-boundary.md), D4 |
-| Automation | Independent stacks; a GitOps pipeline as an example | One state for everything; manual applies | Each stack can be reviewed and owned separately | [ADR-0005](../adr/0005-stacks-contracts-and-access.md) |
+| Automation | Independent stacks; a GitOps pipeline as an integration point | One state for everything; manual applies | Each stack can be reviewed and owned separately | [ADR-0005](../adr/0005-stacks-contracts-and-access.md) |
 | Tests | Integration tests on a real cloud: apply, empty plan, functional checks, destroy; the isolation test | Static review only | Isolation claims become a test that fails | [ADR-0003](../adr/0003-scope-and-boundary.md), D5 |
 
 ## Related designs

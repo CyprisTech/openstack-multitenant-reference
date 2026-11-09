@@ -4,7 +4,7 @@ A tenant is a project with its own credentials, joined to the shared planes it n
 
 ## 1. Project and credentials
 
-Create the project (provider's console or API, or cloud-baseline on a private cloud), with resources in the same region as the other projects, and an application credential scoped to it, with the roles `member` and `load-balancer_member`. Add it to `clouds.yaml`. A Kubernetes tenant needs a second credential for the cluster itself ([Kubernetes tenant](../../stacks/tenants/kubernetes/README.md)).
+Create the project (provider's console or API, or [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) on a private cloud), with resources in the same region as the other projects, and an application credential scoped to it, with the roles `member` and `load-balancer_member`. Add it to `clouds.yaml`. A Kubernetes tenant needs a second credential for the cluster itself ([Kubernetes tenant](../../stacks/tenants/kubernetes/README.md)).
 
 ## 2. Type and address range
 

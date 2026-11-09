@@ -322,6 +322,7 @@ The shared services are the only points that several tenants reach, and the entr
 - **A tenant** reaches a shared service on the ports of the service it consumes, and no other: SSH is admitted from the administrators' addresses only ([ADR-0005](../adr/0005-stacks-contracts-and-access.md)).
 - **Routes exist between the shared services of a plane** ([ADR-0004](../adr/0004-planes-and-isolation.md)): only the security groups of the target close the flows that are not declared.
 - **Spoofed sources.** Port security filters the ports of the instances, not those of the routers. A project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address through its router. They are blind: the answer goes to the real owner, so no TCP connection is established, and every service of the scenario listens on TCP. Services answering on UDP, such as name resolution and time, allow reflection; their integration point states it. The [test procedure](../reference/test-procedure.md) checks this on each cloud.
+- **A Kubernetes cluster both published and offering shared services** puts an entry from the Internet on a cluster that every tenant of the internal services plane reaches. The reference recommends one cluster for each ([spec](../specs/kubernetes-shared-services.md)).
 - **Beyond the network** ([ADR-0003](../adr/0003-scope-and-boundary.md), D4, level 3): the integrity of what a shared service distributes (images, packages, name resolution) and whom it authenticates are properties of the tool chosen for it, not of this architecture.
 
 ## Planes contract
@@ -375,5 +376,7 @@ Indicative minimum for the whole scenario, with the default flavors of the examp
 | receiver (tests) | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with an operator plane |
 | optional bastions (one per stack) | 1 each | 2 each | 2 GiB each | 0 | 1 each, administration |
 | **Total without bastions** | **12** | **23** | **35 GiB** | **4** | **2 to 5** |
+
+The total does not count the Kubernetes cluster for shared services: about the same as the `kubernetes` tenant, with one more load balancer for the TCP demonstration service.
 
 With hub planes, the hub project holds one router per plane and no instance.
