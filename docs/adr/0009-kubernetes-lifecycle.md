@@ -22,6 +22,7 @@ What no distribution provides is what this architecture adds around a cluster: i
 ### D1 — What the reference owns
 
 - The service addresses do not change with the lifecycle: the stack reserves them outside the cluster, so upgrading or replacing nodes and recreating an exposed Service keep them. Changing an address remains a deliberate operation, supported as for any tenant: the domains are published again and the entry point's routes are updated in place ([ADR-0006](0006-exposure.md), D3).
+- The address of the API stays with Cluster API, on the load balancer it creates. An upgrade or a node replacement keeps it, as the upgrade test checks. It changes only when the cluster is recreated, which already gives a new kubeconfig.
 - The cluster's credential: rotating its application credential without recreating the cluster.
 - The administration path during operations: the bootstrap instance admitted again when it must act on the cluster, and only then.
 - What `clusterctl move` does not carry for this architecture (the ORC image).
@@ -31,7 +32,7 @@ Each is documented and tested, with one minor Kubernetes upgrade per release cyc
 
 ### D2 — What it delegates
 
-Upgrades, scaling, machine remediation and the backup of etcd are Cluster API's operations on the ClusterClass the stack provides. The reference documents the commands for its ClusterClass and points to Cluster API's documentation; it builds no tooling around them.
+Upgrades, scaling, machine remediation and the backup of etcd are Cluster API's operations on the ClusterClass the stack provides. The reference documents the commands for its ClusterClass and points to Cluster API's documentation; it builds no tooling around them. The ClusterClass takes the node image as a variable, since a Kubernetes version needs its own image.
 
 ### D3 — A managed Kubernetes offer replaces the stack
 

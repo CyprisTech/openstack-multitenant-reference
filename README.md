@@ -184,6 +184,7 @@ isolated t1-isolated-1 internal service 198.51.100.3                          80
 | Give a tenant trusted certificates | [certificates](docs/guides/certificates.md) |
 | Check the isolation after a change | [check-isolation](docs/guides/check-isolation.md) |
 | Discover a Kubernetes tenant | [kubernetes-tour](docs/guides/kubernetes-tour.md) |
+| Upgrade a Kubernetes cluster, rotate its credential | [kubernetes-lifecycle](docs/guides/kubernetes-lifecycle.md) |
 | Tear down | [teardown](docs/guides/teardown.md) |
 
 ## Before production

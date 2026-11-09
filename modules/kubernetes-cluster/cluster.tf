@@ -29,22 +29,24 @@ locals {
   ])), 0, 8)
 
   manifest_vars = {
-    revision      = local.revision
-    cluster       = var.cluster
-    prefix        = local.prefix
-    az            = var.az
-    network       = local.network
-    subnet        = local.subnet
-    router        = local.router
-    admin_network = local.admin_network.network
-    admin_sources = var.admin.sources
-    ssh_key_name  = var.admin.ssh_key_name
-    pod_mtu       = local.pod_mtu
-    versions      = local.versions
-    receiver      = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
-    site          = var.site
-    cluster_cidr  = var.cluster_cidr
-    ingresses     = local.ingresses
+    revision = local.revision
+    # One ORC Image per node image: an upgrade adds one, the machines being replaced keep theirs.
+    node_image_object = replace(lower(var.cluster.node_image), ".", "-")
+    cluster           = var.cluster
+    prefix            = local.prefix
+    az                = var.az
+    network           = local.network
+    subnet            = local.subnet
+    router            = local.router
+    admin_network     = local.admin_network.network
+    admin_sources     = var.admin.sources
+    ssh_key_name      = var.admin.ssh_key_name
+    pod_mtu           = local.pod_mtu
+    versions          = local.versions
+    receiver          = var.monitoring.receiver == null ? "" : trimsuffix(var.monitoring.receiver, "/")
+    site              = var.site
+    cluster_cidr      = var.cluster_cidr
+    ingresses         = local.ingresses
     services = { for k, sv in var.services : k => merge(sv, {
       nat        = local.entry_nat["service-${k}"]
       network_id = var.plane_attachment[sv.plane].network_id

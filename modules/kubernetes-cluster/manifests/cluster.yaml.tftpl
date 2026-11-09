@@ -24,6 +24,8 @@ spec:
     # replaces BOOTSTRAP_SOURCE with its address, then removes it after clusterctl move).
     - name: apiAllowedCIDRs
       value: ${jsonencode(concat(admin_sources, ["BOOTSTRAP_SOURCE"]))}
+    - name: nodeImage
+      value: ${node_image_object}
     controlPlane:
       replicas: ${cluster.control_plane_count}
     workers:

@@ -92,6 +92,98 @@ step_consumer() {
   apply_shared_manifests
 }
 
+# Move the cluster to another application credential, as in docs/guides/kubernetes-lifecycle.md,
+# then check that the cloud controller works with it: a new load balancer. Cluster API uses it
+# in the next step.
+step_rotate() {
+  local next="${W}/next-clouds.yaml" identity conf id secret
+  export KUBECONFIG=${SHARED_KUBECONFIG}
+  cluster_credential "${CLOUD_K8S_SHARED_CLUSTER_NEXT}" "${next}"
+  id=$(yq_credential application_credential_id "${next}")
+  secret=$(yq_credential application_credential_secret "${next}")
+  identity=$(kubectl -n platform get openstackcluster -o jsonpath='{.items[0].spec.identityRef.name}')
+
+  comment "Cluster API: the secret of its identity"
+  kubectl -n platform get secret "${identity}" -o json \
+    | jq --arg c "$(base64 -w0 "${next}")" '.data["clouds.yaml"] = $c' | kubectl apply -f -
+
+  comment "Cloud controller manager and Cinder CSI: their configuration, then a restart"
+  conf=$(kubectl -n kube-system get secret cloud-config -o jsonpath='{.data.cloud\.conf}' | base64 -d \
+    | sed -e "s|^application-credential-id=.*|application-credential-id=${id}|" -e "s|^application-credential-secret=.*|application-credential-secret=${secret}|")
+  kubectl -n kube-system get secret cloud-config -o json \
+    | jq --arg c "$(base64 -w0 <<<"${conf}")" '.data["cloud.conf"] = $c' | kubectl apply -f -
+  kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' | xargs kubectl -n kube-system rollout restart
+  kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' | xargs -n1 kubectl -n kube-system rollout status --timeout=10m
+
+  comment "A load balancer created with the new credential"
+  kubectl create service loadbalancer rotation-check --tcp=80:80
+  kubectl wait service/rotation-check --for=jsonpath='{.status.loadBalancer.ingress[0].ip}' --timeout=10m
+  kubectl delete service rotation-check
+  kubectl wait service/rotation-check --for=delete --timeout=10m
+}
+
+yq_credential() { python3 -c "import sys, yaml; print(yaml.safe_load(open(sys.argv[2]))['clouds']['openstack']['auth'][sys.argv[1]])" "$1" "$2"; }
+
+# A minor upgrade by Cluster API, with the commands of the guide. The addresses must not change
+# and the service must answer during and after it.
+step_upgrade() {
+  export KUBECONFIG=${SHARED_KUBECONFIG}
+  local cluster="${SITE}-shared" object api service bastion vm ready nodes load
+  object=$(tr '[:upper:].' '[:lower:]-' <<<"${UPGRADE_IMAGE}")
+  api=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+  service=$(shared_service_address)
+  bastion=$(output_raw "${VM}" bastion)
+  vm=$(first_instance_of "${VM}")
+  show kubectl get nodes
+
+  comment "The image of the new version, then the version"
+  kubectl -n platform get image.openstack.k-orc.cloud -o json \
+    | jq --arg name "${object}" --arg image "${UPGRADE_IMAGE}" '.items[0] | {apiVersion, kind, metadata: {name: $name, namespace: .metadata.namespace}, spec: (.spec | .import.filter.name = $image)}' \
+    | kubectl apply -f -
+  kubectl -n platform wait image.openstack.k-orc.cloud "${object}" --for=condition=Available --timeout=10m
+  show kubectl -n platform patch cluster "${cluster}" --type=json -p "[
+    {\"op\": \"replace\", \"path\": \"/spec/topology/version\", \"value\": \"${UPGRADE_VERSION}\"},
+    {\"op\": \"replace\", \"path\": \"/spec/topology/variables/1/value\", \"value\": \"${object}\"}]"
+
+  # Requests from a consumer during the upgrade: measured, kept for the results.
+  rm -f "${W}/stop-load"
+  load_on_shared_service "${bastion}" "${vm}" "${service}" & load=$!
+
+  for _ in $(seq 180); do
+    nodes=$(kubectl get nodes --no-headers | wc -l)
+    ready=$(kubectl get nodes --no-headers 2>/dev/null | awk -v v="${UPGRADE_VERSION}" '$2 == "Ready" && $NF == v' | wc -l)
+    echo "$(date -u +%T) nodes ${nodes}, ready at ${UPGRADE_VERSION}: ${ready}"
+    if [[ ${ready} -eq $(expected_nodes) && ${nodes} -eq ${ready} ]]; then break; fi
+    sleep 20
+  done
+  touch "${W}/stop-load"
+  wait "${load}" || true
+  [[ ${ready} -eq $(expected_nodes) && ${nodes} -eq ${ready} ]]
+  show kubectl get nodes
+
+  comment "The addresses did not change, the service answers"
+  [[ "$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')" == "${api}" ]]
+  kubectl get --raw /readyz >/dev/null
+  [[ "$(kubectl -n traefik-internal get svc -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')" != "" ]]
+  [[ "$(shared_service_address)" == "${service}" ]]
+  step_accept_shared
+}
+
+expected_nodes() { kubectl -n platform get machines --no-headers | wc -l; }
+
+load_on_shared_service() {  # load_on_shared_service <bastion> <instance> <address>
+  local ok=0 failed=0
+  while [[ ! -f "${W}/stop-load" ]]; do
+    if on_instance "$1" "$2" "curl -sf -o /dev/null --cacert /etc/lego/ca.pem --max-time 5 --resolve services.example.org:443:$3 https://services.example.org/" 2>/dev/null; then
+      ok=$((ok + 1))
+    else
+      failed=$((failed + 1))
+    fi
+    sleep 2
+  done
+  echo "requests during the upgrade: ${ok} ok, ${failed} failed" | tee -a "${W}/https.txt"
+}
+
 step_shared_down() {
   delete_cluster "${SHARED}" "${SHARED_KUBECONFIG}"
   destroy_stack "${SHARED}"
