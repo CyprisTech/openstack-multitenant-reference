@@ -116,7 +116,7 @@ The plane and its transit router are created with the network module of [terrafo
 | ---- | ------ | ------- |
 | discovery | ../../../modules/plane-discovery | n/a |
 | overlaps | ../../../modules/range-overlaps | n/a |
-| plane | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/network | v0.1.4 |
+| plane | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/network | v0.1.5 |
 
 ### Resources
 

@@ -8,7 +8,7 @@ locals {
 }
 
 module "check" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.4"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
 
   tenant = {
     existing = {

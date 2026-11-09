@@ -37,9 +37,9 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
 | planes | ../../../modules/plane-attachment | n/a |
-| receiver | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
+| receiver | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
 
 ### Inputs
 

@@ -94,10 +94,10 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | acme | ../../../modules/acme-client | n/a |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
 | metrics | ../../../modules/metrics-agent | n/a |
 | planes | ../../../modules/plane-attachment | n/a |
-| web | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
+| web | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
 
 ### Resources
 

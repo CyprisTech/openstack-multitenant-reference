@@ -26,9 +26,9 @@ What the module owns of the cluster's lifecycle, and what it leaves to Cluster A
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | admission | ../admission | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
 | planes | ../plane-attachment | n/a |
-| tenant | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
+| tenant | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
 
 ### Resources
 

@@ -58,8 +58,8 @@ Its router is its only way out, and the only ranges routed through it are the ob
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.4 |
-| isolated | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.4 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
+| isolated | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
 | planes | ../../../modules/plane-attachment | n/a |
 
 ### Inputs

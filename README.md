@@ -231,7 +231,7 @@ The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansib
 |---|---|
 | OpenTofu or Terraform | >= 1.9 |
 | Provider `terraform-provider-openstack/openstack` | `~> 3.2` |
-| Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.1.4`, pinned in every stack |
+| Module | [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) `v0.1.5`, pinned in every stack |
 | OpenStack | Keystone v3, Nova (metadata service), Glance, Octavia (amphora); Neutron with routers, and network sharing by RBAC for hub planes; Cinder for boot volumes and Designate for the public records and the ACME DNS-01 challenges, both optional |
 | Credentials | One project per tenant and per shared service, plus the hub project for hub planes; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
 | Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges). Hub planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |

@@ -46,7 +46,7 @@ data "openstack_networking_subnet_v2" "operator" {
 # The plane and its transit router: a router on the plane's subnet, holding its gateway address.
 # No DHCP: the plane only carries router interfaces.
 module "plane" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/network?ref=v0.1.4"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/network?ref=v0.1.5"
   for_each = local.interface_planes
 
   name = local.plane_name[each.key]
