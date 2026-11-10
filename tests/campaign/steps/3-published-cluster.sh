@@ -44,6 +44,35 @@ step_accept() {
   isolation_test published
 }
 
+# The vm tenant exposed directly (exposure = "public"): HTTPS on its own public address, no router
+# on the publication plane, the entry point no longer reaches its instances. Then back to the
+# entry point.
+step_direct() {
+  local inputs="${VM}/mode.auto.tfvars.json" address bastion edge instance results
+  cp "${inputs}" "${W}/vm.inputs.bak"
+  jq '.exposure = "public"' "${W}/vm.inputs.bak" > "${inputs}"
+  run_apply "${VM}"
+  address=$(output_raw "${VM}" service_address | cut -d: -f1)
+  echo "service address, exposed directly: ${address}" | tee -a "${W}/https.txt"
+  results=$(https_probe "site-a.${TEST_ZONE}" "${address}") || { echo "${results}"; restore_vm; return 1; }
+
+  comment "No router on the publication plane: the entry point no longer reaches the instances"
+  bastion=$(output_raw "${ENTRY_POINT}" bastion)
+  edge=$(instances_of "${ENTRY_POINT}" | head -1)
+  instance=$(first_instance_of "${VM}")
+  if on_instance "${bastion}" "${edge}" "timeout 4 bash -c '</dev/tcp/${instance}/443'" 2>/dev/null; then
+    echo "ENTRY POINT STILL REACHES ${instance}"; restore_vm; return 1
+  fi
+  echo "entry point -> ${instance}:443 closed" | tee -a "${W}/https.txt"
+  restore_vm
+}
+
+restore_vm() {
+  comment "Back to the entry point"
+  cp "${W}/vm.inputs.bak" "${VM}/mode.auto.tfvars.json"
+  run_apply "${VM}"
+}
+
 step_transit() {
   apply_stack "${PLANES}"
   output_json "${PLANES}" transit

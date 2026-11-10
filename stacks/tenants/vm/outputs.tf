@@ -26,9 +26,9 @@ output "bastion" {
 
 locals {
   service_address = "${local.load_balancer ? (
-    local.public || module.planes.nat.publication ? module.web.load_balancers[local.prefix].floating_ip : module.web.load_balancers[local.prefix].vip
+    local.public || try(module.planes.nat["publication"], false) ? module.web.load_balancers[local.prefix].floating_ip : module.web.load_balancers[local.prefix].vip
     ) : (
-    local.public || module.planes.nat.publication ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip
+    local.public || try(module.planes.nat["publication"], false) ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip
   )}:443"
 }
 

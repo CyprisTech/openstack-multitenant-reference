@@ -6,7 +6,7 @@ Instances serving several domains behind **one service address** ([ADR-0006](../
 - with more than one instance, an Octavia load balancer in TCP on 443 is the service address; with one, the instance itself;
 - the service address is published through the shared entry point (`exposure = "entry-point"`, the default), admitting the entry point's addresses only (`edge_sources`), or exposed with its own public floating IP (`exposure = "public"`);
 - on the publication plane, the service address is a floating IP of the plane when it translates addresses, its own address otherwise; the instances have no address on the planes;
-- routers to the egress network (default route), the publication and observability planes, with plane routes pushed by DHCP;
+- routers to the egress network (default route), the publication and observability planes, with plane routes pushed by DHCP; with `exposure = "public"`, no router on the publication plane: the entry point cannot reach the tenant;
 - metrics pushed to your receiver by a Prometheus agent on each instance (`monitoring.receiver`); nothing connects into the instances;
 - an optional bastion for administration.
 

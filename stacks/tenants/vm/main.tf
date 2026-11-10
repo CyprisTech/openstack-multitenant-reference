@@ -99,7 +99,9 @@ module "planes" {
 
   # The internal services plane when the attachment has it: the tenant consumes internal services,
   # such as the organisation's certificate authority.
-  planes     = concat(["publication", "observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
+  # The publication plane only through the entry point: exposed directly, the tenant has no
+  # router there, and the entry point cannot reach it.
+  planes     = concat(local.public ? [] : ["publication"], ["observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
   attachment = var.plane_attachment
   instances  = local.instances
   exposure = {
@@ -205,7 +207,7 @@ module "web" {
         vip = { network = local.prefix, subnet = "main" }
         # The service address: on publication (a floating IP of the plane when it translates
         # addresses, the VIP itself otherwise), or a public floating IP.
-        floating_ip = local.public ? { pool = "egress" } : (module.planes.nat.publication ? { pool = "publication" } : null)
+        floating_ip = local.public ? { pool = "egress" } : (try(module.planes.nat["publication"], false) ? { pool = "publication" } : null)
         listeners = {
           https = {
             protocol      = "TCP", port = 443
