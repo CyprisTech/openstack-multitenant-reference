@@ -14,26 +14,9 @@ Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr
 | observability | every project pushes its metrics, logs and audit events | your receivers |
 | internal services | services offered to some tenants | your internal services (registry, directory…) |
 
-```mermaid
-flowchart LR
-    U(["Internet clients"])
-    ADM(["Administrators"])
-    subgraph SHARED["Shared services · their own projects"]
-        EP["Entry point<br/>Octavia + Traefik x 2<br/>SNI, no TLS key"]
-        RCV["Receivers<br/>(yours)"]
-        SVC["Internal services<br/>(yours)"]
-    end
-    subgraph TENANTS["Tenants · one project each"]
-        W["vm<br/>load balancer + instances"]
-        K["kubernetes<br/>ingress load balancer"]
-        I["isolated"]
-    end
-    U -->|"HTTPS"| EP
-    EP -->|"publication · PROXY v2<br/>to each service address"| W & K
-    W & K & I & EP -->|"observability · push"| RCV
-    K -->|"internal services"| SVC
-    ADM -.->|"administration network<br/>bastions, Kubernetes API"| TENANTS
-```
+![Architecture: the optional entry point, the receivers and the internal services each in their own project, the tenants in theirs, the hub project owning the planes; every project joins the publication, internal services and observability planes through its own router, with the role shared or tenant; arrows show who opens each connection; security groups on the ports of instances and load balancers; no route between two tenants](../images/architecture-topology.png)
+
+The source of this picture is the SVG next to the PNG in [`docs/images`](../images/). The entry point is optional: a tenant may expose its own load balancer with a public address ([ADR-0006](../adr/0006-exposure.md), D2).
 
 | Project | Planes | Content |
 |---|---|---|
@@ -45,24 +28,13 @@ flowchart LR
 
 The planes are provided by the cloud operator (external networks) or built in the hub project (shared networks and a transit router): the stacks are the same in both cases, only [`stacks/shared/planes`](../../stacks/shared/planes/README.md) changes ([How a tenant joins a plane](plane-attachment.md)).
 
-```mermaid
-flowchart LR
-    subgraph HUBP["Hub project (network only)"]
-        TR["transit router<br/>first address of each plane"]
-        PL["plane networks<br/>shared by RBAC"]
-        TR --- PL
-    end
-    E["entry point router<br/>role shared"] --- PL
-    R["receiver router<br/>role shared"] --- PL
-    A["tenant A router<br/>role tenant"] --- PL
-    B["tenant B router<br/>role tenant"] --- PL
-```
+Who opens each connection is the whole rule of the design: the entry point opens to the tenants' service addresses, consumers open to the internal services, every project pushes to the receivers, and nothing opens from a tenant to another. The target's security group admits the declared sources only.
 
 With hub planes, every attached router routes through the transit router: tenants to the shared services, shared services to the tenants (through aggregates of their ranges), never a tenant to another. The hub discovers the address of each attached router and routes back to it.
 
 ## Network topology of a tenant
 
-Each tenant network has **one router per network it joins**. One of them is the default gateway; the planes' ranges are routed through the others, by routes DHCP pushes to the instances. The example below is a `vm` tenant, whose default gateway reaches the Internet through a declared egress network; the `isolated` tenant has no such router, and its only router, to the observability plane, is its default gateway.
+Each tenant network has **one router per network it joins**. One of them is the default gateway; the planes' ranges are routed through the others, by routes DHCP pushes to the instances. The example below is a `vm` tenant, whose default gateway reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; the `isolated` tenant has no such router, and its only router, to the observability plane, is its default gateway.
 
 ```mermaid
 flowchart LR
@@ -73,7 +45,7 @@ flowchart LR
     RE["router egress<br/>default gateway"]
     RS["router publication"]
     RM["router observability"]
-    VM --> RE --> PUB["egress network<br/>(Internet)"]
+    VM --> RE --> PUB["egress network<br/>(input egress_network, Internet)"]
     LB -.-> RS --> SVC["publication plane"]
     VM --> RM --> MON["observability plane"]
 ```
@@ -83,13 +55,14 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 | Plane | Router joins with | The tenant is seen at | Service address on the publication plane |
 |---|---|---|---|
 | operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of the plane on the load balancer |
+| operator plane, routed (no NAT) | its gateway, without source NAT, in a shared address scope | its own addresses: the cloud routes the tenant's range | the load balancer's own address |
 | shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |
 
 | Tenant | Default gateway | Other routers | Exposed |
 |---|---|---|---|
 | entry point | public network | publication, observability | public floating IP of its load balancer |
-| `vm` | egress | publication, observability, internal services (optional) | its service address on the publication plane (or a public floating IP, `exposure = "public"`) |
-| `kubernetes` | egress | publication, observability, internal services | ingress (service address on the publication plane), API (floating IP of the administration network) |
+| `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
+| `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a public floating IP of its own; API: floating IP of the administration network |
 | `isolated` | observability | — | nothing |
 | bastions | administration network | — (second port on the tenant network) | floating IP of the administration network |
 
@@ -128,12 +101,25 @@ sequenceDiagram
 
 On the Kubernetes tenant the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).
 
-With `exposure = "public"`, a `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`); the shared entry point is not involved ([ADR-0006](../adr/0006-exposure.md), D2).
+With `exposure = "public"`, a `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`); the shared entry point is not involved ([ADR-0006](../adr/0006-exposure.md), D2):
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as Tenant load balancer<br/>public floating IP, pool PROXYV2
+    participant B as Tenant instance<br/>terminates TLS
+    C->>L: TLS ClientHello (SNI site-a.example.org)
+    L->>B: PROXY v2 (client address) + TLS
+    Note over B: reads PROXY v2 from the load balancer's addresses<br/>terminates TLS with its own certificate
+```
+
+The tenant then owns one public address and one load balancer for its domains alone. The shared entry point exists for the opposite case: many domains of many tenants behind one public address.
 
 ## Public entry point
 
 | Element | Setting |
 |---|---|
+| Public address | one floating IP for every domain published through it; Traefik tells the domains apart by SNI |
 | Octavia listener 443 | `TCP`, pool protocol `PROXY`, TCP health monitor on 443 |
 | Octavia listener 80 | `TCP`, pool protocol `PROXY`; Traefik answers with a redirection to HTTPS |
 | Traefik entry points | `proxyProtocol.trustedIPs` limited to the entry point network |
@@ -322,6 +308,8 @@ The shared services are the only points that several tenants reach, and the entr
 - **A tenant** reaches a shared service on the ports of the service it consumes, and no other: SSH is admitted from the administrators' addresses only ([ADR-0005](../adr/0005-stacks-contracts-and-access.md)).
 - **Routes exist between the shared services of a plane** ([ADR-0004](../adr/0004-planes-and-isolation.md)): only the security groups of the target close the flows that are not declared.
 - **Spoofed sources.** Port security filters the ports of the instances, not those of the routers. A project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address through its router. They are blind: the answer goes to the real owner, so no TCP connection is established, and every service of the scenario listens on TCP. Services answering on UDP, such as name resolution and time, allow reflection; their integration point states it. The [test procedure](../reference/test-procedure.md) checks this on each cloud.
+- **A tenant that offers a service to another** takes the role `shared` on a plane, and the other the role `tenant`: one provider, its consumers, one direction of opening, as AWS PrivateLink, not VPC peering ([How a tenant joins a plane](plane-attachment.md#a-tenant-offering-a-service-to-another)).
+- **A published tenant that consumes internal services** is the most exposed tenant reaching the internal services plane: compromised, it reaches the services that declared it as a consumer, on their service ports, and no other tenant. Join the plane only to consume a service; do not admit a published tenant to sensitive services (secrets, administration of the directory, backups), give it a narrower service in front of them instead; when the stakes justify it, split the tenant in two: a published front without the internal services plane, calling a back that offers its service to it and consumes the internal services.
 - **A Kubernetes cluster is published or shared, not both**: an entry from the Internet must not sit on a cluster that every tenant of the internal services plane reaches.
 - **Beyond the network** ([ADR-0003](../adr/0003-scope-and-boundary.md), D4, level 3): the integrity of what a shared service distributes (images, packages, name resolution) and whom it authenticates are properties of the tool chosen for it, not of this architecture.
 
@@ -364,19 +352,21 @@ Replicating tenant data between regions belongs to the tenants and to the backup
 
 ## Sizing
 
-Indicative minimum for the whole scenario, with the default flavors of the examples.
+What the test campaigns of 2026-11-09 and 10 ran, project by project, with the flavors of the test cloud (2 vCPU each; nodes and the bootstrap instance with 4 GiB). The Kubernetes clusters are deployed one after the other in the tests; in production both run at once.
 
-| Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
-|---|---|---|---|---|---|
-| entry point | 2 | 4 | 4 GiB | 1 | 1 public |
-| `vm` tenant | 2 | 4 | 4 GiB | 1 | 1 on the publication plane with an operator plane, none with a hub plane |
-| `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with an operator plane |
-| `isolated` tenant | 1 | 1 | 1 GiB | 0 | 0 |
-| bootstrap (Cluster API management, temporary) | 1 | 2 | 4 GiB | 0 | 1 administration |
-| receiver (tests) | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with an operator plane |
-| optional bastions (one per stack) | 1 each | 2 each | 2 GiB each | 0 | 1 each, administration |
-| **Total without bastions** | **12** | **23** | **35 GiB** | **4** | **2 to 5** |
+| Project | Instances | vCPU | RAM | Boot volumes | Load balancers | Floating IPs |
+|---|---|---|---|---|---|---|
+| entry point | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 public |
+| `vm` tenant | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 on the publication plane with an operator plane with NAT, none otherwise |
+| `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB (defaults 30 and 40) | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with NAT |
+| cluster for shared services | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB | 3 (API, internal ingress, TCP service) | 1 administration (API), 2 on the internal services plane with NAT |
+| bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 20 GiB | 0 | 1 administration |
+| `isolated` tenant | 1 | 2 | 2 GiB | 8 GiB | 0 | 0 |
+| shared services: receiver | 1 | 2 | 2 GiB | 8 GiB | 0 | 1 on the observability plane with NAT |
+| shared services: internal service, ACME authority (tests) | 2 | 4 | 6 GiB | 1 × 8 GiB, one local disk | 0 | 1 on the internal services plane with NAT |
+| bastions (one per stack, optional) | 1 each | 2 each | 2 GiB each | 8 GiB each | 0 | 1 each, administration |
+| **Total, both clusters, without bastions** | **19** | **38** | **62 GiB** | | **7** | **up to 10** |
 
-The total does not count the Kubernetes cluster for shared services: about the same as the `kubernetes` tenant, with one more load balancer for the TCP demonstration service.
+**Load balancers cost instances too.** With the `ACTIVE_STANDBY` topology, each load balancer runs two amphorae, in the cloud operator's Octavia project and on the same hypervisors: 14 more instances for the 7 load balancers above, of the operator's amphora flavor. On a small cloud they are what runs out first: they caused some of the "no valid host" failures seen in the tests.
 
 With hub planes, the hub project holds one router per plane and no instance.

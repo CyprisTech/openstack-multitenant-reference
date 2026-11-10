@@ -21,6 +21,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 15 | [Monitoring by push](#15-monitoring-by-push) | Agents push to a receiver; nothing connects into a tenant |
 | 16 | [Routes through instance metadata](#16-routes-through-instance-metadata) | Updated in place, read by a timer |
 | 17 | [Certificates through DNS-01 only](#17-certificates-through-dns-01-only) | DNS-01 from any ACME directory; HTTP-01 not shipped |
+| 18 | [The entry point's software](#18-the-entry-points-software) | Traefik in a container; any software that keeps the contract fits |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -219,6 +220,18 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **Cost.** The tenant needs write access to its DNS zone, through a provider supported by its tool; the credentials reach the instances or the cluster and must be restricted to the `_acme-challenge` records. With Let's Encrypt, the zone must resolve publicly (or `_acme-challenge` be a CNAME to a public zone), and every certificate appears in the public Certificate Transparency logs.
 
 **Choose HTTP-01 when** a tenant is published on the Internet, cannot get write access to its zone, and terminates TLS on one place (an ingress or a reverse-proxy tier): the entry point would then forward `/.well-known/acme-challenge/` on port 80 to the tenant. It cannot work for several instances behind a load balancer, each requesting its own certificate.
+
+## 18. The entry point's software
+
+**Choice.** Traefik, as a pinned container started by a systemd unit and configured by cloud-init, reads its routes from a file rendered from the instance metadata ([section 16](#16-routes-through-instance-metadata)).
+
+**Why.** It routes TCP by SNI without decrypting, sends PROXY protocol v2 to the backends, and reloads a file of routes without restarting; one binary, no orchestrator on the entry point.
+
+**Cost.** One more component to know for the operators; its configuration is specific to it.
+
+**The contract, whatever the software:** read the SNI without decrypting; forward to the tenant's service address with exactly one PROXY v2 header; accept PROXY only from the entry point's load balancer; reload routes without dropping connections. HAProxy (`req.ssl_sni`, `send-proxy-v2`), nginx (`stream` with `ssl_preread`, `proxy_protocol on`) and Envoy (TLS inspector, PROXY protocol transport socket) all fit it. The same holds for the other choices that look opinionated: the receivers only have to accept the push protocols ([section 15](#15-monitoring-by-push)), and the routes may come from another store ([section 16](#16-routes-through-instance-metadata)).
+
+**Choose another software when** your operators already run it at the edge: replace the role in `stacks/shared/entry-point`, keep the contract, and run the isolation test.
 
 ## Evidence
 

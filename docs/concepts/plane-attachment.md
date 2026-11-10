@@ -51,6 +51,14 @@ flowchart LR
 - **Tenant ranges must not overlap**, with each other or with the planes; `shared/planes` checks it.
 - **Limit**: Neutron caps the routes of a router (`max_routes`, 30 by default), so a transit router serves about 30 attachments per plane.
 
+## A tenant offering a service to another
+
+There is no route between two tenants, but a tenant may serve another: the provider joins a plane with the role `shared`, its consumers with the role `tenant`, exactly as an internal service. Its security group admits the consumers' sources on the service's port, and nothing else.
+
+- **On which plane.** The internal services plane when the service may be offered to other tenants later; a plane of its own, for the provider and its consumers, when no other tenant may reach it.
+- **The cloud analogy** is AWS PrivateLink (a provider, its consumers, one direction of opening), not VPC peering. A peering, any to any in both directions, would make two tenants one network: their ranges would have to be coordinated, and every port of one would depend on the security groups of the other. Two workloads that need that usually belong in one tenant.
+- **Both ways.** If each of two tenants serves the other, each is the provider of its own service, on the same plane or on two.
+
 ## What isolates tenants, in both modes
 
 The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the administrators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
