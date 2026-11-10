@@ -181,6 +181,7 @@ isolated t1-isolated-1 internal service 198.51.100.3                          80
 |---|---|
 | Add a tenant | [add-a-tenant](docs/guides/add-a-tenant.md) |
 | Publish a domain | [publish-a-domain](docs/guides/publish-a-domain.md) |
+| Open a service after qualification | [open-a-service](docs/guides/open-a-service.md) |
 | Give a tenant trusted certificates | [certificates](docs/guides/certificates.md) |
 | Check the isolation after a change | [check-isolation](docs/guides/check-isolation.md) |
 | Discover a Kubernetes tenant | [kubernetes-tour](docs/guides/kubernetes-tour.md) |
