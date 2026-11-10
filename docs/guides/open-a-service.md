@@ -11,7 +11,7 @@ How a tested release reaches its users without being rebuilt, and how opening it
 ## A public service
 
 1. **Deploy the release** in the production tenant, with the promoted digest. Nothing points to it yet.
-2. **Qualify it in place, before any DNS record.** Add its domain to the tenant (`domains` of a `vm` tenant, `cluster.domains` of a `kubernetes` tenant), apply the tenant, then publish:
+2. **Check it in place, before any DNS record.** Add its domain to the tenant (`domains` of a `vm` tenant, `cluster.domains` of a `kubernetes` tenant), apply the tenant, then publish:
 
    ```bash
    OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
@@ -23,7 +23,7 @@ How a tested release reaches its users without being rebuilt, and how opening it
 
 ## An internal service
 
-On the [cluster for shared services](../../stacks/shared/kubernetes/README.md), a service is closed until its consumers are declared. Qualify it from the cluster or from a test consumer, then add the real consumers to `consumers` ([add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)) and write its name in the zone of the internal names.
+On the [cluster for shared services](../../stacks/shared/kubernetes/README.md), a service is closed until its consumers are declared. Qualify it from the cluster or from a test consumer, then add the real consumers to `consumers` ([add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)): they are admitted within one to two minutes, the time for the load balancer to take the new sources. The stack writes the name of the service in the zone of the internal names when `internal_zone` is set; otherwise write it from the `domains` output.
 
 ## In a pipeline
 

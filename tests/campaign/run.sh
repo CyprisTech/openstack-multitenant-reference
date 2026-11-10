@@ -14,9 +14,9 @@ root="$(cd "${here}/../.." && pwd)"
 
 # The two clusters are deployed one after the other, so that the campaign fits a small test cloud.
 declare -A SEQUENCES=(
-  [foundation]="prep planes receiver acme edge web isolated publish"
-  [shared]="k8s-shared cluster-shared tour-shared accept-shared consumer rotate upgrade shared-down"
-  [published]="k8s cluster internal tour publish accept transit hostile"
+  [foundation]="prep planes receiver acme edge web isolated transit publish"
+  [shared]="k8s-shared transit cluster-shared tour-shared accept-shared consumer rotate upgrade shared-down"
+  [published]="k8s cluster internal transit tour publish accept hostile"
   [end]="plans teardown"
   [full]="foundation shared published end"
 )
@@ -82,5 +82,5 @@ run_step() {
 
 for name in $(expand "$@"); do
   run_step "${name}"; status=$?
-  [[ ${status} -eq 0 ]] || { echo "campaign stopped at step ${name}"; exit 1; }
+  [[ ${status} -eq 0 ]] || { notify "campaign ${mode} stopped at step ${name}"; exit 1; }
 done

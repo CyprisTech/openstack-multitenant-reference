@@ -10,7 +10,7 @@ step_k8s_shared() {
 }
 
 step_cluster_shared() {
-  create_cluster "${SHARED}" "${W}/shared-clouds.yaml" "${SITE}-shared" "${SHARED_KUBECONFIG}"
+  create_cluster "${SHARED}" "${W}/shared-clouds.yaml" "${SHARED_KUBECONFIG}"
   demo_manifest "${SHARED}/demo/whoami.yaml" | kubectl --kubeconfig "${SHARED_KUBECONFIG}" apply -f -
   show kubectl --kubeconfig "${SHARED_KUBECONFIG}" apply -f "${SHARED}/demo/echo.yaml"
   kubectl --kubeconfig "${SHARED_KUBECONFIG}" -n whoami rollout status deploy/whoami
@@ -19,7 +19,7 @@ step_cluster_shared() {
 
 step_tour_shared() {
   # shellcheck disable=SC2086
-  python3 tests/tour/capture.py --kubeconfig "${SHARED_KUBECONFIG}" --cluster "${SITE}-shared" ${CAPTURE_REPLACE:-} > "${W}/tour-shared.md"
+  python3 tests/tour/capture.py --kubeconfig "${SHARED_KUBECONFIG}" --cluster "$(cluster_name "${SHARED_KUBECONFIG}")" ${CAPTURE_REPLACE:-} > "${W}/tour-shared.md"
   show kubectl --kubeconfig "${SHARED_KUBECONFIG}" get nodes,svc -A
   show kubectl --kubeconfig "${SHARED_KUBECONFIG}" get gateway,httproute,certificate -A
   show kubectl --kubeconfig "${SHARED_KUBECONFIG}" get networkpolicy -A
@@ -39,7 +39,8 @@ step_accept_shared() {
     on_instance "${bastion}" "${vm}" "curl -s --cacert /etc/lego/ca.pem --max-time 10 --resolve ${SHARED_NAME}:443:${service} https://${SHARED_NAME}/ | grep -E '^Hostname' || echo FAIL"
   done | sort | uniq -c | sed 's/^/shared https /')
   echo "${results}" | tee -a "${W}/https.txt"
-  ! grep -q FAIL <<<"${results}"
+  # Not "! grep": errexit ignores a negated command, and the step would go on.
+  if grep -q FAIL <<<"${results}"; then return 1; fi
   isolation_test shared
 }
 
@@ -71,7 +72,13 @@ step_consumer() {
   jq --arg cidr "${CONSUMER_CIDR}" '.consumers += [$cidr]' "${W}/shared.inputs.bak" > "${inputs}"
   run_apply "${SHARED}"
   apply_shared_manifests
-  sleep 20
+  # The source reaches the chart, the Service, then the Octavia listeners: a minute or two.
+  local attempt
+  for attempt in $(seq 18); do
+    curl -s -o /dev/null --cacert "${W}/root.pem" --max-time 5 --resolve "${SHARED_NAME}:443:${service}" "https://${SHARED_NAME}/" && break
+    sleep 10
+  done
+  echo "open after about $((attempt * 10)) s"
   try_shared_service "${service}"
 
   comment "Back to the declared consumers"
@@ -112,10 +119,34 @@ step_rotate() {
   fi
 
   comment "A load balancer created with the new credential"
-  kubectl create service loadbalancer rotation-check --tcp=80:80
+  # Internal: without an annotation, the cloud controller picks an external network for the
+  # floating IP by itself, which the cluster may not reach (the observability plane in interface mode).
+  kubectl create service loadbalancer rotation-check --tcp=80:80 --dry-run=client -o yaml \
+    | kubectl annotate --local -f - service.beta.kubernetes.io/openstack-internal-load-balancer=true -o yaml \
+    | kubectl apply -f -
   kubectl wait service/rotation-check --for=jsonpath='{.status.loadBalancer.ingress[0].ip}' --timeout=10m
   kubectl delete service rotation-check
   kubectl wait service/rotation-check --for=delete --timeout=10m
+
+  comment "Revoke the old credential (${CLOUD_K8S_SHARED_CLUSTER}): the upgrade waits for it"
+  wait_for_revocation "${CLOUD_K8S_SHARED_CLUSTER}"
+}
+
+# The upgrade proves the new credential only once the old one no longer authenticates. Revoking
+# it needs rights the campaign does not have: wait for an administrator, up to 30 minutes.
+wait_for_revocation() {  # wait_for_revocation <clouds.yaml entry>
+  local attempt
+  notify "Rotation done: revoke the old application credential ($1) now; the upgrade starts once it no longer authenticates (30 minutes at most)."
+  for attempt in $(seq 90); do
+    if ! python3 -c "import openstack, sys; openstack.connect(cloud=sys.argv[1], load_envvars=False).authorize()" "$1" >/dev/null 2>&1; then
+      echo "the old credential no longer authenticates"
+      return 0
+    fi
+    [[ $((attempt % 6)) -eq 1 ]] && echo "$(date -u +%T) waiting for the revocation of $1"
+    sleep 20
+  done
+  echo "OLD CREDENTIAL STILL VALID"
+  return 1
 }
 
 yq_credential() { python3 -c "import sys, yaml; print(yaml.safe_load(open(sys.argv[2]))['clouds']['openstack']['auth'][sys.argv[1]])" "$1" "$2"; }
@@ -124,7 +155,8 @@ yq_credential() { python3 -c "import sys, yaml; print(yaml.safe_load(open(sys.ar
 # and the service must answer during and after it.
 step_upgrade() {
   export KUBECONFIG=${SHARED_KUBECONFIG}
-  local cluster="${SITE}-shared" object api service bastion vm ready nodes load
+  local cluster object api service bastion vm ready=0 nodes=0 load listing
+  cluster=$(cluster_name "${SHARED_KUBECONFIG}")
   object=$(tr '[:upper:].' '[:lower:]-' <<<"${UPGRADE_IMAGE}")
   api=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
   service=$(shared_service_address)
@@ -146,10 +178,12 @@ step_upgrade() {
   load_on_shared_service "${bastion}" "${vm}" "${service}" & load=$!
 
   for _ in $(seq 180); do
-    nodes=$(kubectl get nodes --no-headers | wc -l)
-    ready=$(kubectl get nodes --no-headers 2>/dev/null | awk -v v="${UPGRADE_VERSION}" '$2 == "Ready" && $NF == v' | wc -l)
+    # The API may time out while a control plane machine is replaced: try again at the next round.
+    listing=$(kubectl get nodes --no-headers --request-timeout=15s 2>/dev/null) || { sleep 20; continue; }
+    nodes=$(wc -l <<<"${listing}")
+    ready=$(awk -v v="${UPGRADE_VERSION}" '$2 == "Ready" && $NF == v' <<<"${listing}" | wc -l)
     echo "$(date -u +%T) nodes ${nodes}, ready at ${UPGRADE_VERSION}: ${ready}"
-    if [[ ${ready} -eq $(expected_nodes) && ${nodes} -eq ${ready} ]]; then break; fi
+    if [[ ${ready} -eq $(expected_nodes || echo -1) && ${nodes} -eq ${ready} ]]; then break; fi
     sleep 20
   done
   touch "${W}/stop-load"
@@ -165,7 +199,7 @@ step_upgrade() {
   step_accept_shared
 }
 
-expected_nodes() { kubectl -n platform get machines --no-headers | wc -l; }
+expected_nodes() { local m; m=$(kubectl -n platform get machines --no-headers --request-timeout=15s) && wc -l <<<"${m}"; }
 
 load_on_shared_service() {  # load_on_shared_service <bastion> <instance> <address>
   local ok=0 failed=0

@@ -53,6 +53,10 @@ Arrows show who opens the connection. The cluster is published through the entry
 - Resolvers (`dns_nameservers`) that resolve the cloud API endpoints: the controllers call them from the bootstrap instance and from the cluster.
 - When the cloud APIs use a private certificate authority, its certificates in a file: `create-cluster.sh` gives them to Cluster API, ORC, the cloud controller manager and Cinder CSI.
 
+## Load balancers of your own Services
+
+A Service of type `LoadBalancer` gets an internal load balancer, reachable from the cluster network only: the cloud controller runs with `internal-lb = true`. To give it a floating IP on a plane, annotate it with `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"`, and admit its sources, as the entries of the stack do.
+
 ## Usage
 
 ```bash

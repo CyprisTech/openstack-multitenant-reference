@@ -43,6 +43,8 @@ service:
     # The floating IP is created by Terraform (spec.loadBalancerIP): keep it when the
     # Service is deleted.
     loadbalancer.openstack.org/keep-floatingip: "true"
+    # The cloud controller makes internal load balancers by default (internal-lb): say otherwise.
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "false"
 %{ else ~}
     # Plane without NAT: no floating IP; the load balancer address in the cluster network
     # (spec.loadBalancerIP) is reached through the plane's routes.

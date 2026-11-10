@@ -31,6 +31,13 @@ show() {
 
 recording() { [[ "${RECORD:-0}" == 1 ]]; }
 
+# NOTIFY_HOOK (optional, outside this repository): a command that tells the operator, given the
+# message as its argument. Used when the campaign waits for someone, and when it stops.
+notify() {
+  echo "$1"
+  if [[ -n "${NOTIFY_HOOK:-}" ]]; then "${NOTIFY_HOOK}" "$1" || true; fi
+}
+
 # --- Inputs and outputs of the stacks -------------------------------------------------------------
 
 output_json() { "${TOOL}" -chdir="$1" output -json "$2"; }
@@ -143,9 +150,12 @@ wait_for_bootstrap() { remote -o ConnectionAttempts=30 "$(output_raw "$1" bootst
 
 # --- Kubernetes -----------------------------------------------------------------------------------
 
+# The name of the Cluster API cluster (cluster.name of the stack), read from the cluster itself.
+cluster_name() { kubectl --kubeconfig "$1" -n platform get cluster -o jsonpath='{.items[0].metadata.name}'; }
+
 # Run the creation script on the bootstrap instance, then fetch the kubeconfig.
-create_cluster() {  # create_cluster <stack> <credential file> <cluster name> <kubeconfig>
-  local stack=$1 credential=$2 name=$3 kubeconfig=$4 bootstrap start
+create_cluster() {  # create_cluster <stack> <credential file> <kubeconfig>
+  local stack=$1 credential=$2 kubeconfig=$3 bootstrap start
   bootstrap=$(output_raw "${stack}" bootstrap)
   copy "${credential}" "${bootstrap}:/tmp/clouds.yaml"
   if [[ -n "${CA_CERT:-}" ]]; then copy "${CA_CERT}" "${bootstrap}:/tmp/cacert.pem"; fi
@@ -155,12 +165,19 @@ create_cluster() {  # create_cluster <stack> <credential file> <cluster name> <k
 
   start=$(date +%s)
   remote -t "${bootstrap}" sudo /opt/platform/create-cluster.sh
-  timing "create-cluster ${name} $(($(date +%s) - start))s"
+  timing "create-cluster ${stack} $(($(date +%s) - start))s"
 
-  remote "${bootstrap}" sudo cat "/opt/platform/${name}.kubeconfig" > "${kubeconfig}"
+  fetch_kubeconfig "${bootstrap}" "${kubeconfig}"
   chmod 600 "${kubeconfig}"
   show kubectl --kubeconfig "${kubeconfig}" get nodes -o wide
   show kubectl --kubeconfig "${kubeconfig}" get svc -A --field-selector spec.type=LoadBalancer
+}
+
+# The kubeconfig create-cluster.sh writes on the bootstrap instance, named after the cluster.
+fetch_kubeconfig() {  # fetch_kubeconfig <bootstrap> <kubeconfig>
+  remote "$1" 'sudo sh -c "ls /opt/platform/*.kubeconfig | grep -v /bootstrap.kubeconfig | head -1 | xargs cat"' > "$2"
+  chmod 600 "$2"
+  [[ -s "$2" ]]
 }
 
 # Admit the bootstrap instance on the API again, then delete the cluster from it. Does nothing if

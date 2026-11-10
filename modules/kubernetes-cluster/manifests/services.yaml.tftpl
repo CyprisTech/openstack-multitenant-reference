@@ -16,6 +16,7 @@ metadata:
 %{ if s.nat ~}
     loadbalancer.openstack.org/floating-network-id: "${s.network_id}"
     loadbalancer.openstack.org/keep-floatingip: "true"
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "false"
 %{ else ~}
     service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
 %{ endif ~}

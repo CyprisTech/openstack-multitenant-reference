@@ -282,8 +282,9 @@ def main():
 
         # The domains published through the entry point; the names of the shared cluster are
         # served on the internal services plane only (their certificate is checked by its consumer).
+        # The Kubernetes tenant's domains only when it is deployed (--published-kubeconfig).
         for tenant, names in sorted(acme["tenants"].items()):
-            if tenant == "shared":
+            if tenant == "shared" or (tenant != "web" and not args.published_kubeconfig):
                 continue
             for d in names:
                 rows.append(("test runner", f"{tenant} certificate of {d}", 443, "valid", lambda d=d: certificate(d)))

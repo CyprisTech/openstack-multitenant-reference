@@ -50,6 +50,10 @@ Arrows show who opens the connection. The internal services plane appears twice:
 
 The entry point is not a prerequisite: this cluster is not published.
 
+## Load balancers of your own Services
+
+A Service of type `LoadBalancer` gets an internal load balancer, reachable from the cluster network only: the cloud controller runs with `internal-lb = true`. To give it a floating IP on a plane, annotate it with `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"`, and admit its sources, as the entries of the stack do.
+
 ## Usage
 
 The same as the [Kubernetes tenant](../../tenants/kubernetes/README.md#usage): an application credential dedicated to the cluster, the node image, then `create-cluster.sh` on the bootstrap instance. In `shared/planes`, the cluster's attachment has the role `shared` on the internal services plane and `tenant` on the observability plane; each consuming tenant joins the internal services plane.

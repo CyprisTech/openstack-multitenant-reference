@@ -8,7 +8,7 @@ step_k8s() {
 }
 
 step_cluster() {
-  create_cluster "${PUBLISHED}" "${W}/published-clouds.yaml" "${SITE}-published" "${PUBLISHED_KUBECONFIG}"
+  create_cluster "${PUBLISHED}" "${W}/published-clouds.yaml" "${PUBLISHED_KUBECONFIG}"
 }
 
 # The fixture of an internal service, open to the Kubernetes tenant only.
@@ -20,8 +20,8 @@ step_internal() {
 
 step_tour() {
   # shellcheck disable=SC2086
-  python3 tests/tour/capture.py --kubeconfig "${PUBLISHED_KUBECONFIG}" --cluster "${SITE}-published" ${CAPTURE_REPLACE:-} > "${W}/kubernetes-tour.md"
-  show clusterctl describe cluster "${SITE}-published" -n platform --kubeconfig "${PUBLISHED_KUBECONFIG}"
+  python3 tests/tour/capture.py --kubeconfig "${PUBLISHED_KUBECONFIG}" --cluster "$(cluster_name "${PUBLISHED_KUBECONFIG}")" ${CAPTURE_REPLACE:-} > "${W}/kubernetes-tour.md"
+  show clusterctl describe cluster "$(cluster_name "${PUBLISHED_KUBECONFIG}")" -n platform --kubeconfig "${PUBLISHED_KUBECONFIG}"
   show kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" get machines -n platform
   show kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" get gateway,httproute,certificate -A
 }

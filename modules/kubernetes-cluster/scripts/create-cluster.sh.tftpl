@@ -63,7 +63,9 @@ wait_webhooks -f manifests/cluster-class.yaml
 kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
 source=$(bootstrap_source)
 sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
-kubectl -n platform wait cluster/${cluster.name} --for=condition=ControlPlaneInitialized --timeout=30m
+# By its value: once true, Cluster API no longer updates the observedGeneration of this condition,
+# and kubectl wait --for=condition would never return on a cluster changed since (a script run again).
+kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.conditions[?(@.type=="ControlPlaneInitialized")].status}'=True --timeout=30m
 clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
 
 # 3. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
@@ -84,6 +86,10 @@ if os.path.exists("/opt/platform/cacert.pem"):
     print("ca-file=/etc/config/ca.crt")
 print("[LoadBalancer]")
 print("create-monitor=true")
+# Closed by default: a Service of type LoadBalancer gets no floating IP unless its annotations
+# name a network (as the entries of this module do). Without it, the cloud controller would pick
+# an external network by itself, which the cluster may not reach.
+print("internal-lb=true")
 EOF
 )
 kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-config \
@@ -104,7 +110,7 @@ fi
 kubectl --kubeconfig "$workload" apply -f manifests/services.yaml
 %{ endif ~}
 
-kubectl -n platform wait cluster/${cluster.name} --for=condition=Available --timeout=30m
+kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.conditions[?(@.type=="Available")].status}'=True --timeout=30m
 # clusterctl move refuses to run while a machine is still provisioning.
 kubectl -n platform wait kubeadmcontrolplane -l cluster.x-k8s.io/cluster-name=${cluster.name} \
   --for=jsonpath='{.status.readyReplicas}'=${cluster.control_plane_count} --timeout=40m
@@ -147,5 +153,12 @@ kubectl --kubeconfig "$workload" -n ${i.namespace} wait certificate/${i.tls_secr
 # The bootstrap instance no longer manages the cluster: its address leaves the API sources.
 sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 kind delete cluster --name bootstrap
+# One release proxy per chart. CAAPH v0.6.4 may create a second one when its cache lags behind its
+# own write (kubernetes-sigs/cluster-api-addon-provider-helm#606); the duplicate blocks every later
+# change of the add-ons, so the script ends in error rather than leave it unnoticed. Checked last, once the
+# cluster is complete (certificates, bootstrap source removed).
+duplicates=$(kubectl --kubeconfig "$workload" -n platform get helmreleaseproxy \
+  -o jsonpath='{range .items[*]}{.spec.releaseNamespace}/{.spec.releaseName}{"\n"}{end}' | sort | uniq -d)
+[[ -z "$duplicates" ]] || { echo "duplicate Helm release proxies after the move: $duplicates" >&2; exit 1; }
 
 echo "Cluster ${cluster.name} manages itself. Kubeconfig: $workload"
