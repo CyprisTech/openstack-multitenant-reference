@@ -222,11 +222,13 @@ spec:
       image:
         imageRef:
           name: ${node_image_object}
+%{ if m.size > 0 ~}
       rootVolume:
         sizeGiB: ${m.size}
         availabilityZone:
           from: Name
           name: ${az}
+%{ endif ~}
       serverGroup:
         filter:
           name: ${prefix}-${role == "worker" ? "workers" : role}

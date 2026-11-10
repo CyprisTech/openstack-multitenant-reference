@@ -124,7 +124,9 @@ variable "cluster" {
     - control_plane_count: 3 for a highly available control plane.
     - control_plane_root_volume_size, worker_root_volume_size: GiB of the root volume of each
       machine (container images, ephemeral storage, logs, and etcd on the control plane). They
-      must not be smaller than the virtual size of the node image.
+      must not be smaller than the virtual size of the node image. 0 boots from the flavor's
+      local disk instead: faster to create, lost with the machine, no live migration without
+      shared storage; the flavor's disk must then be large enough.
     - domains: names of the HTTP services, served by the internal ingress, with a certificate.
     - pod_cidr, service_cidr: must not overlap the cluster network nor the planes.
   EOT
@@ -146,6 +148,11 @@ variable "cluster" {
   validation {
     condition     = contains([1, 3, 5], var.cluster.control_plane_count)
     error_message = "control_plane_count must be 1, 3 or 5 (an odd number for etcd)."
+  }
+
+  validation {
+    condition     = var.cluster.control_plane_root_volume_size >= 0 && var.cluster.worker_root_volume_size >= 0
+    error_message = "Root volume sizes are GiB, or 0 for the flavor's local disk."
   }
 }
 
