@@ -70,7 +70,56 @@ step_direct() {
 restore_vm() {
   comment "Back to the entry point"
   cp "${W}/vm.inputs.bak" "${VM}/mode.auto.tfvars.json"
-  run_apply "${VM}"
+  # The router on publication is new: interface mode routes to it through the transit router.
+  run_apply "${VM}" && step_transit >/dev/null
+}
+
+# The Kubernetes tenant exposed directly (exposure = "public"): the ingress moves to a public
+# floating IP once the add-ons are applied again, HTTPS there with the certificate checked, the
+# entry point no longer reaches the cluster. Then back to the entry point, republished.
+step_direct_k8s() {
+  local inputs="${PUBLISHED}/mode.auto.tfvars.json" before address status=0
+  before=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
+  cp "${inputs}" "${W}/published.inputs.bak"
+  jq '.exposure = "public"' "${W}/published.inputs.bak" > "${inputs}"
+  if run_apply "${PUBLISHED}" && apply_addons; then
+    address=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
+    echo "ingress, exposed directly: ${address}" | tee -a "${W}/https.txt"
+    https_probe "apps.published.${TEST_ZONE}" "${address}" || status=1
+
+    comment "The entry point no longer reaches the cluster"
+    if on_instance "$(output_raw "${ENTRY_POINT}" bastion)" "$(instances_of "${ENTRY_POINT}" | head -1)" \
+      "timeout 4 bash -c '</dev/tcp/${before}/443'" 2>/dev/null; then
+      echo "ENTRY POINT STILL REACHES ${before}"; status=1
+    else
+      echo "entry point -> ${before}:443 closed" | tee -a "${W}/https.txt"
+    fi
+  else
+    status=1
+  fi
+
+  comment "Back to the entry point"
+  cp "${W}/published.inputs.bak" "${inputs}"
+  run_apply "${PUBLISHED}" && apply_addons && step_transit >/dev/null && step_publish || status=1
+  https_probe "apps.published.${TEST_ZONE}" "$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)" || status=1
+  return "${status}"
+}
+
+# The ingress settings are in the cluster's add-ons: apply them again after a change of the stack,
+# then wait for the Service to get the address of the stack.
+apply_addons() {
+  local address
+  address=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
+  "${TOOL}" -chdir="${PUBLISHED}" output -json manifests | jq -r '."addons.yaml"' \
+    | kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" apply -f - >/dev/null || return 1
+  for _ in $(seq 60); do
+    [[ "$(kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" == "${address}" ]] && {
+      show kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" -n traefik get svc traefik
+      return 0
+    }
+    sleep 10
+  done
+  echo "the ingress Service did not get ${address}"; return 1
 }
 
 step_transit() {

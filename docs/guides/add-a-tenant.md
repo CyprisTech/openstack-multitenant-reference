@@ -8,7 +8,7 @@ Create the project (provider's console or API, or [`cloud-baseline`](https://git
 
 ## 2. Type and address range
 
-Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances behind one service address, published through the entry point or with their own address), [`isolated`](../../stacks/tenants/isolated/README.md) (no public exposure) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md).
+Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances behind one service address, published through the entry point or with their own address), [`isolated`](../../stacks/tenants/isolated/README.md) (no public exposure) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md) (a cluster with its ingress, published through the entry point or with its own address).
 
 Choose its address range outside the planes' ranges. On hub planes (interface mode) it must also differ from every other attachment of the plane — and fall inside the plane's `tenant_ranges` aggregates, so that no shared service needs a new route. On operator planes (gateway mode), tenants may share ranges.
 

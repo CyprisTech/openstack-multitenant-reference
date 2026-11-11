@@ -49,7 +49,7 @@ locals {
     ingresses         = local.ingresses
     services = { for k, sv in var.services : k => merge(sv, {
       nat        = local.entry_nat["service-${k}"]
-      network_id = var.plane_attachment[sv.plane].network_id
+      network_id = local.entry_network["service-${k}"].id
       address    = local.entry_address["service-${k}"]
     }) }
     ingress_charts = { for k, i in local.ingresses : i.namespace => {
@@ -60,7 +60,7 @@ locals {
         proxy_protocol = i.proxy_protocol
         cluster_cidr   = var.cluster_cidr
         nat            = local.entry_nat[k]
-        network_id     = var.plane_attachment[i.plane].network_id
+        network_id     = local.entry_network[k].id
         address        = local.entry_address[k]
         sources        = i.sources
       })

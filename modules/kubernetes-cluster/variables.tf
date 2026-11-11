@@ -219,7 +219,8 @@ variable "ingresses" {
     HTTP entries of the cluster (ADR-0006): each one a Traefik deployment with its own Gateway
     and Service, so that a route attached to one cannot be served by another. Keyed by name.
     - plane: the plane its address is on: a floating IP of the plane with NAT, the address
-      host in the cluster network otherwise (reached through the plane's routes).
+      host in the cluster network otherwise (reached through the plane's routes). "egress"
+      exposes it directly: a floating IP of egress_network (ADR-0006, D2).
     - sources: who may connect (loadBalancerSourceRanges).
     - proxy_protocol: the sources send a PROXY protocol v2 header (the entry point).
     - domains: names served, with a certificate for them.
@@ -243,7 +244,8 @@ variable "ingresses" {
 variable "services" {
   description = <<-EOT
     Layer 4 entries of the cluster: a Service of type LoadBalancer for a workload you deploy,
-    selected by labels, at an address prepared like the ingresses'. Keyed by name.
+    selected by labels, at an address prepared like the ingresses' (plane "egress" included).
+    Keyed by name.
   EOT
   type = map(object({
     plane     = string

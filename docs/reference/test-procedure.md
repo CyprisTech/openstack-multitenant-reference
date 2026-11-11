@@ -292,6 +292,19 @@ receiver               series pushed by web                                     
 33/33 rows as expected
 ```
 
+### Direct exposure
+
+Each tenant type that can leave the entry point is switched to `exposure = "public"`, checked, then put back.
+
+1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`, apply.
+2. **`kubernetes`**: apply with `exposure = "public"`, then apply the add-ons again in the cluster (`tofu output -json manifests | jq -r '."addons.yaml"' | kubectl apply -f -`); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, add-ons, planes again (step 7), domain publication (step 8), HTTPS through the entry point.
+
+| Checkpoint | Expected | If it fails |
+|---|---|---|
+| HTTPS on the public address | 12 answers, certificate verified | the Service keeps its former address: the add-ons were not applied, or the cloud controller manager did not move the load balancer (`kubectl -n traefik describe svc traefik`) |
+| entry point to the former address | closed | the publication router is still there: plan of the tenant |
+| back to the entry point | HTTPS through the entry point again | domains not republished (step 8); interface mode: transit routes (step 7) |
+
 ### Hostile route (interface mode)
 
 The automatic test only opens connections. This step changes a tenant's router, so it is manual: a tenant adds a route to another tenant through the transit router, and must still reach nothing.

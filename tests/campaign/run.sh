@@ -16,7 +16,7 @@ root="$(cd "${here}/../.." && pwd)"
 declare -A SEQUENCES=(
   [foundation]="prep planes receiver acme edge web isolated transit publish"
   [shared]="k8s-shared transit cluster-shared tour-shared accept-shared consumer rotate upgrade shared-down"
-  [published]="k8s cluster internal transit tour publish accept direct hostile"
+  [published]="k8s cluster internal transit tour publish accept direct direct-k8s hostile"
   [end]="plans teardown"
   [full]="foundation shared published end"
 )

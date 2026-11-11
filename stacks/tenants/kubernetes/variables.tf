@@ -65,7 +65,8 @@ variable "plane_attachment" {
   description = <<-EOT
     The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),
     keyed by plane: how its router joins each plane and how its instances are seen there,
-    whatever provides the plane (the operator, or a hub project).
+    whatever provides the plane (the operator, or a hub project). observability is required,
+    publication with exposure = "entry-point"; the cluster joins internal when it is present.
   EOT
   type = map(object({
     mode         = string
@@ -78,9 +79,31 @@ variable "plane_attachment" {
   }))
 }
 
+variable "exposure" {
+  description = <<-EOT
+    How the service address, the ingress, is published (ADR-0006, D2):
+    - "entry-point": through the shared entry point (output published_domains), reachable from
+      the entry point only, which sends a PROXY protocol header;
+    - "public": a floating IP of egress_network, reachable from anywhere; the shared entry point
+      is not used and the cluster does not join the publication plane.
+  EOT
+  type        = string
+  default     = "entry-point"
+
+  validation {
+    condition     = contains(["entry-point", "public"], var.exposure)
+    error_message = "exposure must be \"entry-point\" or \"public\"."
+  }
+}
+
 variable "edge_sources" {
-  description = "Ranges the entry point connects from on publication: output publication_sources of stack shared/entry-point. Only they may reach the ingress and send a PROXY protocol header."
+  description = <<-EOT
+    Ranges the entry point connects from on publication: output publication_sources of stack
+    shared/entry-point. Only they may reach the ingress and send a PROXY protocol header.
+    Required with exposure = "entry-point".
+  EOT
   type        = list(string)
+  default     = []
 }
 
 variable "service_addresses" {

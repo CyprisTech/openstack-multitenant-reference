@@ -16,10 +16,12 @@ locals {
   instance = "${local.prefix}-bootstrap"
 
   admin_on_internal = var.admin_network == null
-  admin_network     = local.admin_on_internal ? { network = module.planes.network_name.internal } : { network = var.admin_network.network }
+  admin_network     = local.admin_on_internal ? { network = try(module.planes.network_name.internal, null) } : { network = var.admin_network.network }
 
   # The entries of the cluster (ADR-0006, D1): each one at a floating IP of its plane when the
-  # plane translates addresses, at a fixed address of the cluster network otherwise.
+  # plane translates addresses, at a fixed address of the cluster network otherwise. An entry
+  # with plane "egress" is exposed directly (ADR-0006, D2): a floating IP of egress_network,
+  # the external network of the cluster's default route, so that replies leave the same way.
   ingresses = { for k, i in var.ingresses : k => merge(i, {
     namespace  = coalesce(i.namespace, "traefik-${k}")
     tls_secret = coalesce(i.tls_secret, "${k}-tls")
@@ -28,7 +30,13 @@ locals {
     { for k, i in var.ingresses : k => { plane = i.plane, host = i.host } },
     { for k, s in var.services : "service-${k}" => { plane = s.plane, host = s.host } },
   )
-  entry_nat     = { for k, e in local.entries : k => module.planes.nat[e.plane] }
+  egress_entries = { for k, e in local.entries : k => e if e.plane == "egress" }
+  entry_nat      = { for k, e in local.entries : k => e.plane == "egress" ? true : module.planes.nat[e.plane] }
+  entry_network = { for k, e in local.entries : k => e.plane == "egress" ? {
+    name = var.egress_network.network, id = data.openstack_networking_network_v2.egress[0].id
+    } : {
+    name = module.planes.network_name[e.plane], id = var.plane_attachment[e.plane].network_id
+  } }
   entry_address = { for k, e in local.entries : k => local.entry_nat[k] ? openstack_networking_floatingip_v2.entry[k].address : cidrhost(var.cluster_cidr, e.host) }
   # The first host numbers are kept for the entries on planes without NAT.
   fixed_entries = anytrue([for k, n in local.entry_nat : !n])
@@ -56,10 +64,21 @@ module "admission" {
 resource "terraform_data" "checks" {
   lifecycle {
     precondition {
-      condition     = !local.admin_on_internal || module.planes.nat.internal
-      error_message = "The internal services plane gives no floating IPs (nat = false): set admin_network, an external network for the API and bootstrap floating IPs."
+      condition     = !local.admin_on_internal || try(module.planes.nat.internal, false)
+      error_message = "Without admin_network, the administration role goes to the internal services plane, which must be joined (planes) and give floating IPs (nat = true): otherwise set admin_network, an external network for the API and bootstrap floating IPs."
+    }
+    precondition {
+      condition     = alltrue([for k, e in local.entries : e.plane == "egress" || contains(var.planes, e.plane)])
+      error_message = "The plane of an entry is one of planes, or \"egress\" for an entry exposed directly."
     }
   }
+}
+
+# The external network of the default route, for the entries exposed directly.
+data "openstack_networking_network_v2" "egress" {
+  count    = length(local.egress_entries) > 0 ? 1 : 0
+  name     = var.egress_network.network
+  external = true
 }
 
 # Addresses of the entries on planes with NAT, created here rather than by the cloud controller
@@ -70,7 +89,7 @@ resource "terraform_data" "checks" {
 resource "openstack_networking_floatingip_v2" "entry" {
   for_each = { for k, e in local.entries : k => e if local.entry_nat[k] }
 
-  pool        = module.planes.network_name[each.value.plane]
+  pool        = local.entry_network[each.key].name
   description = "${local.prefix} ${each.key}"
 }
 

@@ -15,4 +15,4 @@ The entry point routes each domain by SNI to the tenant that serves it, without 
 
 The tenant obtains the domain's certificate itself, with an ACME DNS-01 challenge on its zone ([ADR-0006](../adr/0006-exposure.md), D5).
 
-Limits of the shared entry point (no TLS termination, no layer 7 routing, SNI required, about 120 domains): [trade-offs](../concepts/trade-offs.md#1-tls-passthrough-at-the-public-entry-point). A tenant that should not depend on it exposes its service address itself (`exposure = "public"` of the `vm` stack).
+Limits of the shared entry point (no TLS termination, no layer 7 routing, SNI required, about 120 domains): [trade-offs](../concepts/trade-offs.md#1-tls-passthrough-at-the-public-entry-point). A tenant that should not depend on it exposes its service address itself (`exposure = "public"` of the `vm` and `kubernetes` stacks).
