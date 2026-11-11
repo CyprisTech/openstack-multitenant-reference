@@ -14,9 +14,9 @@ Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr
 | observability | every project pushes its metrics, logs and audit events | your receivers |
 | internal services | services offered to some tenants | your internal services (registry, directory…) |
 
-![Architecture: the optional entry point, the receivers and the internal services each in their own project, the tenants in theirs, the hub project owning the planes; every project joins the publication, internal services and observability planes through its own router, with the role shared or tenant; arrows show who opens each connection; security groups on the ports of instances and load balancers; no route between two tenants](../images/architecture-topology.png)
+![Architecture: the optional entry point, the receivers and the internal services each in their own project, the tenants in theirs, the hub project owning the planes; every project joins the publication, internal services and observability planes through its own router, with the role shared or tenant; arrows show who opens each connection; no route between two tenants](../images/architecture-topology.png)
 
-The source of this picture is the SVG next to the PNG in [`docs/images`](../images/). The entry point is optional: a tenant may expose its own load balancer with a public address ([ADR-0006](../adr/0006-exposure.md), D2).
+The source of this picture is the SVG next to the PNG in [`docs/images`](../images/). The entry point is optional: a tenant may expose its own load balancer with a public address ([ADR-0006](../adr/0006-exposure.md), D2). Who admits what on each target: the [isolation matrix](../reference/isolation-matrix.md).
 
 | Project | Planes | Content |
 |---|---|---|

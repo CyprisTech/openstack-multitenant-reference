@@ -18,6 +18,22 @@ flowchart LR
 
 About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes for a Kubernetes tenant, plus 25 minutes once for its node image. Every stack follows the same pattern: copy `terraform.tfvars.example` to `terraform.tfvars` (git-ignored), adapt it, add its `plane_attachment`, then `tofu init && tofu apply` (`terraform` works the same).
 
+## What the example shows
+
+The stacks with their example values, and the test fixtures, deploy one instance of each choice. Keep what you need; each row says where the choice is made.
+
+| Area | The example shows | Where |
+|---|---|---|
+| Planes | the cloud operator's external networks, or shared networks built in a hub project with transit routers; addresses translated or not | step 1, [`examples/planes`](../../examples/planes/README.md) |
+| Exposure | a `vm` and a `kubernetes` tenant behind the shared entry point; each may instead have its own public address (`exposure = "public"`) | steps 3 and 4 |
+| Isolation | no route between two tenants; an `isolated` tenant with no exposure and no way out but the observability plane | step 4, [isolation matrix](../reference/isolation-matrix.md) |
+| Internal services | a service open to declared consumers only ([fixture](../../tests/fixtures/internal-service/README.md)), and a [cluster for shared services](../../stacks/shared/kubernetes/README.md) | after step 4 |
+| Observability | every project pushes its metrics to one receiver ([fixture](../../tests/fixtures/receiver/README.md)) | step 2 |
+| Certificates | ACME DNS-01 from an internal authority ([fixture](../../tests/fixtures/acme/README.md)); without it, a self-signed demonstration mode | `certificates` of each tenant |
+| Administration | bastions, and the Kubernetes API and bootstrap instance on an administration network | `admin`, `admin_network` |
+
+The fixtures stand for your own receivers, internal services and certificate authority: they are there to test the contracts, not to run in production.
+
 ## 0. Projects
 
 - OpenTofu or Terraform ≥ 1.9, `jq`, Python 3, `ssh` and the `openstack` client.
@@ -60,7 +76,7 @@ tofu -chdir=stacks/shared/entry-point output -json publication_sources   # edge_
 
 ## 4. Tenants
 
-Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
+Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` or `kubernetes` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
 
 ```bash
 for t in vm isolated; do
