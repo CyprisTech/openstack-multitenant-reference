@@ -127,7 +127,7 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <line x1="1290" y1="298" x2="1290" y2="372" stroke="#9ca3af" stroke-width="1.6"/>
 <rect x="950" y="256" width="370" height="42" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1.1"/>
 <text x="1135.0" y="273.0" font-size="12.5" fill="#1f2937" text-anchor="middle">internal services (yours)</text>
-<text x="1135.0" y="289.0" font-size="10" fill="#6b7280" text-anchor="middle" font-style="italic">e.g. network services: resolvers, time, mirrors, egress proxy</text>
+<text x="1135.0" y="289.0" font-size="10" fill="#6b7280" text-anchor="middle" font-style="italic">network services: resolvers, time, mirrors, egress proxy</text>
 <rect x="950" y="372" width="430" height="16" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.2"/>
 <text x="1165.0" y="384.5" font-size="10.5" fill="#4b5563" font-weight="normal" text-anchor="middle">network</text>
 <line x1="1020" y1="388" x2="1020" y2="437" stroke="#9ca3af" stroke-width="1.6"/>
