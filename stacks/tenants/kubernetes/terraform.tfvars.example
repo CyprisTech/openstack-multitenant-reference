@@ -4,8 +4,8 @@ site  = "site-a"
 az    = "nova"
 image = "ubuntu-24.04"
 
-flavor           = "m1.medium-nodisk" # bootstrap instance: kind runs there
-boot_volume_size = 20
+flavor           = "m1.medium" # bootstrap instance: kind runs there
+boot_volume_size = 20 # null with a flavor that has a local disk
 
 egress_network = { network = "public", subnet = "public" }
 # admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the internal services plane
@@ -22,8 +22,8 @@ admin = {
 
 cluster = {
   node_image           = "ubuntu-2404-kube-v1.36.5"
-  control_plane_flavor = "m1.medium-nodisk"
-  worker_flavor        = "m1.medium-nodisk"
+  control_plane_flavor = "m1.medium"
+  worker_flavor        = "m1.medium"
   # Root disks: container images, ephemeral storage, logs, etcd. Defaults 30 and 40 GiB.
   # control_plane_root_volume_size = 30
   # worker_root_volume_size        = 40

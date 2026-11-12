@@ -11,7 +11,7 @@ What the stacks expect from planes **provided by the cloud operator** as externa
 | MTU | The MTU of each plane, and the largest MTU the cloud carries for tenant networks (lower when the tenant overlay itself runs over a tunnel). Tenant networks that join a plane use the smallest of these values (`network_mtu`): OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets |
 | Floating IPs | On the planes where something must be reached at a stable address — in the scenario, the tenants' service addresses on the publication plane and the receiver on the observability plane — one per address |
 | Reserved ranges | The ranges tenants must not use for their networks (ranges used by the cloud infrastructure) |
-| Public network | A network providing floating IPs reachable from the Internet, for the entry point load balancer (and the tenants exposed with `exposure = "public"`) |
+| Public network | A network providing floating IPs reachable from the Internet: for the entry point load balancer (its `public_network`), and for the tenants exposed with `exposure = "public"`, whose public floating IP comes from their `egress_network` |
 | Administration network and sources | An external network for the bastions and the Kubernetes API floating IPs, and the **administrator addresses** allowed on them. Recommended: a network distinct from the internal services plane. With one network for both roles, the administration sources must be specific addresses, never the network range ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5) |
 | Octavia | Available to the projects (amphora provider) |
 | Image | An Ubuntu LTS cloud image visible to the projects |

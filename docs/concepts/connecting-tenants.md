@@ -14,9 +14,9 @@ When the two tenants really need each other (two applications of one team, a mig
 
 ```mermaid
 flowchart LR
-    VA["VM of A<br/>10.21.0.15"] --> RA["router of A<br/>transit: 198.51.100.65<br/>route 10.24.0.0/24 via 198.51.100.66"]
+    VA["VM of A<br/>10.21.0.15"] --> RA["router of A<br/>transit: 192.0.2.1<br/>route 10.24.0.0/24 via 192.0.2.2"]
     RA --- T["transit network<br/>192.0.2.0/29<br/>owned by A, shared with B"]
-    T --- RB["router of B<br/>transit: 198.51.100.66<br/>route 10.21.0.0/24 via 198.51.100.65"]
+    T --- RB["router of B<br/>transit: 192.0.2.2<br/>route 10.21.0.0/24 via 192.0.2.1"]
     RB --> VB["VM of B<br/>10.24.0.8"]
 ```
 

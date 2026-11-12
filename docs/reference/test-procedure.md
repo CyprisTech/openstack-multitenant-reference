@@ -14,18 +14,20 @@ flowchart LR
     H --> C["2. Receiver"]
     C --> E["3. Entry point"]
     E --> T["4. vm · isolated<br/>kubernetes"]
-    T --> K["5. Cluster"]
+    T --> K["5. Published cluster"]
     K --> I["6. Internal service"]
     I --> R["7. Planes again<br/>(transit routes)"]
     R --> PB["8. Publish"]
     PB --> A["9. Acceptance"]
     A -.-> D["10. Teardown"]
+    A -.-> SC["11. Shared cluster"]
 ```
 
 | Project | Stacks | Role on the planes |
 |---|---|---|
 | hub (interface mode) | `shared/planes` | owns the planes and their transit routers; no instance. With operator planes, `shared/planes` runs with the shared services' credentials and only adopts them |
-| shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service` | `shared` on `observability`, `shared` on `internal` |
+| shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service`, `tests/fixtures/acme` | `shared` on `observability` (receiver), `shared` on `internal` (internal service, ACME authority). On hub planes, one attachment per project and plane: the internal service and the ACME authority then need a project each |
+| shared cluster | `shared/kubernetes` ([section 11](#11-shared-cluster)) | `shared` on `internal`, `tenant` on `observability` |
 | entry point | `shared/entry-point` | `shared` on `publication`, `tenant` on `observability` |
 | one per tenant | `tenants/vm`, `tenants/isolated`, `tenants/kubernetes` | `tenant` |
 
@@ -41,7 +43,7 @@ flowchart LR
 | 8. Domain publication | 19 s, the routes answering 13 s later |
 | 9. Acceptance | 3 min |
 | **Total, steps 1 to 9** | **about 45 minutes** without incident |
-| 10. Teardown | about 10 min: 5 to 7 for the cluster, the rest for the stacks |
+| 10. Teardown | 4 to 7 min for the cluster, about 7 for the stacks ([test results](../concepts/test-results.md), 2026-11-05 and 2026-11-06) |
 
 Expected results are short extracts of the cycle of 2026-11-02 (interface mode); addresses outside the private ranges of the example are documentation addresses.
 
@@ -151,7 +153,7 @@ done; wait
 | cloud-init `done` on the instances (through their bastions) and on the Kubernetes bootstrap instance | as in step 3 |
 | `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the internal services plane |
 
-## 5. Cluster
+## 5. Published cluster
 
 ```bash
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
@@ -307,7 +309,7 @@ Each tenant type that can leave the entry point is switched to `exposure = "publ
 
 ### Hostile route (interface mode)
 
-The automatic test only opens connections. This step changes a tenant's router, so it is manual: a tenant adds a route to another tenant through the transit router, and must still reach nothing.
+A tenant adds a route to another tenant through the transit router, and must still reach nothing. The isolation test only opens connections and does not run this step; the campaign does (step `hostile` of [`tests/campaign`](../../tests/campaign/README.md), interface mode). By hand:
 
 ```bash
 # isolated routes the web range through the observability transit router (172.31.1.1 here)
@@ -361,7 +363,7 @@ Expected: closed. The packet may reach the web instance, whose security group ad
 ```bash
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
-kubectl --kubeconfig published.kubeconfig -n platform patch cluster t1-published --type=json \
+kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --type=json \
   -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$B"'/32"}]'
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
@@ -375,12 +377,12 @@ done
 |---|---|
 | no leftover, in every project | servers, volumes, load balancers, floating IPs, routers, networks, ports, security groups, server groups, and the records of the DNS zones: all empty, except the node image if you keep it. `openstack loadbalancer list` needs the Octavia client plugin: an error is not an empty list |
 
-## 11. Cluster for shared services
+## 11. Shared cluster
 
 The test cloud holds one Kubernetes cluster at a time, so this cluster is tested on its own, in the middle of the cycle:
 
 1. Steps 1 to 4 without the Kubernetes tenant, then step 8 for the domains of the `vm` tenant.
-2. This section: the cluster for shared services, with the `vm` tenant as its consumer, then its teardown.
+2. This section: the shared cluster (a Kubernetes cluster for shared services), with the `vm` tenant as its consumer, then its teardown.
 3. The Kubernetes tenant: its stack (step 4), then steps 5 to 10.
 
 The campaign script follows this order (sequence `full`). Deploy this cluster with the previous minor Kubernetes version, its node image shared with the project: the **Lifecycle** step below upgrades it.
@@ -390,7 +392,7 @@ The campaign script follows this order (sequence `full`). Deploy this cluster wi
 3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
 4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
 5. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer created with the new one, the old one revoked; then the minor upgrade, while a consumer sends requests.
-6. **Teardown** of the cluster and the stack, as in step 10.
+6. **Teardown** of the cluster and the stack, as in step 10, with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
 
 | Checkpoint | How | If it fails |
 |---|---|---|

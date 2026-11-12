@@ -18,5 +18,5 @@ Specs and [ADRs](../adr/README.md) play different parts:
 
 | Spec | Status |
 |---|---|
-| [A Kubernetes cluster for shared services](kubernetes-shared-services.md) | In progress |
-| [Certificates of the tenants](tenant-certificates.md) | In progress ([ADR-0008](../adr/0008-tenant-certificates.md)) |
+| [A Kubernetes cluster for shared services](kubernetes-shared-services.md) | Implemented in v0.4 ([ADR-0010](../adr/0010-kubernetes-shared-services.md)) |
+| [Certificates of the tenants](tenant-certificates.md) | Implemented in v0.4 ([ADR-0008](../adr/0008-tenant-certificates.md)) |

@@ -64,7 +64,7 @@ The `published_domains` output maps each domain to the service address, in the s
 
 ## Bastion
 
-With `bastion` set, the stack creates a small network whose only router joins the administration network, and a bastion with a floating IP on it and a second port on the web network. SSH to the web instances is admitted from the bastion only.
+With `bastion` set, the stack creates a small network whose only router joins the administration network, and a bastion with a floating IP on it and a second port on the web network. SSH to the web instances is admitted from the bastion, and from the ranges of `admin.ssh_cidrs` (empty by default).
 
 ```bash
 ssh -J ops@<bastion floating IP> ops@<web instance address>

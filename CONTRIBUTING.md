@@ -17,7 +17,7 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 |---|---|
 | `stacks/shared/planes` | The planes: adopted from the cloud operator, or built in a hub project |
 | `stacks/shared/entry-point` | The shared public entry point |
-| `stacks/shared/kubernetes` | A Kubernetes cluster for shared services |
+| `stacks/shared/kubernetes` | The shared cluster (a Kubernetes cluster for shared services) |
 | `stacks/tenants/vm`, `stacks/tenants/isolated`, `stacks/tenants/kubernetes` | The tenant types |
 | `modules/` | Building blocks of the stacks: joining a plane, admission rules, bastion, metrics agent, ACME client, Kubernetes cluster, discovery and range checks of `shared/planes` |
 | `images/kubernetes-node` | The node image of the Kubernetes tenant |

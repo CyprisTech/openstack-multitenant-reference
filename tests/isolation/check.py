@@ -16,15 +16,15 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
 Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
 bastions and pushing to the test receiver, and the receiver applied. With
---published-kubeconfig, the rows of the Kubernetes tenant are added: probes from the cluster run
+--published-kubeconfig, the rows of the published cluster are added: probes from the cluster run
 in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
 use.
 
-With --shared-kubeconfig, the rows of the Kubernetes cluster for shared services are added
-(stacks/shared/kubernetes, its demonstration services applied): the web tenant, its consumer,
-reaches the internal ingress and the TCP echo; the other tenants do not; a pod of the cluster
-reaches no tenant and, from another namespace, no backend of a service.
+With --shared-kubeconfig, the rows of the shared cluster (a Kubernetes cluster for shared
+services) are added (stacks/shared/kubernetes, its demonstration services applied): the web
+tenant, its consumer, reaches the internal ingress and the TCP echo; the other tenants do not; a
+pod of the cluster reaches no tenant and, from another namespace, no backend of a service.
 
 With --acme, the rows of the certificates are added (ADR-0008): each published domain, reached
 through the entry point, presents a certificate for its name issued by the test authority, and
@@ -102,7 +102,7 @@ def main():
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
-    ap.add_argument("--shared-kubeconfig", help="kubeconfig of the cluster for shared services (stacks/shared/kubernetes)")
+    ap.add_argument("--shared-kubeconfig", help="kubeconfig of the shared cluster (stacks/shared/kubernetes)")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
@@ -220,7 +220,7 @@ def main():
         rows.append(("receiver", f"published ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
 
     if args.shared_kubeconfig:
-        # The cluster for shared services (spec: a Kubernetes cluster for shared services): the web
+        # The shared cluster (spec: a Kubernetes cluster for shared services): the web
         # tenant is its consumer; the others are not.
         shared = outputs(args.tool, os.path.join(args.stacks, "shared", "kubernetes"))
         sk = start_probe(args.shared_kubeconfig)

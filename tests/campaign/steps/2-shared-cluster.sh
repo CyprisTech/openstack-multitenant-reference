@@ -1,4 +1,4 @@
-# Phase 2: the Kubernetes cluster for shared services, tested, then removed.
+# Phase 2: the shared cluster (a Kubernetes cluster for shared services), tested, then removed.
 
 shared_service_address() { output_json "${SHARED}" services | jq -r .ingress | cut -d: -f1; }
 

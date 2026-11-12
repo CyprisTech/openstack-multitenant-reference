@@ -12,8 +12,8 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 
 - The entry point and the `vm` and `isolated` tenants applied **with bastions**, the domains published.
 - The test receiver [`tests/fixtures/receiver`](../../tests/fixtures/receiver/README.md), given to the stacks as `monitoring.receiver`: the test reads it to check that every tenant pushed.
-- With a Kubernetes tenant: its kubeconfig, and the internal service it consumes (or the test one, [`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)).
-- For the optional rows: the test ACME authority (`--acme tests/fixtures/acme`) and, with the cluster for shared services and its demonstrated services applied, its kubeconfig (`--shared-kubeconfig`).
+- With the published cluster: its kubeconfig, and the internal service it consumes (or the test one, [`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)).
+- For the optional rows: the test ACME authority (`--acme tests/fixtures/acme`) and, with the shared cluster (a Kubernetes cluster for shared services) and its demonstrated services applied, its kubeconfig (`--shared-kubeconfig`).
 - The same SSH user and key on the bastions, the instances and the receiver.
 
 ## Run
@@ -21,7 +21,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
   --user ops --key ~/.ssh/id_ed25519 \
-  --published-kubeconfig published.kubeconfig # with a Kubernetes tenant
+  --published-kubeconfig published.kubeconfig # with the published cluster
 ```
 
 Each row prints the source, the destination, the port, the expected and the actual result; the script exits with status 1 if any row differs. A probe that cannot run (SSH failure) is reported as an error, never as `closed`.

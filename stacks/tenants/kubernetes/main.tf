@@ -1,6 +1,6 @@
-# Kubernetes tenant: a Kubernetes cluster created by Cluster API with the OpenStack provider
-# (ADR-0002), in a tenant project, published through the shared entry point or exposed directly
-# with its own public floating IP (ADR-0006, D2). The cluster itself is built by
+# Kubernetes tenant: the published cluster, a Kubernetes cluster created by Cluster API with the
+# OpenStack provider (ADR-0002), in a tenant project, published through the shared entry point or
+# exposed directly with its own public floating IP (ADR-0006, D2). The cluster itself is built by
 # modules/kubernetes-cluster.
 
 locals {

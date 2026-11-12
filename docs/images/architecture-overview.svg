@@ -62,7 +62,7 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <text x="246" y="276" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >no decryption: TLS ends in the tenant</text>
 <rect x="640" y="170" width="340" height="130" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
 <text x="656" y="196" font-size="16" fill="#1e3a8a" font-weight="bold" text-anchor="start" >Internal services</text>
-<text x="966" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">vm or kubernetes</text>
+<text x="966" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">vm, or the shared cluster</text>
 <text x="656" y="232" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >resolvers, time, package mirrors, egress proxy</text>
 <text x="656" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >admit declared consumers only</text>
 <rect x="1060" y="170" width="310" height="130" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
@@ -76,7 +76,7 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <text x="146" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >through the entry point, or exposed directly</text>
 <rect x="580" y="610" width="440" height="130" rx="10" fill="#ffedd5" stroke="#c2410c" stroke-width="2"/>
 <text x="596" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >kubernetes tenant</text>
-<text x="596" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >a cluster created by Cluster API, its ingress</text>
+<text x="596" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >the published cluster and its ingress (Cluster API)</text>
 <text x="596" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >through the entry point, or exposed directly</text>
 <rect x="1070" y="610" width="320" height="130" rx="10" fill="#ffedd5" stroke="#c2410c" stroke-width="2"/>
 <text x="1086" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >isolated tenant</text>
@@ -85,12 +85,12 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <line x1="540" y1="675" x2="570" y2="675" stroke="#dc2626" stroke-width="2.2" stroke-dasharray="4 3"/>
 <line x1="547" y1="667" x2="563" y2="683" stroke="#dc2626" stroke-width="2.4"/>
 <line x1="547" y1="683" x2="563" y2="667" stroke="#dc2626" stroke-width="2.4"/>
-<ellipse cx="575" cy="800" rx="80" ry="22" fill="#ffffff" stroke="#6b7280" stroke-width="2"/>
-<text x="575" y="805" font-size="15" fill="#111827" font-weight="bold" text-anchor="middle" >Internet</text>
-<line x1="330" y1="740" x2="505" y2="794" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
-<line x1="770" y1="740" x2="660" y2="794" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
-<line x1="520" y1="786" x2="360" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
-<line x1="630" y1="786" x2="800" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
-<text x="700" y="806" font-size="12.5" fill="#4b5563" font-weight="normal" text-anchor="start" >egress; dashed: direct exposure</text>
-<text x="60" y="868" font-size="12.5" fill="#374151" font-weight="normal" text-anchor="start" >Arrows show who opens the connection; dashed: optional. ✕: no route between two tenants. Administration (bastions, Kubernetes API) on its own network. Routers, resources and security groups: docs/concepts/architecture.md</text>
+<ellipse cx="575" cy="826" rx="80" ry="22" fill="#ffffff" stroke="#6b7280" stroke-width="2"/>
+<text x="575" y="831" font-size="15" fill="#111827" font-weight="bold" text-anchor="middle" >Internet</text>
+<line x1="462" y1="742" x2="528" y2="802" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
+<line x1="548" y1="802" x2="482" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
+<line x1="688" y1="742" x2="622" y2="802" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
+<line x1="602" y1="802" x2="668" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
+<text x="675" y="832" font-size="12.5" fill="#4b5563" font-weight="normal" text-anchor="start" >egress; dashed: direct exposure</text>
+<text x="60" y="884" font-size="12.5" fill="#374151" font-weight="normal" text-anchor="start" >Arrows show who opens the connection; dashed: optional. ✕: no route between two tenants. Administration (bastions, Kubernetes API) on its own network. Routers, resources and security groups: docs/concepts/architecture.md</text>
 </svg>

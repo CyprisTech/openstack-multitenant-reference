@@ -1,4 +1,4 @@
-# Phase 3: the Kubernetes tenant published on the entry point, and the acceptance tests.
+# Phase 3: the published cluster behind the entry point, and the acceptance tests.
 
 step_k8s() {
   set_inputs "${PUBLISHED}" cloud="${CLOUD_PUBLISHED}" plane_attachment:="$(attachment published)" monitoring:="$(monitoring)" \
@@ -74,7 +74,7 @@ restore_vm() {
   run_apply "${VM}" && step_transit >/dev/null
 }
 
-# The Kubernetes tenant exposed directly (exposure = "public"): the ingress moves to a public
+# The published cluster exposed directly (exposure = "public"): the ingress moves to a public
 # floating IP once the add-ons are applied again, HTTPS there with the certificate checked, the
 # entry point no longer reaches the cluster. Then back to the entry point, republished.
 step_direct_k8s() {

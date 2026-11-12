@@ -1,6 +1,6 @@
 {
   "source_image_filter_name": "ubuntu-24.04",
-  "flavor": "m1.medium-nodisk",
+  "flavor": "m1.medium",
   "availability_zone": "nova",
   "use_blockstorage_volume": "true",
   "volume_availability_zone": "nova",

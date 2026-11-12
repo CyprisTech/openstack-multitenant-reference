@@ -1,6 +1,6 @@
 # Isolation matrix
 
-Every flow of the reference scenario between the Internet, the planes, the shared services and the tenants, with the expected result. Another deployment adds the rows of its own planes and services. The [isolation test](../guides/check-isolation.md) checks each row on a deployment ([`tests/isolation`](../../tests/isolation/README.md)); run it after every change. The rows that involve the Kubernetes tenant or the internal services plane are checked when the test is given its kubeconfig; the rows of the certificates, when it is given the test ACME authority; the rows of the cluster for shared services, when it is given that cluster's kubeconfig (`--shared-kubeconfig`).
+Every flow of the reference scenario between the Internet, the planes, the shared services and the tenants, with the expected result. Another deployment adds the rows of its own planes and services. The [isolation test](../guides/check-isolation.md) checks each row on a deployment ([`tests/isolation`](../../tests/isolation/README.md)); run it after every change. The rows that involve the published cluster or the internal services plane are checked when the test is given its kubeconfig; the rows of the certificates, when it is given the test ACME authority; the rows of the shared cluster (a Kubernetes cluster for shared services), when it is given that cluster's kubeconfig (`--shared-kubeconfig`).
 
 *Enforced by* names the mechanism that makes the row true. The rows are the same whatever provides the planes ([ADR-0004](../adr/0004-planes-and-isolation.md)); the mechanism sometimes differs between planes with address translation (operator planes) and routed planes (hub planes, [How a tenant joins a plane](../concepts/plane-attachment.md)).
 
@@ -21,7 +21,7 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | the Kubernetes tenant | an internal service | its port | allowed | router to the internal services plane; the service admits the tenant's `internal_sources` |
 | `vm`, `isolated` | an internal service | its port | denied | `isolated` has no router to the internal services plane; a `vm` tenant joins it only when it consumes internal services, and the service admits only its consumers |
 | the entry point, the receiver | an internal service | its port | denied | the service admits only its consumers |
-| the receiver | the Kubernetes tenant's ingress | 443 | denied | sources of the ingress = entry point only |
+| the receiver | the published cluster's ingress | 443 | denied | sources of the ingress = entry point only |
 | the Kubernetes tenant | the bastions of the other stacks | 22 | denied | bastions admit the administrator addresses only |
 | a consumer (the `web` tenant) | the shared cluster's internal ingress and TCP service | 443, 7000 | allowed | route to the internal services plane; load balancer sources = the consumers' `internal_sources` |
 | a tenant that is not a consumer, the entry point, the receiver, the Internet | the shared cluster's services | 443, 7000 | denied | load balancer sources = the consumers only; the entry point and the receiver have no route to the plane |
@@ -35,4 +35,4 @@ Every flow of the reference scenario between the Internet, the planes, the share
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/architecture.md#lateral-movement)).
 
-The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the automatic test, which only opens TCP connections and reads the receiver.
+The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the isolation test, which only opens TCP connections and reads the receiver. The hostile route is automated by [`tests/campaign`](../../tests/campaign/README.md) (step `hostile`, interface mode); the spoofed source is run by hand.

@@ -8,7 +8,7 @@ The single description of the shared planes, read by every other stack whatever 
 
 ## Two kinds of plane
 
-A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. An operator plane is used with or without address translation (`nat` in the attachments output).
+A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. `nat` in the attachments output follows the mode for now: an operator plane (`gateway`) translates addresses, a hub plane (`interface`) does not. A third kind, the operator plane routed without translation, is adopted like any operator plane: an input of this stack, built by the operator by any means ([`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) is one). Declaring it (an operator plane with `nat = false`) comes in `v0.6`; it is shown here for comparison.
 
 
 ```mermaid
@@ -19,7 +19,7 @@ flowchart LR
         R1["router of an attached project<br/>gateway port: source NAT, floating IPs"]
         R1 --- P1
     end
-    subgraph RT["Operator plane, routed · mode gateway, nat false"]
+    subgraph RT["Operator plane, routed · mode gateway, nat false (v0.6)"]
         direction TB
         P2[["external network of the operator<br/>in a shared address scope"]]
         R2["router of an attached project<br/>gateway port: real addresses, BGP"]
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - **Operator plane, with NAT.** The stack adopts the operator's external network by name and creates nothing. An attached router joins with its gateway port: source NAT, floating IPs.
-- **Operator plane, routed.** Adopted the same way, without translation. The operator puts the tenants' ranges in the plane's address scope (subnet pools) and advertises them (BGP): tenants reach the plane at their real addresses.
+- **Operator plane, routed** (`v0.6`, see above). Adopted the same way, without translation: the operator puts the tenants' ranges in the plane's address scope (subnet pools) and advertises them (BGP): tenants reach the plane at their real addresses.
 - **Hub plane.** The stack creates, in the hub project, a private network without DHCP, shares it with every attached project by RBAC (`access_as_shared`), and puts a **transit router** at its first address. An attached router joins with an interface port, with routes through the transit router.
 
 Lines show attachments, not connections. Dashed boxes: the routers of the stacks that attach; grey: planes.

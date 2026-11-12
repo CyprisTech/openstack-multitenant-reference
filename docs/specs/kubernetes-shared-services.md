@@ -56,7 +56,7 @@ For each one, the module reserves the address (floating IP of the plane in gatew
 
 The HTTP services are offered by an **internal ingress**: its own Traefik deployment, Gateway and Service on the plane where they are offered (the `internal` entry above), not a second entry point of the public Traefik. No PROXY protocol (its clients are tenants, not the entry point); TLS terminated by Traefik or passed through per route. Adding an HTTP service is then one `HTTPRoute`; restricting it to some consumers, an `IPAllowList` middleware on the route.
 
-Why separate: with one Traefik for both, an `HTTPRoute` attached to the wrong listener publishes an internal service on the Internet. Each Gateway admits routes from its own namespaces only (`allowedRoutes`).
+Why separate: with one Traefik for both, an `HTTPRoute` attached to the wrong listener publishes an internal service on the Internet. The Gateways admit routes from all namespaces (`namespacePolicy.from: All` in the Traefik values): a route reaches a Gateway by naming it in its `parentRefs`.
 
 ### 4. Sources, in both directions
 
@@ -69,7 +69,7 @@ The `vm` tenant joins the internal services plane as an optional plane, with the
 
 ### 6. Inside the cluster
 
-The boundary between services is the cluster's: one namespace per service, default-deny network policies, ingress allowed from the internal ingress or the service's own load balancer only. The stack ships the default-deny policy and documents the rest.
+The boundary between services is the cluster's: one namespace per service, default-deny network policies, ingress allowed from the internal ingress or the service's own load balancer only. The stack applies no network policy: the default-deny policy and the admitted ingress come with each service, applied by the operator, as in the demonstrated services ([`demo/`](../../stacks/shared/kubernetes/demo)).
 
 A cluster is published or shared, not both: an entry from the Internet must not sit on a cluster that every tenant of the internal services plane reaches, and that reaches them ([lateral movement](../concepts/architecture.md#lateral-movement)).
 
@@ -91,7 +91,7 @@ Recorded in [ADR-0010](../adr/0010-kubernetes-shared-services.md).
 
 ### Proposed decisions, as first written
 
-1. **A separate stack, `stacks/shared/kubernetes`**, next to `stacks/tenants/kubernetes`, both on a common module `modules/kubernetes-cluster` extracted from today's stack (Cluster API manifests, bootstrap, add-ons, scripts). The layout already says the role; inputs, outputs and defaults differ (exposed services, default-deny policies, sources in both directions); a `role` input would fill one stack with conditions, and a single wrong value would expose a tenant cluster as a shared one. The extraction is checked like the building blocks were: identical plans before and after.
+1. **A separate stack, `stacks/shared/kubernetes`**, next to `stacks/tenants/kubernetes`, both on a common module `modules/kubernetes-cluster` extracted from today's stack (Cluster API manifests, bootstrap, add-ons, scripts). The layout already says the role; inputs, outputs and defaults differ (exposed services, default-deny policies, sources in both directions); a `role` input would fill one stack with conditions, and a single wrong value would expose a published cluster as a shared one. The extraction is checked like the building blocks were: identical plans before and after.
 2. **TLS: the organisation's ACME authority, as for the tenants** ([ADR-0008](../adr/0008-tenant-certificates.md)): cert-manager, already in the cluster, gets the certificates of the internal names through DNS-01; the consumers trust the authority's root, distributed by cloud-init (the tenant stacks render it already; it works without Internet access). Let's Encrypt is the same path when the names are under a public domain. Passthrough stays possible per route for services that manage their own TLS.
 3. **Names: a DNS zone of the internal names**, with the services' internal addresses. The stack outputs the records (`domains`); you write them with your DNS provider (RFC 2136 in the example). A zone served publicly exposes internal addresses, not access. Option documented: a resolver of the cluster (CoreDNS) exposed on the internal services plane, used by the consumers, for a zone that stays private.
 

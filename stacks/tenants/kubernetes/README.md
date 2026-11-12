@@ -1,6 +1,6 @@
 # Tenant type `kubernetes`
 
-A Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on the publication plane behind the entry point (`exposure = "entry-point"`, the default) or exposed with its own public floating IP (`exposure = "public"`), pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
+The published cluster, a Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on the publication plane behind the entry point (`exposure = "entry-point"`, the default) or exposed with its own public floating IP (`exposure = "public"`), pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
 
 | Created by | What |
 |---|---|
@@ -13,7 +13,7 @@ Every version is pinned in [`modules/kubernetes-cluster/cluster.tf`](../../../mo
 ```mermaid
 flowchart LR
     EP["entry point"] --> PUB[["publication plane"]]
-    subgraph CL["cluster · created by Cluster API"]
+    subgraph CL["published cluster · created by Cluster API"]
         IN["public ingress<br/>Traefik, Gateway API"] --> WK["workers"]
         API["API load balancer"] --> CP["control plane × 3"]
     end
@@ -127,7 +127,8 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 # 1. The bootstrap instance must exist (bootstrap = true) and be admitted on the API again:
 #    after the move, the cluster no longer admits it, and it cannot admit itself.
 #    A patch of the API sources only: manifests/cluster.yaml may describe an older version.
-kubectl --kubeconfig published.kubeconfig -n platform patch cluster <site>-published --type=json \
+#    The Cluster object is named by cluster.name ("published" by default).
+kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --type=json \
   -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$(tofu output -raw bootstrap)"'/32"}]'
 
 # 2. Delete the cluster from the bootstrap instance, then the stack.

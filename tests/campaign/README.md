@@ -22,8 +22,8 @@ Outputs, under `tests/campaign/work/<mode>` (git-ignored): `isolation-*.txt`, `h
 | `run.sh` | Arguments, configuration, the sequences, recording of each step |
 | `lib/helpers.sh` | Stack inputs and outputs, apply and destroy, access to the instances, clusters, checks |
 | `steps/1-foundation.sh` | Sequence `foundation`: planes, fixtures, entry point, `vm` and `isolated` tenants, publication |
-| `steps/2-shared-cluster.sh` | Sequence `shared`: the cluster for shared services, its acceptance, a consumer added, removal |
-| `steps/3-published-cluster.sh` | Sequence `published`: the Kubernetes tenant, acceptance, hostile route |
+| `steps/2-shared-cluster.sh` | Sequence `shared`: the shared cluster, its acceptance, a consumer added, removal |
+| `steps/3-published-cluster.sh` | Sequence `published`: the published cluster, acceptance, hostile route |
 | `steps/4-end.sh` | Sequence `end`: plans still empty, teardown |
 
 A step is a function `step_<name>`; `full` runs the four sequences in order. The inputs a stack receives from the others are written by `set_inputs` to its `mode.auto.tfvars.json`.

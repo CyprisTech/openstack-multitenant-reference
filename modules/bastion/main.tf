@@ -1,6 +1,6 @@
-# An administration bastion (ADR-0001, D10), written once for every stack. It creates nothing
-# itself: the outputs are fragments of the tenant model of terraform-openstack-tenant, empty
-# when bastion is null.
+# An administration bastion (ADR-0005, D5; a building block of D4), written once for every
+# stack. It creates nothing itself: the outputs are fragments of the tenant model of
+# terraform-openstack-tenant, empty when bastion is null.
 
 locals {
   enabled = var.bastion != null

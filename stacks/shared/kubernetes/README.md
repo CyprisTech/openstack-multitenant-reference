@@ -1,12 +1,12 @@
-# Kubernetes cluster for shared services
+# Shared cluster
 
-A Kubernetes cluster that offers services to the tenants ([spec](../../../docs/specs/kubernetes-shared-services.md)): the same cluster as the [Kubernetes tenant](../../tenants/kubernetes/README.md), built by [`modules/kubernetes-cluster`](../../../modules/kubernetes-cluster/README.md), in a project of shared services, attached with the role `shared` on the internal services plane.
+The shared cluster (a Kubernetes cluster for shared services) offers services to the tenants ([spec](../../../docs/specs/kubernetes-shared-services.md)): the same cluster as the [published cluster](../../tenants/kubernetes/README.md), built by [`modules/kubernetes-cluster`](../../../modules/kubernetes-cluster/README.md), in a project of shared services, attached with the role `shared` on the internal services plane.
 
 - **Not published:** it does not join the publication plane. A cluster for published applications is another cluster ([lateral movement](../../../docs/concepts/architecture.md#lateral-movement)).
 - **HTTP services** behind an **internal ingress**: its own Traefik deployment, Gateway (`traefik-internal-gateway`) and Service, one `HTTPRoute` per service, TLS for the names of `cluster.domains` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)).
 - **Layer 4 services**: a Service of type `LoadBalancer` per service, at an address the stack prepares.
 - **Closed by default, then admitted to its consumers only** (`consumers`): the `internal_sources` output of each consuming tenant, and the ranges of the users. Deploy the cluster first, then [add its consumers](#add-a-consumer). Network admission does not identify a user: authentication belongs to the service.
-- **Between services, the cluster's boundary**: one namespace per service, a default-deny network policy, ingress from the internal ingress or the service's own load balancer only.
+- **Between services, the cluster's boundary**: one namespace per service, a default-deny network policy, ingress from the internal ingress or the service's own load balancer only. The stack applies no network policy: they come with each service, applied by the operator, as in [`demo/`](demo). The Gateway admits routes from all namespaces.
 - Its Prometheus pushes to the receiver through the observability plane ([ADR-0007](../../../docs/adr/0007-monitoring.md)).
 
 The reference demonstrates two services, not operated ([`demo/`](demo)): `whoami` over HTTPS behind the internal ingress, and a TCP echo on port 7000. Real products are yours ([ADR-0003](../../../docs/adr/0003-scope-and-boundary.md), D4).
@@ -14,7 +14,7 @@ The reference demonstrates two services, not operated ([`demo/`](demo)): `whoami
 ```mermaid
 flowchart LR
     CT["consumers<br/>declared tenants"] --> INI[["internal services plane"]]
-    subgraph CL["cluster · created by Cluster API"]
+    subgraph CL["shared cluster · created by Cluster API"]
         IE["internal ingress<br/>Traefik, Gateway API"] --> WK["workers<br/>one namespace per service"]
         L4["layer 4 services"] --> WK
         API["API load balancer"] --> CP["control plane × 3"]

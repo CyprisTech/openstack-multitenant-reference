@@ -1,6 +1,6 @@
 # Boot check of the node image
 
-Starts one instance from the image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md), on the build network (apply `build-network/` first), with a floating IP on the administration network. The instance only gets an SSH key: nothing else is configured.
+Starts one instance from the image built by [images/kubernetes-node](../../../images/kubernetes-node/README.md), on the build network (apply [`images/kubernetes-node/build-network/`](../../../images/kubernetes-node/build-network) first), with a floating IP on the administration network. The instance only gets an SSH key: nothing else is configured.
 
 ```bash
 tofu init && tofu apply        # terraform.tfvars: cloud, site, az, flavor, image, admin_network, ssh_public_key

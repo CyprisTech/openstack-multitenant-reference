@@ -6,6 +6,34 @@ What the landing zone requires of a cluster's life ([ADR-0009](../adr/0009-kuber
 
 A Kubernetes version needs its node image. The service addresses and the address of the API do not change.
 
+**Clusters created before v0.4.0:** give the cloud controller manager the right to delete nodes, once, before the first upgrade. Otherwise the Node of a replaced machine may stay `NotReady`. The same manifest as `create-cluster.sh`:
+
+```bash
+kubectl apply -f - <<'RBAC'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloud-controller-manager-node-deletion
+rules:
+- apiGroups: [""]
+  resources: [nodes]
+  verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-controller-manager-node-deletion
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-controller-manager-node-deletion
+subjects:
+- kind: ServiceAccount
+  name: cloud-controller-manager
+  namespace: kube-system
+RBAC
+```
+
 1. Build the image of the new version ([images/kubernetes-node](../../images/kubernetes-node/README.md)) and make it available in the project of the cluster. One minor version at a time.
 2. Declare it in the cluster. The object name is the image name in lower case, with hyphens instead of dots:
 
@@ -17,7 +45,7 @@ A Kubernetes version needs its node image. The service addresses and the address
    kubectl -n platform wait image.openstack.k-orc.cloud "$object" --for=condition=Available --timeout=10m
    ```
 
-3. Change the version and the image. Cluster API replaces the control plane, then the workers, one machine at a time; the project needs room for one more of each:
+3. Change the version and the image of the `Cluster` object, named by `cluster.name` (`published` or `shared` by default). Cluster API replaces the control plane, then the workers, one machine at a time; the project needs room for one more of each:
 
    ```bash
    kubectl -n platform patch cluster <cluster> --type=json -p '[

@@ -13,7 +13,7 @@ The contract is [ADR-0007](../adr/0007-monitoring.md); the receiver is yours.
 | Plane | `observability` |
 | Direction | Push: the tenants connect to your receiver; nothing on the plane connects into a tenant |
 | Protocol | Prometheus remote write at `<receiver>/api/v1/write`; OTLP at `<receiver>/api/v1/otlp/v1/metrics` for workloads that use it |
-| In the tenants | The `vm` instances and the entry point run their exporters and a Prometheus agent ([`modules/metrics-agent`](../../modules/metrics-agent/README.md)); the Kubernetes tenant's Prometheus pushes with remote write; the `isolated` stand-in workload pushes OTLP |
+| In the tenants | The `vm` instances and the entry point run their exporters and a Prometheus agent ([`modules/metrics-agent`](../../modules/metrics-agent/README.md)); the published cluster's Prometheus pushes with remote write; the `isolated` stand-in workload pushes OTLP |
 | Identification | Labels `site`, `tenant` and `instance` on every series; with address translation, addresses do not identify the sources |
 | Configured by | The input `monitoring.receiver` of every stack: the receiver's base URL |
 | You provide | A receiver in a project of shared services, attached to `observability` with the role `shared`, admitting the plane (operator plane) or the tenant ranges routed to it (hub plane) on its port; the alerts on missing series |
@@ -53,7 +53,7 @@ The design is [ADR-0006](../adr/0006-exposure.md).
 | What reaches the tenant | The TLS stream untouched (SNI passthrough), preceded by a PROXY protocol v2 header with the client address |
 | Admitted | The service address accepts connections only from the entry point's addresses on the publication plane (output `publication_sources`, input `edge_sources` of the tenants) |
 | Tenant provides | A service address per domain (its load balancer, or its only instance), and backends that terminate TLS with certificates obtained by ACME DNS-01 on its own zone, and accept PROXY protocol v2 |
-| Instead | A tenant may expose its service address with its own public floating IP (`exposure = "public"` in the `vm` stack): the entry point is not used |
+| Instead | A tenant may expose its service address with its own floating IP of `egress_network` (`exposure = "public"` in the stacks `tenants/vm` and `tenants/kubernetes`): the entry point is not used and the tenant does not join the publication plane. The `vm` load balancer then sends the PROXY v2 header itself; the ingress of the published cluster receives none |
 | Checked by | The publication rows of the [isolation matrix](isolation-matrix.md) |
 
 ## Administration

@@ -6,7 +6,7 @@ site  = "site-a" # same site as the entry point
 az    = "nova"
 image = "ubuntu-24.04"
 
-flavor           = "m1.small-nodisk"
+flavor           = "m1.small"
 boot_volume_size = 8 # null with a flavor that has a local disk
 
 # Default route of the web network (package installation at first boot). The instances get no

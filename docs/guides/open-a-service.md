@@ -23,7 +23,7 @@ How a tested release reaches its users without being rebuilt, and how opening it
 
 ## An internal service
 
-On the [cluster for shared services](../../stacks/shared/kubernetes/README.md), a service is closed until its consumers are declared. Qualify it from the cluster or from a test consumer, then add the real consumers to `consumers` ([add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)): they are admitted within one to two minutes, the time for the load balancer to take the new sources. The stack writes the name of the service in the zone of the internal names when `internal_zone` is set; otherwise write it from the `domains` output.
+On the [shared cluster](../../stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), a service is closed until its consumers are declared. Qualify it from the cluster or from a test consumer, then add the real consumers to `consumers` ([add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)): they are admitted within one to two minutes, the time for the load balancer to take the new sources. The stack writes the name of the service in the zone of the internal names when `internal_zone` is set; otherwise write it from the `domains` output.
 
 ## In a pipeline
 

@@ -47,14 +47,14 @@ The whole scenario with [`tests/campaign`](../../tests/campaign/README.md), in b
   - After an upgrade, the Node of a replaced machine could stay `NotReady`: the cloud controller may now delete nodes.
   - `create-cluster.sh` applied the add-ons before the add-on webhook answered; it waits for it now.
 
-## Detailed results: Kubernetes cluster for shared services (2026-11-08)
+## Detailed results: the shared cluster (2026-11-08)
 
 `modules/kubernetes-cluster` extracted from the Kubernetes tenant, and `stacks/shared/kubernetes` ([spec](../specs/kubernetes-shared-services.md)), on operator planes (gateway), from empty projects.
 
-- **The Kubernetes tenant after the extraction:** every stack applied with an empty plan; the tenant's cluster created and moved into itself; the isolation rows of the tenant as expected.
-- **The cluster for shared services:** created and moved into itself (3 control-plane nodes, 2 workers). From the `web` tenant, its consumer: HTTPS to `services.example.org` through the internal ingress, certificate verified with the authority's root, 6/6 across both replicas; the TCP echo reached. The other tenants, the entry point, the receiver and the test runner do not reach its services; a pod of the cluster reaches no tenant instance, service address or bastion; a pod of another namespace reaches no backend (default-deny); the cluster's series reach the receiver.
+- **The Kubernetes tenant after the extraction:** every stack applied with an empty plan; the published cluster created and moved into itself; the isolation rows of the tenant as expected.
+- **The shared cluster:** created and moved into itself (3 control-plane nodes, 2 workers). From the `web` tenant, its consumer: HTTPS to `services.example.org` through the internal ingress, certificate verified with the authority's root, 6/6 across both replicas; the TCP echo reached. The other tenants, the entry point, the receiver and the test runner do not reach its services; a pod of the cluster reaches no tenant instance, service address or bastion; a pod of another namespace reaches no backend (default-deny); the cluster's series reach the receiver.
 - **Hub planes (interface):** checked offline only for this change: the rendered manifests and scripts of the tenant are identical before and after the extraction, apart from the expected changes (the Gateway named explicitly, the replicas spread by instance label); the same fixed address and internal load balancer.
-- **Findings:** `create-cluster.sh` validated the manifests in a namespace that did not exist yet in the workload cluster and stopped before `clusterctl move`; the network policies of the demonstrated services needed `matchLabels`; the certificate of an internal name was checked through the entry point. All three fixed. Two clusters at once exceed the capacity of the test cloud: the tenant cluster was removed after its rows passed, before the shared cluster's.
+- **Findings:** `create-cluster.sh` validated the manifests in a namespace that did not exist yet in the workload cluster and stopped before `clusterctl move`; the network policies of the demonstrated services needed `matchLabels`; the certificate of an internal name was checked through the entry point. All three fixed. Two clusters at once exceed the capacity of the test cloud: the published cluster was removed after its rows passed, before the shared cluster's.
 - Teardown: no leftover.
 
 ## Detailed results: plane keys by role, lateral movement (2026-11-06)

@@ -11,7 +11,7 @@ Shared services run in their own projects, attached to the planes with the role 
 
 ## Options considered
 
-1. **A `role` input on the tenant stack** — one stack full of conditions, and a single wrong value exposes a tenant cluster as a shared one.
+1. **A `role` input on the tenant stack** — one stack full of conditions, and a single wrong value exposes a published cluster as a shared one.
 2. **A separate stack on a common module** — the layout states the role; inputs, outputs and defaults differ. Chosen.
 
 ## Decision

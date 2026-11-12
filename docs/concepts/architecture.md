@@ -62,7 +62,7 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 |---|---|---|---|
 | entry point | public network | publication, observability | public floating IP of its load balancer |
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
-| `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a public floating IP of its own; API: floating IP of the administration network |
+| `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
 | `isolated` | observability | — | nothing |
 | bastions | administration network | — (second port on the tenant network) | floating IP of the administration network |
 
@@ -99,7 +99,7 @@ sequenceDiagram
 | Traefik → tenant service address | the entry point's address on the publication plane (output `publication_sources`) | the tenant load balancer's `allowed_cidrs` (`edge_sources`) |
 | Tenant load balancer → instances | amphora address, on the tenant network | security group of the instances; trusted as PROXY sender |
 
-On the Kubernetes tenant the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).
+On the published cluster the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).
 
 With `exposure = "public"`, a `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`); the shared entry point is not involved ([ADR-0006](../adr/0006-exposure.md), D2):
 
@@ -112,6 +112,8 @@ sequenceDiagram
     L->>B: PROXY v2 (client address) + TLS
     Note over B: reads PROXY v2 from the load balancer's addresses<br/>terminates TLS with its own certificate
 ```
+
+With `exposure = "public"` on [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md), the ingress of the published cluster gets a floating IP of `egress_network`, open to any source; the cluster does not join the publication plane. No PROXY protocol on this path: Traefik trusts no PROXY sender and the load balancer adds no header; `externalTrafficPolicy: Local` keeps the client address.
 
 The tenant then owns one public address and one load balancer for its domains alone. The shared entry point exists for the opposite case: many domains of many tenants behind one public address.
 
@@ -275,7 +277,7 @@ sequenceDiagram
     B->>W: CAAPH: cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus
     W->>OS: ingress load balancer at the address created by the stack
     B->>W: clusterctl move: the cluster manages itself
-    Note over TF,B: the bootstrap instance is destroyed
+    Note over TF,B: optional: bootstrap = false removes the bootstrap instance
 ```
 
 | Element | Setting |
@@ -284,7 +286,7 @@ sequenceDiagram
 | Control plane | 3 nodes behind the CAPO load balancer |
 | Workers | one machine deployment, anti-affinity |
 | Pod network | Cilium, VXLAN, MTU = network MTU − 50 |
-| Ingress | Traefik (Gateway API) behind a load balancer at the service address, PROXY v2 from the entry point |
+| Ingress | Traefik (Gateway API) behind a load balancer at the service address, PROXY v2 from the entry point; with `exposure = "public"`, a floating IP of `egress_network`, no PROXY protocol |
 | Metrics | in-cluster Prometheus, pushed to the receiver (remote write) |
 | API | floating IP on the administration network, administration sources only |
 | Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
@@ -359,7 +361,7 @@ What the test campaigns of 2026-11-09 and 10 ran, project by project, with the f
 | entry point | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 public |
 | `vm` tenant | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 on the publication plane with an operator plane with NAT, none otherwise |
 | `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB (defaults 30 and 40) | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with NAT |
-| cluster for shared services | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB | 3 (API, internal ingress, TCP service) | 1 administration (API), 2 on the internal services plane with NAT |
+| shared cluster | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB | 3 (API, internal ingress, TCP service) | 1 administration (API), 2 on the internal services plane with NAT |
 | bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 20 GiB | 0 | 1 administration |
 | `isolated` tenant | 1 | 2 | 2 GiB | 8 GiB | 0 | 0 |
 | shared services: receiver | 1 | 2 | 2 GiB | 8 GiB | 0 | 1 on the observability plane with NAT |

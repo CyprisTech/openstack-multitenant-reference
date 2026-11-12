@@ -40,7 +40,7 @@ tofu apply
 
 ## Why the tenant reaches the receiver only
 
-Its router is its only way out, and the only ranges routed through it are the observability plane's and the shared services routed on that plane: the receiver. Every flow is outbound; the security group of the instance admits SSH from its bastion only.
+Its router is its only way out, and the only ranges routed through it are the observability plane's and the shared services routed on that plane: the receiver. Every flow is outbound; the security group of the instance admits SSH from its bastion, and from the ranges of `admin.ssh_cidrs` (empty by default).
 
 ## Inputs and outputs
 

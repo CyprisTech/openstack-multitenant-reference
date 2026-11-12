@@ -1,6 +1,6 @@
 # ADR-0008: Certificates of the tenants
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented in v0.4.0)
 - **Date:** 2026-11-05
 - **Deciders:** maintainers
 - **Refines:** [ADR-0006](0006-exposure.md) D5 (certificates by ACME DNS-01, in the tenant): authorities, tools, DNS provider, topology of the `vm` tenant. Design details: [spec](../specs/tenant-certificates.md).

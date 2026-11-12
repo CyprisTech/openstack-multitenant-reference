@@ -4,7 +4,7 @@ site  = "site-a"
 az    = "nova"
 image = "ubuntu-24.04"
 
-flavor           = "m1.small-nodisk"
+flavor           = "m1.small"
 boot_volume_size = 10 # null with a flavor that has a local disk
 
 public_network = { network = "public", subnet = "public-subnet" }

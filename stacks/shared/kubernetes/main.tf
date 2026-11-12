@@ -1,9 +1,9 @@
-# Kubernetes cluster for shared services (spec: a Kubernetes cluster for shared services): the same
-# cluster as the Kubernetes tenant (modules/kubernetes-cluster), in a shared-services project,
-# attached with the role shared on the internal services plane. It offers services to the tenants
-# that consume them, through an internal ingress for HTTP and layer 4 Services, admitted to the
-# consumers only; it is not published on the publication plane. Its Prometheus pushes to the
-# receiver through the observability plane.
+# The shared cluster, a Kubernetes cluster for shared services (spec: a Kubernetes cluster for
+# shared services): the same cluster as the published cluster (modules/kubernetes-cluster), in a
+# shared-services project, attached with the role shared on the internal services plane. It
+# offers services to the tenants that consume them, through an internal ingress for HTTP and
+# layer 4 Services, admitted to the consumers only; it is not published on the publication plane.
+# Its Prometheus pushes to the receiver through the observability plane.
 
 locals {
   # Closed by default: an empty list of source ranges would admit every source.
