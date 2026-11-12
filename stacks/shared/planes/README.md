@@ -41,7 +41,7 @@ flowchart LR
 
 - **Operator plane, with NAT.** The stack adopts the operator's external network by name and creates nothing. An attached router joins with its gateway port: source NAT, floating IPs.
 - **Operator plane, routed** (`v0.6`, see above). Adopted the same way, without translation: the operator puts the tenants' ranges in the plane's address scope (subnet pools) and advertises them (BGP): tenants reach the plane at their real addresses.
-- **Hub plane.** The stack creates, in the hub project, a private network without DHCP, shares it with every attached project by RBAC (`access_as_shared`), and puts a **transit router** at its first address. An attached router joins with an interface port, with routes through the transit router.
+- **Hub plane.** The stack creates, in the hub project, a private network without DHCP, shares it with every attached project by RBAC (`access_as_shared`), and puts a **transit router** at its first address. An attached router joins with an interface port, with routes through the transit router. One attachment per project on a hub plane: the network is shared with a project, and its router is found by project. Another network with its own router is another tenant or shared service, so another project ([ADR-0003](../../../docs/adr/0003-scope-and-boundary.md): one project per tenant).
 
 Lines show attachments, not connections. Dashed boxes: the routers of the stacks that attach; grey: planes.
 
