@@ -49,7 +49,7 @@ module "cluster" {
   certificates     = var.certificates
 }
 
-resource "terraform_data" "checks" {
+resource "terraform_data" "exposure" {
   lifecycle {
     precondition {
       condition     = var.exposure != "entry-point" || length(var.edge_sources) > 0

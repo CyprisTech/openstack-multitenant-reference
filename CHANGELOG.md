@@ -9,7 +9,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Kubernetes: a root volume size of 0 boots the machines from the flavor's local disk.
-- Kubernetes: the cloud controller makes internal load balancers by default (`internal-lb`); a Service gets a floating IP only when its annotations name a network.
 - Kubernetes lifecycle ([guide](docs/guides/kubernetes-lifecycle.md)): upgrade with one node image per version, selected by a variable of the ClusterClass; rotation of the cluster's credential. Tested in the campaign.
 - `tests/campaign`: the test campaign as a script, with asciinema recordings of each step and a sanitiser for publishing them.
 - Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)): input `certificates` on the `vm` and `kubernetes` stacks — ACME DNS-01 from any directory (Let's Encrypt or the organisation's authority), lego on the instances (local module `acme-client`), cert-manager in the cluster, RFC 2136 with TSIG in the examples. Without it, demonstration mode (self-signed, with a warning). Guide [certificates](docs/guides/certificates.md).

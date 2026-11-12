@@ -52,7 +52,7 @@ The entry point is not a prerequisite: this cluster is not published.
 
 ## Load balancers of your own Services
 
-A Service of type `LoadBalancer` gets an internal load balancer, reachable from the cluster network only: the cloud controller runs with `internal-lb = true`. To give it a floating IP on a plane, annotate it with `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"`, and admit its sources, as the entries of the stack do.
+Annotate every Service of type `LoadBalancer`, as the entries of the stack do: `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"` for a load balancer reachable from the cluster network only; `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"` for a floating IP on a plane, with its sources admitted (`loadBalancerSourceRanges`). Without annotation, the cloud controller gives it a floating IP of an external network it picks by itself, which the cluster may not reach. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
 
 ## Usage
 

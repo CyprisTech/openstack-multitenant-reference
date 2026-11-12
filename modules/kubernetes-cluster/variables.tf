@@ -57,7 +57,7 @@ variable "network_mtu" {
 }
 
 variable "egress_network" {
-  description = "External network giving the default route (packages, container images). The cluster gets no public address on it."
+  description = "External network giving the default route (packages, container images). The cluster gets no public address on it, except the ingress with exposure = \"public\" (an entry with plane \"egress\")."
   type        = object({ network = string, subnet = string })
 }
 

@@ -91,6 +91,10 @@ resource "openstack_networking_floatingip_v2" "entry" {
 
   pool        = local.entry_network[each.key].name
   description = "${local.prefix} ${each.key}"
+
+  # Destroyed before the router interfaces: Neutron does not remove an interface while a
+  # floating IP uses it (the cloud controller associates this one to the entry's VIP).
+  depends_on = [module.tenant]
 }
 
 # An entry on a plane without NAT needs its host number, kept out of the allocation pool.
@@ -146,18 +150,55 @@ module "tenant" {
       }
     }
 
-    security_groups = {
-      (local.instance) = {
-        description = "Bootstrap instance: SSH from the administration sources"
-        rules       = module.admission.rules
-      }
-    }
-
     # Read by the machine templates (ADR-0002, D2). Soft anti-affinity: the cluster still
     # starts when the cloud has fewer hosts than machines.
     server_groups = {
       "${local.prefix}-control-plane" = { policy = "soft-anti-affinity" }
       "${local.prefix}-workers"       = { policy = "soft-anti-affinity" }
+    }
+  }
+}
+
+# The cluster network as the bootstrap call adopts it, once the network call is complete (its
+# routers carry the bootstrap's floating IP). A managed resource rather than depends_on on the
+# call: depends_on would defer the lookups of the bootstrap call at every change of the network,
+# and replace the instance. Its output stays known once created.
+resource "terraform_data" "cluster_network" {
+  input = module.tenant.networks[local.network].id
+
+  depends_on = [module.tenant]
+}
+
+# The bootstrap instance, in its own call: its user data carries the manifests, hence the
+# addresses of the entries. In the call that creates the network, every router interface would
+# depend on these addresses, and a change of an entry's plane would remove the interface before
+# the floating IP that uses it, which Neutron refuses.
+module "bootstrap" {
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+
+  tenant = {
+    existing = {
+      networks = merge({
+        # Only the id comes from the relay: the shape stays known at plan (the module keys its
+        # lookups on it).
+        (local.network) = { id = terraform_data.cluster_network.output, subnets = { main = { name = local.subnet } } }
+        },
+        # The network of the bootstrap instance's floating IP: the internal services plane, or
+        # the administration network.
+        # By name too: the floating IP pool is the network's name, read by a lookup that waits.
+        { for k in(local.admin_on_internal ? ["internal"] : []) : k => { name = module.planes.network_name.internal } },
+        {
+          for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
+            name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
+          }
+      })
+    }
+
+    security_groups = {
+      (local.instance) = {
+        description = "Bootstrap instance: SSH from the administration sources"
+        rules       = module.admission.rules
+      }
     }
 
     instances = {
@@ -179,6 +220,7 @@ module "tenant" {
       }
     }
   }
+
 }
 
 moved {

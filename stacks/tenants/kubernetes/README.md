@@ -55,7 +55,7 @@ Arrows show who opens the connection. The cluster is published through the entry
 
 ## Load balancers of your own Services
 
-A Service of type `LoadBalancer` gets an internal load balancer, reachable from the cluster network only: the cloud controller runs with `internal-lb = true`. To give it a floating IP on a plane, annotate it with `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"`, and admit its sources, as the entries of the stack do.
+Annotate every Service of type `LoadBalancer`, as the entries of the stack do: `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"` for a load balancer reachable from the cluster network only; `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"` for a floating IP on a plane, with its sources admitted (`loadBalancerSourceRanges`). Without annotation, the cloud controller gives it a floating IP of an external network it picks by itself, which the cluster may not reach. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
 
 ## Usage
 
@@ -165,7 +165,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 
 | Name | Type |
 | ---- | ---- |
-| [terraform_data.checks](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [terraform_data.exposure](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 
 ### Inputs
 
@@ -175,7 +175,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | az | Availability zone of the bootstrap instance and of the cluster machines. | `string` | n/a | yes |
 | cloud | Entry of clouds.yaml used by this stack (the published project). | `string` | n/a | yes |
 | cluster | The Kubernetes cluster created by Cluster API.<br/>- node\_image: name of the image built by images/kubernetes-node.<br/>- kubernetes\_version: must match the node image.<br/>- control\_plane\_count: 3 for a highly available control plane.<br/>- control\_plane\_root\_volume\_size, worker\_root\_volume\_size: GiB of the root volume of each<br/>  machine (container images, ephemeral storage, logs, and etcd on the control plane). They<br/>  must not be smaller than the virtual size of the node image. 0 boots from the flavor's<br/>  local disk instead: faster to create, lost with the machine, no live migration without<br/>  shared storage; the flavor's disk must then be large enough.<br/>- domains: domains served by the ingress and published through the entry point.<br/>- pod\_cidr, service\_cidr: must not overlap the cluster network nor the planes. | <pre>object({<br/>    name                           = optional(string, "published")<br/>    node_image                     = string<br/>    kubernetes_version             = optional(string, "v1.36.5")<br/>    control_plane_flavor           = string<br/>    worker_flavor                  = string<br/>    control_plane_count            = optional(number, 3)<br/>    worker_count                   = optional(number, 2)<br/>    control_plane_root_volume_size = optional(number, 30)<br/>    worker_root_volume_size        = optional(number, 40)<br/>    domains                        = optional(list(string), ["apps.example.org"])<br/>    pod_cidr                       = optional(string, "10.244.0.0/16")<br/>    service_cidr                   = optional(string, "10.96.0.0/12")<br/>  })</pre> | n/a | yes |
-| egress\_network | External network giving the default route (packages, container images). The cluster gets no public address on it. | `object({ network = string, subnet = string })` | n/a | yes |
+| egress\_network | External network giving the default route (packages, container images). The cluster gets no public address on it, except the ingress with exposure = "public" (an entry with plane "egress"). | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | Flavor name of the bootstrap instance (kind runs there: 2 vCPU and 4 GiB at least). | `string` | n/a | yes |
 | image | Image name of the bootstrap instance (an Ubuntu LTS cloud image). | `string` | n/a | yes |
 | plane\_attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes),<br/>keyed by plane: how its router joins each plane and how its instances are seen there,<br/>whatever provides the plane (the operator, or a hub project). observability is required,<br/>publication with exposure = "entry-point"; the cluster joins internal when it is present. | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |

@@ -1,6 +1,6 @@
 output "bootstrap" {
   description = "Floating IP of the bootstrap instance on the administration network, or null once it is removed."
-  value       = var.bootstrap ? module.tenant.instances[local.instance].ports["main"].floating_ip : null
+  value       = var.bootstrap ? module.bootstrap.instances[local.instance].ports["main"].floating_ip : null
 }
 
 output "sources" {

@@ -59,7 +59,7 @@ ca_args=()
 [[ -f cacert.pem ]] && ca_args=(--from-file=cacert=cacert.pem)
 kubectl -n platform create secret generic ${prefix}-cloud-config --from-file=clouds.yaml "$${ca_args[@]}" \
   --dry-run=client -o yaml | kubectl label --local -f - clusterctl.cluster.x-k8s.io/move= -o yaml | kubectl apply -f -
-wait_webhooks -f manifests/cluster-class.yaml
+wait_webhooks -f manifests/cluster-class.yaml -f manifests/addons.yaml
 kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
 source=$(bootstrap_source)
 sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
@@ -86,14 +86,39 @@ if os.path.exists("/opt/platform/cacert.pem"):
     print("ca-file=/etc/config/ca.crt")
 print("[LoadBalancer]")
 print("create-monitor=true")
-# Closed by default: a Service of type LoadBalancer gets no floating IP unless its annotations
-# name a network (as the entries of this module do). Without it, the cloud controller would pick
-# an external network by itself, which the cluster may not reach.
-print("internal-lb=true")
+# No internal-lb = true: with it, the cloud controller ignores the annotation
+# openstack-internal-load-balancer: "false" and puts the requested floating IP (loadBalancerIP)
+# in the cluster network as the VIP address. Every Service of type LoadBalancer says what it
+# wants with its annotations instead, as the entries of this module do.
 EOF
 )
 kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-config \
   --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+# The chart of the cloud controller does not let it delete nodes: the Node of a machine whose
+# server is gone (Cluster API gives up deleting it after nodeDeletionTimeout) would stay, NotReady.
+kubectl --kubeconfig "$workload" apply -f - <<'RBAC'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloud-controller-manager-node-deletion
+rules:
+- apiGroups: [""]
+  resources: [nodes]
+  verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-controller-manager-node-deletion
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-controller-manager-node-deletion
+subjects:
+- kind: ServiceAccount
+  name: cloud-controller-manager
+  namespace: kube-system
+RBAC
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 %{ for name, i in ingresses ~}
 kubectl --kubeconfig "$workload" create namespace ${i.namespace} --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
@@ -125,7 +150,7 @@ kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || cl
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
 # The manifests are validated in the namespace they are moved to.
 kubectl --kubeconfig "$workload" create namespace platform --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
-wait_webhooks --kubeconfig "$workload" -f manifests/cluster-class.yaml
+wait_webhooks --kubeconfig "$workload" -f manifests/cluster-class.yaml -f manifests/addons.yaml
 clusterctl move -n platform --to-kubeconfig "$workload"
 # clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
 python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
