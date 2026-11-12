@@ -52,7 +52,8 @@ variable "planes" {
 variable "attachments" {
   description = <<-EOT
     Projects joining the planes, keyed by name.
-    - project_id: project of the attachment (the target of the RBAC policies).
+    - project_id: project of the attachment (the target of the RBAC policies). On a hub plane,
+      one attachment per project.
     - cidr: range of the attachment's network. Must not overlap a plane, nor another
       attachment of the same hub plane.
     - planes: the planes it joins, each with its role on that plane:
@@ -81,6 +82,16 @@ variable "attachments" {
   validation {
     condition     = alltrue(flatten([for a in values(var.attachments) : [for p in keys(a.planes) : contains(keys(var.planes), p)]]))
     error_message = "Each plane of an attachment must be a key of planes."
+  }
+
+  # On a hub plane, an attachment is found by its project (RBAC policy, router discovery): one
+  # attachment per project and plane.
+  validation {
+    condition = alltrue([
+      for pk, p in var.planes : length(distinct([for a in values(var.attachments) : a.project_id if contains(keys(a.planes), pk)])) == length([for a in values(var.attachments) : a if contains(keys(a.planes), pk)])
+      if p.mode == "interface"
+    ])
+    error_message = "On a hub plane (mode \"interface\"), two attachments cannot share a project: give each one its own project."
   }
 }
 
