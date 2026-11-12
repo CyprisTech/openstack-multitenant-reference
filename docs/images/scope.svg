@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 880" width="1600" height="880" font-family="Inter,'Segoe UI',Helvetica,Arial,'DejaVu Sans',sans-serif">
+<title>openstack-multitenant-reference: scope</title>
+<desc>Source of scope.png, shown in docs/concepts/audiences.md. After editing this file, render the PNG at twice the size with a headless Chrome or Chromium, from this directory:
+chromium --headless --hide-scrollbars --force-device-scale-factor=2 --window-size=1600,880 --screenshot=scope.png scope.svg
+Keep --window-size equal to the width and height of the svg element.</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker></defs>
+<rect width="1600" height="880" fill="#ffffff"/>
+<text x="60" y="46" font-size="22" fill="#111827" font-weight="bold" text-anchor="start">openstack-multitenant-reference: what it owns, and what connects to it</text>
+<text x="60" y="72" font-size="14" fill="#4b5563" font-weight="normal" text-anchor="start">The reference owns level 2. Everything around it stays yours or your provider’s, and connects at a stated place.</text>
+<rect x="340" y="100" width="920" height="92" rx="12" fill="#f9fafb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="358" y="128" font-size="16" fill="#374151" font-weight="bold" text-anchor="start">4. Workloads</text>
+<text x="1244" y="128" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="end" font-style="italic">each tenant</text>
+<text x="358" y="150" font-size="13" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">What do the tenants run? Applications, their data and deployments</text>
+<rect x="340" y="232" width="920" height="96" rx="12" fill="#f9fafb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="358" y="260" font-size="16" fill="#374151" font-weight="bold" text-anchor="start">3. Platform services</text>
+<text x="1244" y="260" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="end" font-style="italic">your platform or operations team, your tools</text>
+<text x="358" y="282" font-size="13" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">Which shared services run on it? Metrics, logs, audit, security tooling, backup, secrets, GitOps</text>
+<rect x="340" y="380" width="920" height="250" rx="12" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.5"/>
+<text x="358" y="408" font-size="16" fill="#1e3a8a" font-weight="bold" text-anchor="start">2. Multi-tenant architecture · this repository</text>
+<text x="1244" y="408" font-size="12.5" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">the platform architect</text>
+<text x="358" y="430" font-size="13" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">How are the projects organised, connected, exposed and kept available?</text>
+<rect x="340" y="670" width="920" height="84" rx="12" fill="#f9fafb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="358" y="698" font-size="16" fill="#374151" font-weight="bold" text-anchor="start">1. Cloud foundation</text>
+<text x="1244" y="698" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="end" font-style="italic">the cloud operator or provider · cloud-baseline</text>
+<text x="358" y="720" font-size="13" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">What do the projects get from the cloud? Projects, quotas, roles, flavors, images, external networks, identity</text>
+<rect x="358" y="452" width="300" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="508.0" y="472" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">one project per tenant or shared service</text>
+<rect x="670" y="452" width="210" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="775.0" y="472" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">planes and transit routers</text>
+<rect x="892" y="452" width="230" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="1007.0" y="472" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">entry point, SNI passthrough</text>
+<rect x="358" y="496" width="300" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="508.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">tenant types: vm · isolated · kubernetes</text>
+<rect x="670" y="496" width="150" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="745.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">shared cluster</text>
+<rect x="832" y="496" width="220" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="942.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">certificates (ACME DNS-01)</text>
+<rect x="1064" y="496" width="160" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="1144.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">isolation, tested</text>
+<rect x="358" y="540" width="300" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
+<text x="508.0" y="560" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">availability, recovery of the architecture</text>
+<text x="358" y="602" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="start" font-style="italic">Kubernetes lifecycle the architecture requires · network services (egress, DNS, time, mirrors) · access and administration</text>
+<line x1="420" y1="378" x2="420" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="426" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">metrics</text>
+<line x1="510" y1="378" x2="510" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="516" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">logs</text>
+<line x1="590" y1="378" x2="590" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="596" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">audit</text>
+<line x1="670" y1="378" x2="670" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="676" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">backups</text>
+<line x1="770" y1="378" x2="770" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="776" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">secrets</text>
+<line x1="860" y1="378" x2="860" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
+<text x="866" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">GitOps</text>
+<text x="950" y="360" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="start" font-style="italic">integration points: where it lives, which flows, who is admitted</text>
+<line x1="800" y1="230" x2="800" y2="194" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<text x="812" y="216" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" font-style="italic">runs in the tenant projects, joins the planes as a tenant</text>
+<line x1="800" y1="668" x2="800" y2="632" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<text x="812" y="654" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" font-style="italic">projects, quotas, external networks, images given to the architecture</text>
+<rect x="40" y="388" width="250" height="96" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="52" y="412" font-size="14" fill="#374151" font-weight="bold" text-anchor="start">On-premises networks</text>
+<text x="52" y="434" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start">VPN, dedicated links</text>
+<text x="52" y="452" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">→ a plane, or a VPN gateway</text>
+<line x1="290" y1="436" x2="340" y2="436" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<rect x="40" y="506" width="250" height="96" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="52" y="530" font-size="14" fill="#374151" font-weight="bold" text-anchor="start">Central inspection firewall</text>
+<text x="52" y="552" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start">between the tenants</text>
+<text x="52" y="570" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">→ in the path, by routing</text>
+<line x1="290" y1="554" x2="340" y2="554" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<rect x="1310" y="388" width="250" height="96" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1322" y="412" font-size="14" fill="#374151" font-weight="bold" text-anchor="start">WAF, DDoS protection</text>
+<text x="1322" y="434" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start">upstream of the entry point</text>
+<text x="1322" y="452" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">→ in front of the entry point</text>
+<line x1="1310" y1="436" x2="1260" y2="436" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<rect x="1310" y="506" width="250" height="96" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1322" y="530" font-size="14" fill="#374151" font-weight="bold" text-anchor="start">Other clouds, other regions</text>
+<text x="1322" y="552" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start">each with its landing zone</text>
+<text x="1322" y="570" font-size="12" fill="#4b5563" font-weight="normal" text-anchor="start" font-style="italic">→ an overlay between hubs (v0.8)</text>
+<line x1="1310" y1="554" x2="1260" y2="554" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<rect x="340" y="790" width="30" height="18" rx="5" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
+<text x="380" y="804" font-size="13" fill="#374151" font-weight="normal" text-anchor="start">this repository</text>
+<rect x="540" y="790" width="30" height="18" rx="5" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="5 4"/>
+<text x="580" y="804" font-size="13" fill="#374151" font-weight="normal" text-anchor="start">outside it, compatible: owner and where it connects</text>
+<text x="60" y="850" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" font-style="italic">Levels from ADR-0003 (D4): a need is placed by who owns the decision. A single application in one project: terraform-openstack-tenant and its examples.</text>
+</svg>

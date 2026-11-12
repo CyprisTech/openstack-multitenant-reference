@@ -38,6 +38,7 @@ OpenStack provides the building blocks — projects, Neutron networks and router
 | Operator plane | A plane provided by the cloud operator as an external network |
 | Hub plane, hub project | A plane you build yourself, with a member role, as a network of a hub project shared with the other projects; the hub project holds the planes and a transit router, and runs nothing |
 | Service address | The address through which a tenant exposes a service; the domains it serves are published to it |
+| Ingress | A cluster's entry for HTTP traffic: Traefik as a Gateway API controller, behind a load balancer at an address prepared by the stack. Applications attach `HTTPRoute`s to its `Gateway`; the Kubernetes `Ingress` object is not used |
 | Integration point | Where a platform service of your choice (metrics, logs, backups…) plugs in: plane, flows, admission, what each stack configures |
 | Region | A set of OpenStack services with its own endpoints. A project is not tied to a region; its resources and the planes are. Each region has its own planes, hub and entry point; an encrypted overlay joins the hubs of several regions |
 | Site | The name of a region in a deployment, an input of every stack and part of every name |
@@ -115,11 +116,11 @@ Every stack describes its project with the [terraform-openstack-tenant](https://
 
 ## Scope
 
-| In the reference | Integration points (your tools) | Out of scope |
-|---|---|---|
-| Resource organisation, planes in one or several regions, network services, isolation and its test, exposure and certificates, administration paths, resilience and recovery of the architecture, VM and Kubernetes tenants and the lifecycle the landing zone requires of them | Metrics, logs, audit, backups of tenant data, secrets, a GitOps pipeline | The cloud's foundation (projects, quotas, identity federation, cost), the operation of the cloud itself, the workloads, projects administered by several organisations |
+The reference owns how the projects are organised, connected, exposed and kept available. The cloud foundation below, the platform services and the workloads above, and what joins from outside connect to it at a stated place ([ADR-0003](docs/adr/0003-scope-and-boundary.md)).
 
-Who it is for, profile by profile: [who it is for](docs/concepts/audiences.md). For a single project, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly.
+![What the reference owns (level 2, multi-tenant architecture) and what connects to it: the cloud foundation below, platform services and workloads above through integration points, on-premises networks, an inspection firewall, a WAF and other clouds or regions on the sides](docs/images/scope.png)
+
+For each need outside it, where it connects: [who it is for](docs/concepts/audiences.md#outside-the-reference-compatible-with-it). For a single project, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly.
 
 ## Getting started
 
