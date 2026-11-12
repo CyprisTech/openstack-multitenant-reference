@@ -1,6 +1,6 @@
 # Spec: a Kubernetes cluster for shared services
 
-- **Status:** In progress, in [`stacks/shared/kubernetes`](../../stacks/shared/kubernetes/README.md) and [`modules/kubernetes-cluster`](../../modules/kubernetes-cluster/README.md) — its release is given in the README's [status](../../README.md#status)
+- **Status:** Implemented in v0.4, in [`stacks/shared/kubernetes`](../../stacks/shared/kubernetes/README.md) and [`modules/kubernetes-cluster`](../../modules/kubernetes-cluster/README.md) — its release is given in the README's [status](../../README.md#status)
 - **Related:** [ADR-0002](../adr/0002-platform-kubernetes.md) (Kubernetes tenant), [ADR-0006](../adr/0006-exposure.md) (exposure), [ADR-0008](../adr/0008-tenant-certificates.md) (certificates), [ADR-0007](../adr/0007-monitoring.md) (monitoring by push), [ADR-0003](../adr/0003-scope-and-boundary.md) (projects), [ADR-0004](../adr/0004-planes-and-isolation.md) (planes, roles per plane), [integration points](../reference/integration-points.md)
 
 ## Problem

@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-12
+
 ### Added
 
+- `kubernetes`: input `exposure` (`"entry-point"` or `"public"`), as for `vm`: exposed directly, the cluster's ingress gets a floating IP of the egress network and the cluster does not join the publication plane; output `service_address`. Module `kubernetes-cluster`: an entry with `plane = "egress"`.
+- Kubernetes: the cloud controller may delete nodes, so that the Node of a replaced machine goes away after an upgrade.
 - Kubernetes: a root volume size of 0 boots the machines from the flavor's local disk.
 - Kubernetes lifecycle ([guide](docs/guides/kubernetes-lifecycle.md)): upgrade with one node image per version, selected by a variable of the ClusterClass; rotation of the cluster's credential. Tested in the campaign.
 - `tests/campaign`: the test campaign as a script, with asciinema recordings of each step and a sanitiser for publishing them.
@@ -23,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Module `kubernetes-cluster`: the bootstrap instance and its security group in their own call of `terraform-openstack-tenant`, so that a change of exposure no longer blocks on the router interfaces nor replaces the bootstrap instance. Existing clusters: with `bootstrap = true`, the bootstrap instance is replaced once (copy the cluster credential to it again); the node deletion right is applied by `create-cluster.sh`, apply it by hand to a cluster created before (see `modules/kubernetes-cluster/scripts/create-cluster.sh.tftpl`).
 - `tenants/vm` exposed directly (`exposure = "public"`) no longer joins the publication plane: its attachment needs no publication, and the entry point cannot reach it.
 - Every stack uses `terraform-openstack-tenant` `v0.1.5`: replacing a router no longer leaves its interface on a deleted port.
 - Plane keys named by role: `svc_public` → `publication`, `monitoring` → `observability`, `intranet` → `internal`, in `shared/planes`, the stacks and the fixtures. Outputs `publication_sources` (entry point, was `svc_public_sources`) and `internal_sources` (`vm`, `kubernetes`, was `intranet_sources`); test fixture `tests/fixtures/internal-service` (was `intranet-service`), `check.py --internal-service`. The scenario's network names remain only as the names of the operator networks in the examples. Existing deployments: re-key the planes and the attachments in the `terraform.tfvars` of `shared/planes`, then give each stack its new `plane_attachment`; the routers of the planes are recreated (no `moved` blocks before `v1.0.0`).
@@ -152,7 +157,8 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 
-[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.1.0...v0.2.0

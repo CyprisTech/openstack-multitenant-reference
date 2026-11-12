@@ -6,20 +6,22 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Tests of 2026-11-05 to 2026-11-07, from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md).
+Campaigns of 2026-11-10 to 2026-11-12, run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md).
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
-| Deployment | 8 stacks (with the test ACME authority); empty plan after apply | ✅ | ✅ |
-| Isolation | executable matrix: tenants, shared services and their reach, administrators, certificates, DNS keys (46 rows) | ✅ 46/46 | ✅ 46/46 |
+| Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration | ✅ | ✅ |
+| Isolation, shared cluster | executable matrix with the shared cluster (44 rows) | ✅ 44/44 | ✅ 44/44 |
+| Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed on 443, 22, 9100 |
-| Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root (3 domains × 12) | ✅ 36/36 | ✅ 36/36 |
-| Certificates | ACME DNS-01 from an internal authority: lego on the `vm` instances, cert-manager in the cluster; a tenant's DNS key changes its own names only | ✅ | ✅ |
-| Observability | push from every tenant type (Prometheus agent, OTLP, remote write); nothing connects in | ✅ | ✅ |
-| Kubernetes | self-managed cluster with Cluster API, management moved into the cluster | ✅ | ✅ |
+| Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
+| Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 83 / 0 | ✅ 73 / 0 |
+| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ | ✅ |
+| Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 341 / 8 | ✅ 402 / 6 |
+| Exposure change | the published cluster switched to its own public address and back: the entry point no longer reaches it, then the domain is published again | ✅ | ✅ |
 | Teardown | no leftover in any project | ✅ | ✅ |
-
-Publishing a domain under load, measured once (2026-11-02): nothing is replaced, the domain answers 13 s after a 19 s apply, and none of the 290 requests sent meanwhile to another domain fails.
 
 **Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
 
@@ -29,11 +31,21 @@ Known limits, detailed in the findings below and in the [test procedure](../refe
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
 - An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
 
-The isolation matrix of the earlier designs had 45 rows; the counts are not comparable.
+The isolation matrix of the earlier designs had 45 and 46 rows; the counts are not comparable.
 
 ## Environment
 
-Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.4 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.5 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: campaigns of 2026-11-10 to 2026-11-12
+
+The whole scenario with [`tests/campaign`](../../tests/campaign/README.md), in both plane modes: foundation, shared cluster (consumer, rotation, upgrade), published cluster (acceptance, exposure change), hostile route, plans, teardown.
+
+- **Defects found and fixed:**
+  - The cloud controller ran with `internal-lb = true`: it then ignores the annotation `openstack-internal-load-balancer: "false"` and uses the requested floating IP as the VIP address in the cluster network. Removed; every entry states its choice with its annotations.
+  - Changing the exposure of the published cluster blocked: every router interface of the cluster depended on the entry's floating IP, through the bootstrap's user data, so the publication interface was removed before the floating IP that uses it. The bootstrap instance now has its own call of the tenant module; the change touches only the entry's floating IP and the publication router, the bootstrap instance is kept.
+  - After an upgrade, the Node of a replaced machine could stay `NotReady`: the cloud controller may now delete nodes.
+  - `create-cluster.sh` applied the add-ons before the add-on webhook answered; it waits for it now.
 
 ## Detailed results: Kubernetes cluster for shared services (2026-11-08)
 

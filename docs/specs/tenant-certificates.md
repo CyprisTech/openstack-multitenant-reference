@@ -1,6 +1,6 @@
 # Spec: certificates of the tenants
 
-- **Status:** In progress — decisions in [ADR-0008](../adr/0008-tenant-certificates.md); its release is given in the README's [status](../../README.md#status)
+- **Status:** Implemented in v0.4 — decisions in [ADR-0008](../adr/0008-tenant-certificates.md); its release is given in the README's [status](../../README.md#status)
 - **Related:** [ADR-0006](../adr/0006-exposure.md) (exposure, TLS ends in the tenant), [ADR-0004](../adr/0004-planes-and-isolation.md) (planes), [spec: a Kubernetes cluster for shared services](kubernetes-shared-services.md) (internal certificate authority)
 
 ## Problem
