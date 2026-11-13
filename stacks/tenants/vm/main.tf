@@ -15,6 +15,12 @@ locals {
   # Boot disk of the instances: the image's ephemeral disk, or a volume of the given size.
   boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
 
+  # Availability zones (ADR-0012): the instances of a role are spread over the zones in order,
+  # the single ones (bastion) go to the first. A root volume takes the storage zone mapped to
+  # the instance's zone, or the cloud's default.
+  zone_of = { for i, name in local.instances : name => var.zones[i % length(var.zones)] }
+  boot_in = { for z in var.zones : z => merge(local.boot, { az = local.boot.source == "volume" ? lookup(var.volume_zones, z, null) : null }) }
+
   # One service address (ADR-0006, D1): a load balancer in front of several instances.
   load_balancer = var.instance_count > 1
   public        = var.exposure == "public"
@@ -83,10 +89,10 @@ module "bastion" {
   port          = "web"
   users         = var.admin.users
   instance = {
-    az     = var.az
+    az     = var.zones[0]
     image  = var.image
     flavor = var.flavor
-    boot   = local.boot
+    boot   = local.boot_in[var.zones[0]]
   }
   mtu             = var.network_mtu
   dns_nameservers = var.dns_nameservers
@@ -226,10 +232,10 @@ module "web" {
 
     instances = merge({
       for name in local.instances : name => {
-        az           = var.az
+        az           = local.zone_of[name]
         flavor       = var.flavor
         image        = var.image
-        boot         = local.boot
+        boot         = local.boot_in[local.zone_of[name]]
         server_group = local.prefix
         user_data    = module.cloudinit[name].rendered
         labels       = ["web"]

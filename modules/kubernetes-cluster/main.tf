@@ -203,10 +203,10 @@ module "bootstrap" {
 
     instances = {
       for name in(var.bootstrap ? [local.instance] : []) : name => {
-        az        = var.az
+        az        = var.zones[0]
         flavor    = var.flavor
         image     = var.image
-        boot      = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+        boot      = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size, az = lookup(var.volume_zones, var.zones[0], null) }
         user_data = module.cloudinit[0].rendered
         labels    = ["bootstrap"]
         ports = {

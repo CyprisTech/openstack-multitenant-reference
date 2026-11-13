@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
 cloud = "example-site-a-shared"
 site  = "site-a"
-az    = "nova"
+zones = ["nova"]
 image = "ubuntu-24.04"
 
 flavor           = "m1.medium" # bootstrap instance: kind runs there

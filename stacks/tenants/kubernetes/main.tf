@@ -32,7 +32,8 @@ module "cluster" {
   reserved_hosts = var.service_addresses.reserved_hosts
 
   site             = var.site
-  az               = var.az
+  zones            = var.zones
+  volume_zones     = var.volume_zones
   image            = var.image
   flavor           = var.flavor
   boot_volume_size = var.boot_volume_size

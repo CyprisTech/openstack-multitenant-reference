@@ -136,7 +136,9 @@ spec:
         filter:
           name: ${admin_network}
       controlPlaneAvailabilityZones:
-      - ${az}
+%{ for z in zones ~}
+      - ${z}
+%{ endfor ~}
       apiServer:
         enableFloatingIP: true
         managedLoadBalancer:
@@ -226,8 +228,7 @@ spec:
       rootVolume:
         sizeGiB: ${m.size}
         availabilityZone:
-          from: Name
-          name: ${az}
+          from: Machine
 %{ endif ~}
       serverGroup:
         filter:

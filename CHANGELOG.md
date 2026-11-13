@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Availability zones ([ADR-0012](docs/adr/0012-resilience-scope.md)): input `zones` (a list, at least one) on the `vm`, `isolated`, `entry-point`, `kubernetes` and shared `kubernetes` stacks. The instances of a role are spread over the zones in order, the single ones (bastion, isolated workload, bootstrap instance) go to the first. Kubernetes: the control plane is spread by Cluster API, the workers get one machine deployment per zone; a warning when the quorum of the control plane does not survive the loss of a zone.
+- Input `volume_zones`: the block storage zone of the root volumes for each compute zone; a compute zone missing from the map gets the cloud's default storage zone. The root volumes of the Kubernetes machines take the zone of their machine.
+- Tests with a mocked OpenStack provider (`tofu test`), run by CI: placement over zones in each stack, quorum warning of the Kubernetes module.
+
+### Changed
+
+- **Breaking:** input `az` (a string) replaced by `zones` (a list). Migration: `az = "nova"` becomes `zones = ["nova"]`; with one zone, the VM stacks plan no change. The Kubernetes templates get a new revision: Cluster API replaces the machines once, one by one, at the next apply, as for a template change.
+
 ## [0.4.0] - 2026-11-12
 
 ### Added

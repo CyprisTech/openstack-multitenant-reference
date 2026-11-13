@@ -13,9 +13,20 @@ variable "site" {
   }
 }
 
-variable "az" {
-  description = "Availability zone of the instances."
-  type        = string
+variable "zones" {
+  description = "Availability zones of the instances, at least one. The instances of a role are spread over them in order (the first instance in the first zone); changing the order moves instances. One zone places everything in it."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.zones) > 0 && length(distinct(var.zones)) == length(var.zones)
+    error_message = "zones must list at least one zone, without duplicates."
+  }
+}
+
+variable "volume_zones" {
+  description = "Block storage zone of the root volumes (boot_volume_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone."
+  type        = map(string)
+  default     = {}
 }
 
 variable "image" {

@@ -30,7 +30,11 @@ spec:
       replicas: ${cluster.control_plane_count}
     workers:
       machineDeployments:
+%{ for i, z in zones ~}
+%{ if workers_per_zone[z] > 0 ~}
       - class: default-worker
-        name: md-0
-        failureDomain: ${az}
-        replicas: ${cluster.worker_count}
+        name: md-${i}
+        failureDomain: ${z}
+        replicas: ${workers_per_zone[z]}
+%{ endif ~}
+%{ endfor ~}

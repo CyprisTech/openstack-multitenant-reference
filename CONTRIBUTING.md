@@ -48,6 +48,7 @@ Run the same checks as CI before pushing. They need no cloud and no credentials:
 tofu fmt -check -recursive                     # or: terraform fmt -check -recursive
 for d in stacks/shared/* stacks/tenants/* tests/fixtures/* modules/* tests/integration/*; do
   tofu -chdir="$d" init -backend=false -input=false && tofu -chdir="$d" validate
+  if [ -d "$d/tests" ]; then tofu -chdir="$d" test; fi   # mocked provider: no cloud
 done
 tflint --init
 for d in modules/* stacks/shared/* stacks/tenants/*; do
@@ -64,7 +65,7 @@ gitleaks git --no-banner --redact
 
 **Test policy.** A change that adds a flow, a plane or a tenant type adds the matching rows to the isolation test, with the expected result; a fix of a finding adds the check that would have caught it.
 
-CI only validates the code. Every change to a stack is also tested by the maintainers on a real OpenStack cloud before it is merged, and the results are recorded in the [test results](docs/concepts/test-results.md):
+CI validates the code and runs the tests with a mocked provider, which check what a stack asks the cloud for (the placement over availability zones, for example), not what the cloud does. Every change to a stack is also tested by the maintainers on a real OpenStack cloud before it is merged, and the results are recorded in the [test results](docs/concepts/test-results.md):
 
 1. **Apply**, then **plan again: the plan after apply must be empty.**
 2. Functional checks of the change (for example HTTPS through the entry point, the publication of a domain without interruption).

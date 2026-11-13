@@ -68,6 +68,17 @@ jobs:
             echo "::endgroup::"
           done
 
+      # Tests with a mocked OpenStack provider (placement over zones, ADR-0012): no cloud needed.
+      - name: tests with mocked providers
+        run: |
+          for d in $CONFIGURATIONS; do
+            if [ -d "$d/tests" ] && ls "$d"/tests/*.tftest.hcl >/dev/null 2>&1; then
+              echo "::group::$d"
+              ${{ matrix.tool }} -chdir="$d" test
+              echo "::endgroup::"
+            fi
+          done
+
   tflint:
     runs-on: ubuntu-latest
     steps:

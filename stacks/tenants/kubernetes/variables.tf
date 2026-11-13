@@ -13,9 +13,20 @@ variable "site" {
   }
 }
 
-variable "az" {
-  description = "Availability zone of the bootstrap instance and of the cluster machines."
-  type        = string
+variable "zones" {
+  description = "Availability zones of the cluster, at least one: the control plane nodes are spread over them by Cluster API, the workers get one machine deployment per zone, and the bootstrap instance runs in the first. Keeping the quorum of the control plane when a zone is lost needs three zones."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.zones) > 0 && length(distinct(var.zones)) == length(var.zones)
+    error_message = "zones must list at least one zone, without duplicates."
+  }
+}
+
+variable "volume_zones" {
+  description = "Block storage zone of the bootstrap instance's root volume (boot_volume_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine."
+  type        = map(string)
+  default     = {}
 }
 
 variable "image" {

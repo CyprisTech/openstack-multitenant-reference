@@ -3,7 +3,7 @@
 # documentation address ranges.
 cloud = "example-site-a"
 site  = "site-a" # same site as the entry point
-az    = "nova"
+zones = ["nova"]
 image = "ubuntu-24.04"
 
 flavor           = "m1.small"

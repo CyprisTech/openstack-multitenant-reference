@@ -14,6 +14,11 @@ locals {
 
   # Boot disk of the instances: the image's ephemeral disk, or a volume of the given size.
   boot = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
+
+  # Availability zones (ADR-0012): one workload and its bastion, in the first zone. A root volume
+  # takes the storage zone mapped to that zone, or the cloud's default.
+  zone    = var.zones[0]
+  boot_in = merge(local.boot, { az = local.boot.source == "volume" ? lookup(var.volume_zones, local.zone, null) : null })
 }
 
 # How the stack joins the observability plane (ADR-0004). Its router is the default gateway:
@@ -45,10 +50,10 @@ module "bastion" {
   port          = "isolated"
   users         = var.admin.users
   instance = {
-    az     = var.az
+    az     = local.zone
     image  = var.image
     flavor = var.flavor
-    boot   = local.boot
+    boot   = local.boot_in
   }
   mtu             = var.network_mtu
   dns_nameservers = var.dns_nameservers
@@ -104,10 +109,10 @@ module "isolated" {
 
     instances = merge({
       (local.instance) = {
-        az        = var.az
+        az        = local.zone
         flavor    = var.flavor
         image     = var.image
-        boot      = local.boot
+        boot      = local.boot_in
         user_data = module.cloudinit.rendered
         labels    = ["isolated"]
         ports = {

@@ -18,6 +18,12 @@ locals {
     csr_approver  = "1.2.15" # kubelet-csr-approver chart
   }
 
+  # Workers: one machine deployment per zone (ADR-0012), the count spread as evenly as possible,
+  # the first zones first; a zone left with none gets no machine deployment.
+  workers_per_zone = {
+    for i, z in var.zones : z => floor(var.cluster.worker_count / length(var.zones)) + (i < var.cluster.worker_count % length(var.zones) ? 1 : 0)
+  }
+
   # Pod network MTU: cluster network MTU minus the VXLAN overhead (ADR-0002, D4).
   pod_mtu = var.network_mtu == null ? 0 : var.network_mtu - 50
 
@@ -25,7 +31,7 @@ locals {
   # content, so that a change creates new templates and Cluster API rolls the machines.
   revision = substr(sha256(join("/", [
     file("${path.module}/manifests/cluster-class.yaml.tftpl"),
-    jsonencode([var.cluster, var.az, local.network, local.subnet, local.router, local.admin_network.network, var.admin.ssh_key_name]),
+    jsonencode([var.cluster, var.zones, local.network, local.subnet, local.router, local.admin_network.network, var.admin.ssh_key_name]),
   ])), 0, 8)
 
   manifest_vars = {
@@ -34,7 +40,8 @@ locals {
     node_image_object = replace(lower(var.cluster.node_image), ".", "-")
     cluster           = var.cluster
     prefix            = local.prefix
-    az                = var.az
+    zones             = var.zones
+    workers_per_zone  = local.workers_per_zone
     network           = local.network
     subnet            = local.subnet
     router            = local.router
@@ -111,4 +118,15 @@ module "cloudinit" {
     "curl -fsSLo /usr/local/bin/clusterctl https://github.com/kubernetes-sigs/cluster-api/releases/download/${local.versions.cluster_api}/clusterctl-linux-amd64",
     "chmod 0755 /usr/local/bin/kind /usr/local/bin/kubectl /usr/local/bin/clusterctl",
   ]
+}
+
+# Zones (ADR-0012): Cluster API spreads the control plane nodes over the zones; the quorum of etcd
+# survives the loss of a zone only if no zone holds half of them or more.
+check "control_plane_quorum" {
+  assert {
+    condition = length(var.zones) == 1 || (
+      var.cluster.control_plane_count - ceil(var.cluster.control_plane_count / length(var.zones)) > var.cluster.control_plane_count / 2
+    )
+    error_message = "With ${var.cluster.control_plane_count} control plane node(s) over ${length(var.zones)} zones, losing one zone stops the control plane. Use three zones, or accept it."
+  }
 }
