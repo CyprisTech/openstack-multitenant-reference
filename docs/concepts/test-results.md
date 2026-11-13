@@ -25,6 +25,8 @@ Campaigns of 2026-11-10 to 2026-11-12, run with [`tests/campaign`](../../tests/c
 
 **Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
 
+**Resilience**: the tested cloud has one availability zone and one region. The behaviour on the loss of a zone or a region and the failover between regions are not tested by the maintainers; the placement over zones and the deployment of several sites are, from the releases that deliver them ([ADR-0012](../adr/0012-resilience-scope.md)).
+
 Known limits, detailed in the findings below and in the [test procedure](../reference/test-procedure.md):
 
 - On hub planes, `shared/planes` is applied again after the tenants; until then the pushes time out and the agents retry.

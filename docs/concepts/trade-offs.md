@@ -95,7 +95,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** Neutron networks, Octavia load balancers and their amphorae live in one region: a design that spans regions must join them above Neutron. An overlay works on any OpenStack cloud, unlike provider features such as OVHcloud's vRack.
 
-**Cost.** Failover is not instantaneous (DNS TTL), and the passive entry point and the overlay must be kept tested. Stateful data (volumes, databases) is not replicated by the reference: the tenants replicate it, or restore it through the backup integration point.
+**Cost.** Failover is not instantaneous (DNS TTL), and the passive entry point and the overlay must be kept tested by the deployer: the reference tests the deployment of several sites, not the failover. Stateful data (volumes, databases) is not replicated by the reference: the tenants replicate it, or restore it through the backup integration point.
 
 **Choose active-active when** the downtime of a DNS failover is not acceptable and the tenants' data is replicated: it needs a global load balancing service outside OpenStack.
 

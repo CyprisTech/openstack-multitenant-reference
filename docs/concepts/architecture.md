@@ -202,13 +202,24 @@ What every tenant needs from the network, offered the same way as any shared ser
 
 ## Resilience and continuity
 
-| Failure | Design |
-|---|---|
-| A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it |
-| An availability zone | Instances and load balancers spread over the zones of the region; planes and routers are regional in Neutron |
-| A region | An entry point per region, active/passive, failover by DNS ([regions and sites](#regions-and-sites)) |
-| A stack or its state | The architecture is rebuilt from code in a documented order; the states are kept in a backend that is itself backed up |
-| Tenant data | Backed up by the tenants through the backup integration point; restored the same way |
+The reference places what it deploys; the cloud and the workloads provide the behaviour on a failure, as in the landing zones of the large providers ([ADR-0012](../adr/0012-resilience-scope.md)).
+
+| Failure | Design | Tested by the maintainers |
+|---|---|---|
+| A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it | the placement |
+| An availability zone | Instances, Kubernetes nodes and volumes spread over the zones given to each stack; planes and routers are regional in Neutron | the placement, with mocked providers |
+| A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([regions and sites](#regions-and-sites)) | two sites deployed side by side; not the failover |
+| A stack or its state | The architecture is rebuilt from code in a documented order; the states are kept in a backend that is itself backed up | every campaign rebuilds it from empty projects |
+| Tenant data | Backed up by the tenants through the backup integration point; restored the same way | no: yours |
+
+**What the cloud must provide** for the zones to protect anything:
+
+- every plane and every router gateway present in each zone;
+- storage zones aligned with the compute zones, or storage shared between them;
+- load balancers whose amphorae are spread over zones (an Octavia setting of the operator);
+- three zones for a Kubernetes control plane to keep its quorum when one zone is lost: with two zones, losing the zone that holds two of three control plane nodes stops the cluster.
+
+**What stays yours:** deciding and running a failover, rehearsing it, replicating the tenants' data, and setting the recovery objectives (RTO, RPO) of each workload.
 
 ## Administration paths
 
@@ -348,7 +359,7 @@ flowchart LR
 | The site is an input of every stack and part of every name | The same stacks deploy in several regions without collision |
 | No hand-written address: routes and admission rules come from stack outputs of the same region | Each region generates its own |
 | One `shared/planes` per region; the hubs of the regions joined by an encrypted overlay | Shared services and tenants of one region reach those of another through the planes, with the same roles and checks |
-| One entry point per region, active/passive, short TTL on the public records | Failover between regions is a DNS change, rehearsed by a drill that replays the isolation test in the other region |
+| One entry point per region, active/passive, short TTL on the public records | Failover between regions is a DNS change; you run and rehearse it, for example by replaying the isolation test in the other region |
 
 Replicating tenant data between regions belongs to the tenants and to the backup integration point.
 
