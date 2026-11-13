@@ -276,7 +276,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (46 with the Kubernetes tenant and the ACME authority) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| isolation test | every row as expected (47 with the published cluster and the internal service; 44 with the shared cluster, [section 11](#11-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
@@ -291,7 +291,7 @@ edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     44
 receiver               t1-web-1 metrics (private 10.21.0.144)                9100  closed   closed   ok
 receiver               series pushed by web                                     -  yes      yes      ok
 ...
-33/33 rows as expected
+47/47 rows as expected
 ```
 
 ### Direct exposure
