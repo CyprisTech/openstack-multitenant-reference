@@ -1,13 +1,13 @@
 # Internal demonstration service
 
-An internal service, a **shared service of the internal services plane**, for the [isolation test](../../isolation/README.md) ([ADR-0002](../../../docs/adr/0002-platform-kubernetes.md), D7): the Kubernetes tenant must reach it, the other tenants must not. It answers on port 8080 and admits on that port only `allowed_sources`: the `internal_sources` output of the Kubernetes tenant.
+An internal service, a **shared service of the internal services plane**, for the [isolation test](../../isolation/README.md) ([ADR-0002](../../../docs/adr/0002-platform-kubernetes.md), D7): the Kubernetes tenant must reach it, the other tenants must not. It answers on port 8080 and admits on that port only `allowed_sources`: the `internal_sources` output of the Kubernetes tenant. Created before its consumers with an empty `allowed_sources`, it admits nobody until they are given.
 
 - On an operator plane (gateway mode), it has a floating IP of the internal services plane, which also carries SSH for the administration sources.
 - On a hub plane (`shared/planes`, role `shared` on `internal`), it is reached at its own address, through the transit router.
 
 ```bash
 cat > terraform.tfvars <<'VARS'   # git-ignored
-cloud = "..."; site = "site-a"; az = "..."; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
+cloud = "..."; site = "site-a"; zones = ["..."]; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
 allowed_sources = ["198.51.100.7/32"] # internal_sources output of the Kubernetes tenant
 ssh_cidrs       = ["192.0.2.10/32"]
 ssh_keys        = ["ssh-ed25519 AAAA..."]
@@ -41,8 +41,6 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| allowed\_sources | Sources admitted on port 8080: output internal\_sources of the Kubernetes tenant. | `list(string)` | n/a | yes |
-| az | n/a | `string` | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
 | flavor | n/a | `string` | n/a | yes |
 | image | n/a | `string` | n/a | yes |
@@ -50,6 +48,8 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 | site | n/a | `string` | n/a | yes |
 | ssh\_cidrs | n/a | `list(string)` | n/a | yes |
 | ssh\_keys | n/a | `list(string)` | n/a | yes |
+| zones | Availability zones; the fixture runs in the first one, as the single instances of the stacks. | `list(string)` | n/a | yes |
+| allowed\_sources | Sources admitted on port 8080: output internal\_sources of the Kubernetes tenant. Empty: the service is closed, as when it is created before its consumers. | `list(string)` | `[]` | no |
 | boot\_volume\_size | n/a | `number` | `null` | no |
 | cidr | Range of the service's network; on a hub plane, the attachment's cidr in shared/planes. | `string` | `"10.35.0.0/28"` | no |
 | network\_mtu | n/a | `number` | `null` | no |

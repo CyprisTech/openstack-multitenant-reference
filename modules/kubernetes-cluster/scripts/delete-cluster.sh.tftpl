@@ -34,10 +34,21 @@ with urllib.request.urlopen(req, context=ctx) as r:
 PY
 }
 
+# A creation that stopped before clusterctl move leaves Cluster API on the kind cluster of this
+# instance: the cluster is then deleted from here, without moving anything.
+not_moved=""
+if kind get clusters 2>/dev/null | grep -qx bootstrap && kubectl -n platform get cluster ${cluster.name} >/dev/null 2>&1; then
+  not_moved=yes
+  echo "Cluster ${cluster.name} is still managed by this bootstrap instance (not moved): deleting it from here."
+elif [[ ! -f "$workload" ]]; then
+  echo "No cluster ${cluster.name} here and no kubeconfig of it: nothing to delete."
+  exit 0
+fi
+
 # After clusterctl move, the bootstrap instance is no longer admitted on the API (create-cluster.sh
 # removes its address). It cannot admit itself: an operator must do it from an administration
 # source, then run this script again.
-if ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
+if [[ -z "$not_moved" ]] && ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
   echo "The Kubernetes API does not admit this instance. From an administration source, run:" >&2
   echo "  kubectl --kubeconfig <cluster kubeconfig> -n platform patch cluster ${cluster.name} --type=json \\" >&2
   echo "    -p '[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"$(bootstrap_source)\"}]'" >&2
@@ -47,19 +58,27 @@ fi
 
 # Load balancers created by the cloud controller manager belong to Services: delete them first,
 # while the cloud controller manager still runs.
-kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
+# Before a move, the workload API may be unreachable: the cloud controller's load balancers are
+# then removed with the cluster's network objects by Cluster API, or left for the operator.
+if kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
+  kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
+else
+  echo "The workload API does not answer: its LoadBalancer Services are not deleted first; check for leftover load balancers." >&2
+fi
 
 # The operator admitted this instance with a patch of the API sources (variable 0), not by
 # applying manifests/cluster.yaml again: after an upgrade, its version and image are older than
 # the cluster's.
 
-kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
-kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
-kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
-export CLUSTER_TOPOLOGY=true
-kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
-  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
-clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
+if [[ -z "$not_moved" ]]; then
+  kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
+  kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+  kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
+  export CLUSTER_TOPOLOGY=true
+  kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+    --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+  clusterctl move -n platform --kubeconfig "$workload" --to-kubeconfig "$KUBECONFIG"
+fi
 
 # clusterctl move does not carry the ORC Image: declare it again, or CAPO waits for it and the
 # machines are never deleted.
@@ -83,4 +102,6 @@ if kubectl -n platform get cluster ${cluster.name} >/dev/null 2>&1; then
   exit 1
 fi
 kind delete cluster --name bootstrap
+# The kubeconfig of a deleted cluster: run again, the script finds nothing to delete.
+rm -f "$workload"
 echo "Cluster ${cluster.name} deleted: destroy the stack now."

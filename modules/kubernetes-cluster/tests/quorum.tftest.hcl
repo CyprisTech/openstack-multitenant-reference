@@ -1,5 +1,5 @@
-# The quorum warning of the control plane over availability zones (ADR-0012), with a mocked
-# provider: no cloud is needed.
+# The zones of the Kubernetes module, with a mocked provider (no cloud is needed): the quorum
+# warning of the control plane (ADR-0012) and the storage of the persistent volumes.
 
 mock_provider "openstack" {
   mock_resource "openstack_networking_port_v2" {
@@ -82,4 +82,43 @@ run "two_zones" {
 
   # Three control plane nodes over two zones: the quorum does not survive the loss of a zone.
   expect_failures = [check.control_plane_quorum]
+}
+
+run "shared_storage" {
+  command = plan
+
+  variables {
+    zones        = ["az-1", "az-2", "az-3"]
+    volume_zones = { az-1 = "nova", az-2 = "nova", az-3 = "nova" }
+  }
+
+  assert {
+    condition     = strcontains(output.scripts["create-cluster.sh"], "ignore-volume-az=true") && strcontains(output.scripts["create-cluster.sh"], "availability: nova")
+    error_message = "One storage zone for every zone is shared storage: ignore-volume-az and the storage zone in the class."
+  }
+}
+
+run "storage_per_zone" {
+  command = plan
+
+  variables {
+    zones        = ["az-1", "az-2", "az-3"]
+    volume_zones = { az-1 = "az-1", az-2 = "az-2", az-3 = "az-3" }
+  }
+
+  assert {
+    condition     = !strcontains(output.scripts["create-cluster.sh"], "ignore-volume-az") && !strcontains(output.scripts["create-cluster.sh"], "availability:")
+    error_message = "Storage zones of the same names: volumes in the zone of their node."
+  }
+}
+
+run "storage_zones_unsupported" {
+  command = plan
+
+  variables {
+    zones        = ["az-1", "az-2", "az-3"]
+    volume_zones = { az-1 = "ceph-1", az-2 = "ceph-2", az-3 = "ceph-3" }
+  }
+
+  expect_failures = [check.volume_zones]
 }

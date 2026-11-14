@@ -64,7 +64,7 @@ module "service" {
     }
     instances = {
       (local.name) = {
-        az        = var.az, flavor = var.flavor, image = var.image
+        az        = var.zones[0], flavor = var.flavor, image = var.image
         boot      = var.boot_volume_size == null ? { source = "image" } : { source = "volume", size = var.boot_volume_size }
         user_data = module.cloudinit.rendered
         ports = {

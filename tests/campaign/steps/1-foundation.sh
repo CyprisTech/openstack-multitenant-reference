@@ -80,6 +80,14 @@ step_acme() {
   wait_for_instances "$(output_raw "${ACME}" bastion)" "$(output_raw "${ACME}" instance_address)"
 }
 
+# The fixture of an internal service, created before its consumers, closed: it admits nobody
+# until step internal-open.
+step_internal() {
+  set_inputs "${INTERNAL_SERVICE}" cloud="${CLOUD_SHARED}" plane_attachment:="$(attachment internal-service)" \
+    allowed_sources:='[]'
+  apply_stack "${INTERNAL_SERVICE}"
+}
+
 step_edge() {
   rm -f "${ENTRY_POINT}/domains.auto.tfvars.json"
   set_inputs "${ENTRY_POINT}" cloud="${CLOUD_EDGE}" plane_attachment:="$(attachment edge)" monitoring:="$(monitoring)"

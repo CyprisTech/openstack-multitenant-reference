@@ -32,7 +32,8 @@ show() {
 recording() { [[ "${RECORD:-0}" == 1 ]]; }
 
 # NOTIFY_HOOK (optional, outside this repository): a command that tells the operator, given the
-# message as its argument. Used when the campaign waits for someone, and when it stops.
+# message as its argument. Used when the campaign waits for someone and when it stops, and, with
+# NOTIFY_STEPS=1, at the start and the end of each step.
 notify() {
   echo "$1"
   if [[ -n "${NOTIFY_HOOK:-}" ]]; then "${NOTIFY_HOOK}" "$1" || true; fi
@@ -64,7 +65,21 @@ set_inputs() {
     filter+=" + {${key}: \$${key}}"
   done
   jq -n "${args[@]}" "${filter}" > "${stack}/mode.auto.tfvars.json"
+  scene_done "${stack}"
 }
+
+# --- Scenes that change a stack and restore it -------------------------------------------------------
+
+# scene_begin <stack>: keeps the stack's inputs before the scene, or restores them when an earlier
+# run of the scene stopped before restoring; set_inputs drops the copy, its inputs are the new
+# reference. scene_end <stack>: restores them. A scene can be run again after a failure.
+scene_backup() { echo "${W}/${1//\//-}.inputs.bak"; }
+scene_begin() {
+  local backup; backup=$(scene_backup "$1")
+  if [[ -f "${backup}" ]]; then cp "${backup}" "$1/mode.auto.tfvars.json"; else cp "$1/mode.auto.tfvars.json" "${backup}"; fi
+}
+scene_end() { cp "$(scene_backup "$1")" "$1/mode.auto.tfvars.json"; }
+scene_done() { rm -f "$(scene_backup "$1")"; }
 
 # --- Apply and destroy ----------------------------------------------------------------------------
 
@@ -134,10 +149,17 @@ instances_of() { output_json "$1" instances | jq -r '.[]'; }
 first_instance_of() { output_json "$1" instances | jq -r 'to_entries[0].value'; }
 
 wait_for_instances() {  # wait_for_instances <bastion> <address>...
-  local bastion=$1 address attempt; shift
+  local bastion=$1 address attempt status; shift
   for address in "$@"; do
     for attempt in 1 2 3 4 5 6 7 8 9 10; do
-      on_instance "${bastion}" "${address}" "hostname; cloud-init status --wait | tail -1" 2>/dev/null && continue 2
+      # cloud-init status exits 1 on error, 2 on a recoverable error: an error is not retried.
+      # The steps run with errexit: the status is captured, not left to end the step.
+      status=0
+      on_instance "${bastion}" "${address}" "hostname; cloud-init status --wait >/dev/null; s=\$?; cloud-init status | tail -1; exit \$s" 2>/dev/null || status=$?
+      case ${status} in
+        0 | 2) continue 2 ;;
+        1) echo "CLOUD-INIT ERROR: ${address}"; return 1 ;;
+      esac
       echo "  ${address} not reachable yet (attempt ${attempt})"
       sleep 20
     done
@@ -146,7 +168,10 @@ wait_for_instances() {  # wait_for_instances <bastion> <address>...
   done
 }
 
-wait_for_bootstrap() { remote -o ConnectionAttempts=30 "$(output_raw "$1" bootstrap)" "cloud-init status --wait | tail -1"; }
+wait_for_bootstrap() {
+  # shellcheck disable=SC2016 # expanded on the bootstrap instance
+  remote -o ConnectionAttempts=30 "$(output_raw "$1" bootstrap)" 'cloud-init status --wait >/dev/null; s=$?; cloud-init status | tail -1; [ "$s" != 1 ]'
+}
 
 # --- Kubernetes -----------------------------------------------------------------------------------
 
@@ -185,12 +210,17 @@ fetch_kubeconfig() {  # fetch_kubeconfig <bootstrap> <kubeconfig>
 delete_cluster() {  # delete_cluster <stack> <kubeconfig>
   local stack=$1 kubeconfig=$2 bootstrap start
   bootstrap=$(output_raw "${stack}" bootstrap 2>/dev/null) || return 0
-  [[ -n "${bootstrap}" && "${bootstrap}" != null ]] || return 0
-  kubectl --kubeconfig "${kubeconfig}" get cluster -A >/dev/null 2>&1 || return 0
-  # A patch of the API sources only: after an upgrade, cluster.yaml describes an older version.
-  kubectl --kubeconfig "${kubeconfig}" -n platform get cluster -o name | xargs -I{} kubectl --kubeconfig "${kubeconfig}" -n platform \
-    patch {} --type=json -p "[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"${bootstrap}/32\"}]" || return 1
-  sleep 60
+  # No address (bootstrap = false, or a stack already destroyed: its "output" is a warning).
+  [[ "${bootstrap}" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || return 0
+  # Once moved, the cluster manages itself: the bootstrap instance is admitted on its API first,
+  # with a patch of the API sources only (after an upgrade, cluster.yaml describes an older
+  # version). A creation that stopped before the move left Cluster API on the bootstrap
+  # instance: delete-cluster.sh then deletes the cluster from there.
+  if kubectl --kubeconfig "${kubeconfig}" --request-timeout=15s -n platform get cluster -o name 2>/dev/null | grep -q .; then
+    kubectl --kubeconfig "${kubeconfig}" -n platform get cluster -o name | xargs -I{} kubectl --kubeconfig "${kubeconfig}" -n platform \
+      patch {} --type=json -p "[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"${bootstrap}/32\"}]" || return 1
+    sleep 60
+  fi
   start=$(date +%s)
   remote -t "${bootstrap}" sudo /opt/platform/delete-cluster.sh || return 1
   timing "delete-cluster ${stack} $(($(date +%s) - start))s"

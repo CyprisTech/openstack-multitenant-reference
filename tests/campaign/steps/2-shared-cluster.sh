@@ -60,7 +60,7 @@ step_consumer() {
   [[ -n "${CONSUMER_CIDR:-}" ]] || { echo "CONSUMER_CIDR not set: scene skipped"; return 0; }
   local inputs="${SHARED}/mode.auto.tfvars.json" service
   service=$(shared_service_address)
-  cp "${inputs}" "${W}/shared.inputs.bak"
+  scene_begin "${SHARED}"
 
   comment "Not a declared consumer: the service stays closed"
   if try_shared_service "${service}"; then
@@ -69,7 +69,7 @@ step_consumer() {
   fi
 
   comment "Add a consumer: one line of configuration, apply, the two manifests"
-  jq --arg cidr "${CONSUMER_CIDR}" '.consumers += [$cidr]' "${W}/shared.inputs.bak" > "${inputs}"
+  jq --arg cidr "${CONSUMER_CIDR}" '.consumers += [$cidr]' "$(scene_backup "${SHARED}")" > "${inputs}"
   run_apply "${SHARED}"
   apply_shared_manifests
   # The source reaches the chart, the Service, then the Octavia listeners: a minute or two.
@@ -82,9 +82,10 @@ step_consumer() {
   try_shared_service "${service}"
 
   comment "Back to the declared consumers"
-  cp "${W}/shared.inputs.bak" "${inputs}"
+  scene_end "${SHARED}"
   run_apply "${SHARED}"
   apply_shared_manifests
+  scene_done "${SHARED}"
 }
 
 # Move the cluster to another application credential, as in docs/guides/kubernetes-lifecycle.md,
@@ -128,6 +129,37 @@ step_rotate() {
   kubectl delete service rotation-check
   kubectl wait service/rotation-check --for=delete --timeout=10m
 
+  comment "Cinder CSI with the new credential: a new volume, and the existing one moved intact"
+  kubectl -n volume-check apply -f - <<'EOF'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rotation-check
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rotation-check
+spec:
+  containers:
+  - name: check
+    image: busybox:1.37
+    command: [sh, -c, "date > /data/written; sleep infinity"]
+    volumeMounts:
+    - {name: data, mountPath: /data}
+  volumes:
+  - name: data
+    persistentVolumeClaim: {claimName: rotation-check}
+EOF
+  kubectl -n volume-check wait pod rotation-check --for=condition=Ready --timeout=10m
+  kubectl -n volume-check delete pod rotation-check --wait=true
+  kubectl -n volume-check delete pvc rotation-check --wait=true
+  volume_moved_intact "after the rotation"
+
   comment "Revoke the old credential (${CLOUD_K8S_SHARED_CLUSTER}): the upgrade waits for it"
   wait_for_revocation "${CLOUD_K8S_SHARED_CLUSTER}"
 }
@@ -147,6 +179,69 @@ wait_for_revocation() {  # wait_for_revocation <clouds.yaml entry>
   done
   echo "OLD CREDENTIAL STILL VALID"
   return 1
+}
+
+# A volume of the shared cluster keeps its data across the credential rotation and the upgrade:
+# the rotation changes the credential of Cinder CSI, the upgrade replaces the node under the pod.
+# What is checked is the wiring of the landing zone (credential, zones), not Cinder itself.
+step_volume() {
+  export KUBECONFIG=${SHARED_KUBECONFIG}
+  kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: volume-check
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: data
+  namespace: volume-check
+spec:
+  serviceName: data
+  replicas: 1
+  selector:
+    matchLabels: {app: data}
+  template:
+    metadata:
+      labels: {app: data}
+    spec:
+      containers:
+      - name: data
+        image: busybox:1.37
+        command: [sh, -c, "[ -f /data/marker ] || head -c 1048576 /dev/urandom > /data/marker; sleep infinity"]
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+EOF
+  kubectl -n volume-check rollout status statefulset/data --timeout=10m
+  volume_sum > "${W}/volume.sha256"
+  show kubectl -n volume-check get pvc,pod -o wide
+  echo "volume written: $(cat "${W}/volume.sha256")" | tee -a "${W}/https.txt"
+}
+
+volume_sum() { kubectl -n volume-check exec data-0 -- sha256sum /data/marker | cut -d' ' -f1; }
+
+# The pod moves to another node: Cinder CSI detaches the volume from the first node's server and
+# attaches it to the second one, through the Cinder API, with the credential it holds. The data
+# read there must be the data written: the same volume, attached and mounted, not a new one.
+volume_moved_intact() {  # volume_moved_intact <when>
+  local sum before after
+  before=$(kubectl -n volume-check get pod data-0 -o jsonpath='{.spec.nodeName}')
+  kubectl cordon "${before}"
+  kubectl -n volume-check delete pod data-0 --wait=true
+  kubectl -n volume-check wait pod data-0 --for=condition=Ready --timeout=10m
+  kubectl uncordon "${before}"
+  after=$(kubectl -n volume-check get pod data-0 -o jsonpath='{.spec.nodeName}')
+  sum=$(volume_sum)
+  echo "volume $1: moved from ${before} to ${after}, ${sum}" | tee -a "${W}/https.txt"
+  [[ "${after}" != "${before}" && "${sum}" == "$(cat "${W}/volume.sha256")" ]]
 }
 
 yq_credential() { python3 -c "import sys, yaml; print(yaml.safe_load(open(sys.argv[2]))['clouds']['openstack']['auth'][sys.argv[1]])" "$1" "$2"; }
@@ -197,6 +292,9 @@ step_upgrade() {
   [[ "$(kubectl -n traefik-internal get svc -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')" != "" ]]
   [[ "$(shared_service_address)" == "${service}" ]]
   step_accept_shared
+
+  comment "The volume followed its pod to a new node, intact"
+  volume_moved_intact "after the upgrade"
 }
 
 expected_nodes() { local m; m=$(kubectl -n platform get machines --no-headers --request-timeout=15s) && wc -l <<<"${m}"; }
@@ -215,6 +313,8 @@ load_on_shared_service() {  # load_on_shared_service <bastion> <instance> <addre
 }
 
 step_shared_down() {
+  # The volumes of the check are deleted while Cinder CSI still runs, or they would be left behind.
+  kubectl --kubeconfig "${SHARED_KUBECONFIG}" --request-timeout=30s delete namespace volume-check --wait=true --timeout=10m 2>/dev/null || true
   delete_cluster "${SHARED}" "${SHARED_KUBECONFIG}"
   destroy_stack "${SHARED}"
 }

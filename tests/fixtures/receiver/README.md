@@ -9,7 +9,7 @@ It gets its packages and its image through `egress_network`, and is administered
 
 ```bash
 cat > terraform.tfvars <<'VARS'   # git-ignored
-cloud = "..."; site = "site-a"; az = "..."; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
+cloud = "..."; site = "site-a"; zones = ["..."]; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
 egress_network = { network = "public", subnet = "public-subnet" }
 bastion        = { external_network = { network = "intranet", subnet = "intranet" }, ssh_cidrs = ["192.0.2.10/32"] }
 users          = { ops = ["ssh-ed25519 AAAA..."] }
@@ -45,7 +45,6 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| az | n/a | `string` | n/a | yes |
 | bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
 | egress\_network | External network giving the default route (package and image download). | `object({ network = string, subnet = string })` | n/a | yes |
@@ -54,6 +53,7 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 | plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on observability). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
 | site | n/a | `string` | n/a | yes |
 | users | SSH users (login => public keys, sudo granted), on the bastion and the receiver. | `map(list(string))` | n/a | yes |
+| zones | Availability zones; the fixture runs in the first one, as the single instances of the stacks. | `list(string)` | n/a | yes |
 | boot\_volume\_size | n/a | `number` | `null` | no |
 | cidr | Range of the receiver's network; on a hub plane, the attachment's cidr in shared/planes. | `string` | `"10.34.0.0/28"` | no |
 | dns\_nameservers | n/a | `list(string)` | `[]` | no |

@@ -11,11 +11,11 @@ Run everything from a machine that is an administration source of the stacks (`a
 ```mermaid
 flowchart LR
     P["0. Projects<br/>and prerequisites"] --> H["1. Planes"]
-    H --> C["2. Receiver"]
+    H --> C["2. Shared services<br/>(internal service closed)"]
     C --> E["3. Entry point"]
     E --> T["4. vm · isolated<br/>kubernetes"]
     T --> K["5. Published cluster"]
-    K --> I["6. Internal service"]
+    K --> I["6. Open the<br/>internal service"]
     I --> R["7. Planes again<br/>(transit routes)"]
     R --> PB["8. Publish"]
     PB --> A["9. Acceptance"]
@@ -38,7 +38,7 @@ flowchart LR
 | 3. Entry point | 3 to 10 min (Octavia) |
 | 4. `vm` (with its load balancer), `isolated`, `kubernetes` | 1 to 4 min each |
 | 5. Cluster (`create-cluster.sh`, add-ons included) | 18 min |
-| 6. Internal service | 1 min |
+| 6. Opening the internal service | 1 min (creation, then in place) |
 | 7. Planes again | 7 s |
 | 8. Domain publication | 19 s, the routes answering 13 s later |
 | 9. Acceptance | 3 min |
@@ -91,7 +91,7 @@ $ openstack network show t1-publication                               # from a p
 No Network found for t1-publication
 ```
 
-## 2. Receiver
+## 2. Shared services
 
 Create it before the stacks that push to it: they need its `receiver_url`.
 
@@ -112,6 +112,12 @@ cd tests/fixtures/acme && tofu init && tofu apply && tofu plan -detailed-exitcod
 tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/tenants/vm/certificates.auto.tfvars.json
 tofu output -json certificates | jq '{certificates: .published}' > ../../../stacks/tenants/kubernetes/certificates.auto.tfvars.json
 tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
+```
+
+The **internal service** ([`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)) is created at the same step, **closed**: with an empty `allowed_sources` it admits nobody, as a real internal service exists before its consumers. It is opened at step 6.
+
+```bash
+cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -detailed-exitcode
 ```
 
 | Checkpoint | If it fails |
@@ -196,13 +202,15 @@ traefik     traefik   LoadBalancer   10.24.0.10    80:32745/TCP,443:31426/TCP
 
 Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` removes the bootstrap instance; set it back to `true` before teardown.
 
-## 6. Internal service
+## 6. Open the internal service
+
+Give the internal service its consumers: `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, known after step 4. The change is in place: the service is not replaced.
 
 ```bash
-cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd tests/fixtures/internal-service
+tofu -chdir=../../../stacks/tenants/kubernetes output -json internal_sources | jq '{allowed_sources: .}' > consumers.auto.tfvars.json
+tofu apply && tofu plan -detailed-exitcode
 ```
-
-Its `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, so it comes after step 4.
 
 ## 7. Planes again
 
@@ -391,8 +399,9 @@ The campaign script follows this order (sequence `full`). Deploy this cluster wi
 2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
 3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
 4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
-5. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer created with the new one, the old one revoked; then the minor upgrade, while a consumer sends requests.
-6. **Teardown** of the cluster and the stack, as in step 10, with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
+5. **A volume**: a StatefulSet of one replica writes 1 MiB of random data on a claim of the default storage class; its checksum is kept.
+6. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer and a volume created with the new one, the pod of the volume moved (detached, attached again) with its data intact, the old credential revoked; then the minor upgrade, while a consumer sends requests, and the volume checked again once its node was replaced.
+7. **Teardown** of the volumes (the namespace of the check, while Cinder CSI runs), then of the cluster and the stack, as in step 10, with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
 
 | Checkpoint | How | If it fails |
 |---|---|---|
@@ -400,6 +409,7 @@ The campaign script follows this order (sequence `full`). Deploy this cluster wi
 | HTTPS from a consumer, certificate verified | `curl --cacert /etc/lego/ca.pem https://<name>/` | the certificate in `traefik-internal` (`kubectl get certificate -A`) |
 | closed to an undeclared consumer, open once added | `curl` before and after | the manifests applied again after the apply |
 | after the rotation: a new load balancer | a Service of type `LoadBalancer` gets an address | the logs of the cloud controller manager |
+| after the rotation and after the upgrade: the volume moved intact; a new volume after the rotation | `sha256sum` in the pod, compared with the one written; a claim bound and mounted | `kubectl -n volume-check describe pvc,pod`, the logs of Cinder CSI (`kube-system`) |
 | after the upgrade: every node at the new version, the API and service addresses unchanged | `kubectl get nodes`, kubeconfig, `services` output | `kubectl -n platform get machines`, the capacity of the project |
 
 Durations: measured in the next campaign.

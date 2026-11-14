@@ -11,8 +11,9 @@ step_cluster() {
   create_cluster "${PUBLISHED}" "${W}/published-clouds.yaml" "${PUBLISHED_KUBECONFIG}"
 }
 
-# The fixture of an internal service, open to the Kubernetes tenant only.
-step_internal() {
+# The internal service, created closed in the foundation (step internal), is opened to the
+# Kubernetes tenant once it exists: a change of its consumers, in place.
+step_internal_open() {
   set_inputs "${INTERNAL_SERVICE}" cloud="${CLOUD_SHARED}" plane_attachment:="$(attachment internal-service)" \
     allowed_sources:="$(output_json "${PUBLISHED}" internal_sources)"
   apply_stack "${INTERNAL_SERVICE}"
@@ -49,8 +50,8 @@ step_accept() {
 # entry point.
 step_direct() {
   local inputs="${VM}/mode.auto.tfvars.json" address bastion edge instance results
-  cp "${inputs}" "${W}/vm.inputs.bak"
-  jq '.exposure = "public"' "${W}/vm.inputs.bak" > "${inputs}"
+  scene_begin "${VM}"
+  jq '.exposure = "public"' "$(scene_backup "${VM}")" > "${inputs}"
   run_apply "${VM}"
   address=$(output_raw "${VM}" service_address | cut -d: -f1)
   echo "service address, exposed directly: ${address}" | tee -a "${W}/https.txt"
@@ -69,9 +70,9 @@ step_direct() {
 
 restore_vm() {
   comment "Back to the entry point"
-  cp "${W}/vm.inputs.bak" "${VM}/mode.auto.tfvars.json"
+  scene_end "${VM}"
   # The router on publication is new: interface mode routes to it through the transit router.
-  run_apply "${VM}" && step_transit >/dev/null
+  run_apply "${VM}" && step_transit >/dev/null && scene_done "${VM}"
 }
 
 # The published cluster exposed directly (exposure = "public"): the ingress moves to a public
@@ -80,8 +81,8 @@ restore_vm() {
 step_direct_k8s() {
   local inputs="${PUBLISHED}/mode.auto.tfvars.json" before address status=0
   before=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
-  cp "${inputs}" "${W}/published.inputs.bak"
-  jq '.exposure = "public"' "${W}/published.inputs.bak" > "${inputs}"
+  scene_begin "${PUBLISHED}"
+  jq '.exposure = "public"' "$(scene_backup "${PUBLISHED}")" > "${inputs}"
   if run_apply "${PUBLISHED}" && apply_addons; then
     address=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
     echo "ingress, exposed directly: ${address}" | tee -a "${W}/https.txt"
@@ -99,8 +100,8 @@ step_direct_k8s() {
   fi
 
   comment "Back to the entry point"
-  cp "${W}/published.inputs.bak" "${inputs}"
-  run_apply "${PUBLISHED}" && apply_addons && step_transit >/dev/null && step_publish || status=1
+  scene_end "${PUBLISHED}"
+  run_apply "${PUBLISHED}" && apply_addons && step_transit >/dev/null && step_publish && scene_done "${PUBLISHED}" || status=1
   https_probe "apps.published.${TEST_ZONE}" "$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)" || status=1
   return "${status}"
 }
@@ -132,9 +133,9 @@ step_transit() {
 step_hostile() {
   [[ "${mode}" == interface ]] || { echo "interface mode only"; return 0; }
   local inputs="${ISOLATED}/mode.auto.tfvars.json" bastion instance target
-  cp "${inputs}" "${W}/isolated.inputs.bak"
+  scene_begin "${ISOLATED}"
   jq --arg hop "${HOSTILE_NEXT_HOP}" '.plane_attachment.observability.routes += [{destination: "10.21.0.0/24", next_hop: $hop}]' \
-    "${W}/isolated.inputs.bak" > "${inputs}"
+    "$(scene_backup "${ISOLATED}")" > "${inputs}"
   run_apply "${ISOLATED}"
 
   bastion=$(output_raw "${ISOLATED}" bastion)
@@ -146,7 +147,7 @@ step_hostile() {
       timeout 4 bash -c \"</dev/tcp/${target}/\${port}\" 2>/dev/null && echo \"\${port} OPEN\" || echo \"\${port} closed\"
     done" | tee "${W}/hostile.txt"
 
-  cp "${W}/isolated.inputs.bak" "${inputs}"
-  run_apply "${ISOLATED}"
+  scene_end "${ISOLATED}"
+  run_apply "${ISOLATED}" && scene_done "${ISOLATED}"
   ! grep -q OPEN "${W}/hostile.txt"
 }

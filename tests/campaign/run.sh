@@ -14,10 +14,10 @@ root="$(cd "${here}/../.." && pwd)"
 
 # The two clusters are deployed one after the other, so that the campaign fits a small test cloud.
 declare -A SEQUENCES=(
-  [foundation]="prep planes receiver acme edge web isolated transit publish"
-  [shared]="k8s-shared transit cluster-shared tour-shared accept-shared consumer rotate upgrade shared-down"
-  [published]="k8s cluster internal transit tour publish accept direct direct-k8s hostile"
-  [end]="plans teardown"
+  [foundation]="prep planes receiver acme internal edge web isolated transit publish"
+  [shared]="k8s-shared transit cluster-shared tour-shared accept-shared consumer volume rotate upgrade shared-down"
+  [published]="k8s cluster internal-open transit tour publish accept direct direct-k8s hostile"
+  [end]="plans teardown leftovers"
   [full]="foundation shared published end"
 )
 
@@ -80,7 +80,15 @@ run_step() {
   return "${status}"
 }
 
+# With NOTIFY_STEPS=1, the operator is also told when each step starts and ends.
+progress() { if [[ "${NOTIFY_STEPS:-0}" == 1 ]]; then notify "$1"; fi; }
+
+progress "campaign ${mode} started: $(expand "$@" | tr '\n' ' ')"
 for name in $(expand "$@"); do
+  progress "campaign ${mode}: step ${name} started"
+  started=$(date +%s)
   run_step "${name}"; status=$?
-  [[ ${status} -eq 0 ]] || { notify "campaign ${mode} stopped at step ${name}"; exit 1; }
+  [[ ${status} -eq 0 ]] || { notify "campaign ${mode} stopped at step ${name} after $(( ($(date +%s) - started) / 60 )) min"; exit 1; }
+  progress "campaign ${mode}: step ${name} ok in $(( ($(date +%s) - started) / 60 )) min"
 done
+progress "campaign ${mode} finished"

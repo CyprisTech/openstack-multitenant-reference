@@ -6,26 +6,29 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Campaigns of 2026-11-10 to 2026-11-12, run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md).
+Campaigns of 2026-11-14 to 2026-11-16, run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
-| Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration | ✅ | ✅ |
-| Isolation, shared cluster | executable matrix with the shared cluster (44 rows) | ✅ 44/44 | ✅ 44/44 |
+| Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
+| Migration from v0.4.0 | the v0.4.0 stacks applied, then `az` replaced by `zones` with the same zone: empty plan on every VM stack and fixture | ✅ | not run (same change) |
+| Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
 | Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
-| Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed on 443, 22, 9100 |
+| Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 83 / 0 | ✅ 73 / 0 |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 54 / 0 | ✅ 24 / 0 |
 | Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ | ✅ |
 | Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 341 / 8 | ✅ 402 / 6 |
-| Exposure change | the published cluster switched to its own public address and back: the entry point no longer reaches it, then the domain is published again | ✅ | ✅ |
-| Teardown | no leftover in any project | ✅ | ✅ |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 301 / 10 | ✅ 272 / 5 |
+| Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade; shared storage declared (`volume_zones`, one zone) | ✅ | ✅ |
+| Direct exposure of the VM tenant | the service address on its own public address | ✅ | to be run again |
+| Exposure change of the published cluster | switched to its own public address and back | to be run again | to be run again |
+| Teardown | no leftover in any project, load balancers included | ✅ | ✅ |
 
 **Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
 
-**Resilience**: the tested cloud has one availability zone and one region. The behaviour on the loss of a zone or a region and the failover between regions are not tested by the maintainers; the placement over zones and the deployment of several sites are, from the releases that deliver them ([ADR-0012](../adr/0012-resilience-scope.md)).
+**Resilience**: the tested cloud has one availability zone and one region; volumes moving between zones are not tested. The behaviour on the loss of a zone or a region and the failover between regions are not tested by the maintainers; the placement over zones and the deployment of several sites are, from the releases that deliver them ([ADR-0012](../adr/0012-resilience-scope.md)).
 
 Known limits, detailed in the findings below and in the [test procedure](../reference/test-procedure.md):
 
@@ -33,11 +36,23 @@ Known limits, detailed in the findings below and in the [test procedure](../refe
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
 - An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
 
-The isolation matrix of the earlier designs had 45 and 46 rows; the counts are not comparable.
+The isolation matrix of the earlier designs had 44 to 46 rows; the counts are not comparable.
 
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.5 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: campaigns of 2026-11-14 and 2026-11-15
+
+The `v0.5` changes (zones, volume zones, one machine deployment per zone, the campaign checks of cloud-init and leftovers) with the whole scenario, in both plane modes.
+
+- **To be run again:** the direct exposure steps, and in hub planes the last publication under load, once the test cloud is fixed. Cause checked on 2026-11-16, for the direct exposure and for the entry point at the end of the hub planes run: the floating IP of the load balancer is distributed by OVN, and the virtual port of its address was bound to a compute host without an uplink to the external network; nothing answered ARP for the address. Not a defect of the reference.
+- **Defects found and fixed** (in the campaign tooling):
+  - A first SSH attempt to a new instance ended the step instead of being retried (the steps run with `errexit`).
+  - Run again after a cluster deletion, `delete-cluster.sh` took the unreachable API of the deleted cluster for an unadmitted instance; the teardown also tried to reach the bootstrap instance of a stack already destroyed.
+  - The leftover check stopped without a word when a listing failed, and read the load balancers with a column name the Octavia plugin does not use; a failed listing is now a failed check.
+- **Defect found, still open:** after `clusterctl move`, the add-on controller created some Helm release proxies twice, on every cluster created in these campaigns (from two to four add-ons, the CNI included), as in the earlier campaigns (findings of 2026-11-10 and before). The cause is upstream (kubernetes-sigs/cluster-api-addon-provider-helm#606, open). `create-cluster.sh` detects it and stops; the duplicates were repaired by hand.
+- **Defect found, fixed after the campaigns (not run on the cloud yet):** when the move had not happened, the campaign's cluster deletion found no cluster in the workload cluster and went on with the destroy of the stack, which left the cluster's servers and load balancers behind; `delete-cluster.sh` now deletes such a cluster from the bootstrap instance.
 
 ## Detailed results: campaigns of 2026-11-10 to 2026-11-12
 

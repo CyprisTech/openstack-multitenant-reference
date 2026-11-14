@@ -11,7 +11,7 @@ Nothing is exposed on the Internet: DNS (53) and ACME (443) answer the internal 
 
 ```bash
 cat > terraform.tfvars <<'VARS'   # git-ignored
-cloud = "..."; site = "site-a"; az = "..."; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
+cloud = "..."; site = "site-a"; zones = ["..."]; image = "..."; flavor = "..."; boot_volume_size = 8; network_mtu = 1362
 egress_network = { network = "...", subnet = "..." }
 bastion        = { external_network = { network = "...", subnet = "..." }, ssh_cidrs = ["192.0.2.10/32"] }
 users          = { debug = ["ssh-ed25519 AAAA..."] }
@@ -67,7 +67,6 @@ tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/ten
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| az | n/a | `string` | n/a | yes |
 | bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
 | egress\_network | External network giving the default route (package download). | `object({ network = string, subnet = string })` | n/a | yes |
@@ -77,6 +76,7 @@ tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/ten
 | site | n/a | `string` | n/a | yes |
 | tenants | The tenants that obtain certificates, keyed by tenant name, with the names (domains) each may<br/>get a certificate for. Each tenant gets its own TSIG key, allowed to update only the TXT<br/>records \_acme-challenge.<name> of its names. | `map(list(string))` | n/a | yes |
 | users | SSH users (login => public keys, sudo granted), on the bastion and the authority. | `map(list(string))` | n/a | yes |
+| zones | Availability zones; the fixture runs in the first one, as the single instances of the stacks. | `list(string)` | n/a | yes |
 | boot\_volume\_size | n/a | `number` | `null` | no |
 | cidr | Range of the authority's network; on a hub plane, the attachment's cidr in shared/planes. | `string` | `"10.37.0.0/28"` | no |
 | dns\_nameservers | n/a | `list(string)` | `[]` | no |

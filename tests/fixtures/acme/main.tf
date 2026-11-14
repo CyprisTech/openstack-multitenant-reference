@@ -84,7 +84,7 @@ module "bastion" {
   port          = "authority"
   users         = var.users
   instance = {
-    az     = var.az
+    az     = var.zones[0]
     image  = var.image
     flavor = var.flavor
     boot   = local.boot
@@ -148,7 +148,7 @@ module "authority" {
     }, module.bastion.security_groups)
     instances = merge({
       (local.name) = {
-        az        = var.az, flavor = var.flavor, image = var.image
+        az        = var.zones[0], flavor = var.flavor, image = var.image
         boot      = local.boot
         user_data = module.cloudinit.rendered
         ports = {

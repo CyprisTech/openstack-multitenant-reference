@@ -24,7 +24,7 @@ variable "zones" {
 }
 
 variable "volume_zones" {
-  description = "Block storage zone of the bootstrap instance's root volume (boot_volume_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine."
+  description = "Block storage zone of the bootstrap instance's root volume (boot_volume_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine. It also sets where persistent volumes go: every zone mapped to one storage zone means shared storage, volumes created there and usable from every zone; without it, each volume is created in the zone of its node."
   type        = map(string)
   default     = {}
 }

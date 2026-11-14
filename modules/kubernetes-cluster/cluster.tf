@@ -24,6 +24,16 @@ locals {
     for i, z in var.zones : z => floor(var.cluster.worker_count / length(var.zones)) + (i < var.cluster.worker_count % length(var.zones) ? 1 : 0)
   }
 
+  # Storage of the persistent volumes. Every zone mapped to one storage zone (volume_zones) is
+  # shared storage (one Ceph behind all zones, say): volumes are created there and may follow
+  # their pod to any zone. Otherwise each volume is created in the zone of its node, which needs
+  # Cinder zones of the same names as Nova's.
+  storage_zone = (
+    length(var.volume_zones) > 0
+    && alltrue([for z in var.zones : contains(keys(var.volume_zones), z)])
+    && length(distinct([for z in var.zones : lookup(var.volume_zones, z, "")])) == 1
+  ) ? var.volume_zones[var.zones[0]] : null
+
   # Pod network MTU: cluster network MTU minus the VXLAN overhead (ADR-0002, D4).
   pod_mtu = var.network_mtu == null ? 0 : var.network_mtu - 50
 
@@ -41,6 +51,7 @@ locals {
     cluster           = var.cluster
     prefix            = local.prefix
     zones             = var.zones
+    storage_zone      = local.storage_zone
     workers_per_zone  = local.workers_per_zone
     network           = local.network
     subnet            = local.subnet
@@ -122,6 +133,15 @@ module "cloudinit" {
 
 # Zones (ADR-0012): Cluster API spreads the control plane nodes over the zones; the quorum of etcd
 # survives the loss of a zone only if no zone holds half of them or more.
+check "volume_zones" {
+  assert {
+    condition = local.storage_zone != null || length(var.volume_zones) == 0 || alltrue([
+      for z, v in var.volume_zones : z == v
+    ])
+    error_message = "volume_zones maps the zones to several storage zones of other names: persistent volumes are created in the zone of their node, which Cinder does not have. Supported: one storage zone for all zones, or storage zones of the same names as the compute zones."
+  }
+}
+
 check "control_plane_quorum" {
   assert {
     condition = length(var.zones) == 1 || (

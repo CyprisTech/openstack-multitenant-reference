@@ -46,10 +46,13 @@
         hostMount: false
         create: false
         name: cloud-config
+      # The chart's classes bind a volume when the claim is created, before the pod is placed:
+      # with several zones, the volume may land in a zone the pod cannot run in. Kept, not
+      # default; the default class is created by create-cluster.sh.
       storageClass:
         enabled: true
         delete:
-          isDefault: true
+          isDefault: false
     EOT
   }
   # Kubelet serving certificates (rotate-server-certificates) are requested from the cluster CA

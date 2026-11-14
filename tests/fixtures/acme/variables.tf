@@ -2,7 +2,10 @@ variable "cloud" { type = string }
 
 variable "site" { type = string }
 
-variable "az" { type = string }
+variable "zones" {
+  description = "Availability zones; the fixture runs in the first one, as the single instances of the stacks."
+  type        = list(string)
+}
 
 variable "image" { type = string }
 

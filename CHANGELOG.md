@@ -11,10 +11,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Availability zones ([ADR-0012](docs/adr/0012-resilience-scope.md)): input `zones` (a list, at least one) on the `vm`, `isolated`, `entry-point`, `kubernetes` and shared `kubernetes` stacks. The instances of a role are spread over the zones in order, the single ones (bastion, isolated workload, bootstrap instance) go to the first. Kubernetes: the control plane is spread by Cluster API, the workers get one machine deployment per zone; a warning when the quorum of the control plane does not survive the loss of a zone.
 - Input `volume_zones`: the block storage zone of the root volumes for each compute zone; a compute zone missing from the map gets the cloud's default storage zone. The root volumes of the Kubernetes machines take the zone of their machine.
 - Tests with a mocked OpenStack provider (`tofu test`), run by CI: placement over zones in each stack, quorum warning of the Kubernetes module.
+- [ADR-0012](docs/adr/0012-resilience-scope.md): what the reference places, what the cloud and the workloads provide, what is tested; the documentation says which resilience claims are tested.
+- Guide [rebuild](docs/guides/rebuild.md): what to keep outside the cloud, the order of the stacks, what to rebuild for each loss.
+- `tests/campaign`: a step `volume` on the shared cluster; the credential rotation also provisions a volume and moves an existing one, checked again after the upgrade.
+- `tests/campaign`: `NOTIFY_STEPS=1` tells the operator the start and end of each step; a `leftovers` step checks that nothing is left in the projects after the teardown; the sizes the maintainers use, documented.
+- Isolation test: a positive control per source, and a row from the shared cluster to the receiver; a source whose closed results come with no reachable target fails the test.
 
 ### Changed
 
+- Test fixture `internal-service`: `allowed_sources` defaults to empty, the service closed; the campaign and the test procedure create it before its consumers and open it after them, in place.
+- Test fixtures take `zones` instead of `az`, as the stacks.
+- `tests/campaign`: an instance whose cloud-init ends in error stops the campaign; scenes that change a stack and restore it can be run again after a failure.
+- Kubernetes: the default storage class is `csi-cinder`, created by `create-cluster.sh`: a volume is created once its pod is placed (`WaitForFirstConsumer`). With `volume_zones` mapping every zone to one storage zone (shared storage, such as one Ceph behind all zones), volumes are created in that storage zone and may follow their pod to any zone (`ignore-volume-az` for Cinder CSI); otherwise in the zone of their node, which Cinder must have under the same name. Storage zones of other names per zone are not supported (a check warns). The chart's classes stay, no longer default; existing clusters: apply the class from `create-cluster.sh` once, existing claims are not affected.
 - **Breaking:** input `az` (a string) replaced by `zones` (a list). Migration: `az = "nova"` becomes `zones = ["nova"]`; with one zone, the VM stacks plan no change. The Kubernetes templates get a new revision: Cluster API replaces the machines once, one by one, at the next apply, as for a template change.
+
+### Fixed
+
+- `delete-cluster.sh`: a cluster whose creation stopped before `clusterctl move` is still managed by the bootstrap instance; it is now deleted from there, instead of failing on the workload API. Without a cluster and without its kubeconfig, the script has nothing to delete and says so.
+- `tests/campaign`: the teardown no longer takes a cluster that was never moved for an absent one, which left its servers and load balancers behind the destroyed stack.
 
 ## [0.4.0] - 2026-11-12
 

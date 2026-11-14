@@ -131,6 +131,9 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --type=json \
   -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$(tofu output -raw bootstrap)"'/32"}]'
 
+#    If the creation stopped before the move, Cluster API still runs on the bootstrap instance:
+#    skip this step, delete-cluster.sh deletes the cluster from there.
+
 # 2. Delete the cluster from the bootstrap instance, then the stack.
 ssh ops@$(tofu output -raw bootstrap) 'sudo /opt/platform/delete-cluster.sh'
 tofu destroy
@@ -192,7 +195,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |
 | service\_addresses | Host numbers, in the cluster network, of the load balancer of the ingress on an interface<br/>plane. Neutron does not allocate the first addresses of the cluster network to anything else<br/>(reserved below reserved\_hosts), so this address is known before the cluster exists. | <pre>object({<br/>    ingress        = optional(number, 10)<br/>    reserved_hosts = optional(number, 32)<br/>  })</pre> | `{}` | no |
-| volume\_zones | Block storage zone of the bootstrap instance's root volume (boot\_volume\_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine. | `map(string)` | `{}` | no |
+| volume\_zones | Block storage zone of the bootstrap instance's root volume (boot\_volume\_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine. It also sets where persistent volumes go: every zone mapped to one storage zone means shared storage, volumes created there and usable from every zone; without it, each volume is created in the zone of its node. | `map(string)` | `{}` | no |
 
 ### Outputs
 

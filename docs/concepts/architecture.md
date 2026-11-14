@@ -209,7 +209,7 @@ The reference places what it deploys; the cloud and the workloads provide the be
 | A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it | the placement |
 | An availability zone | Instances, Kubernetes nodes and volumes spread over the zones given to each stack; planes and routers are regional in Neutron | the placement, with mocked providers |
 | A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([regions and sites](#regions-and-sites)) | two sites deployed side by side; not the failover |
-| A stack or its state | The architecture is rebuilt from code in a documented order; the states are kept in a backend that is itself backed up | every campaign rebuilds it from empty projects |
+| A stack or its state | The architecture is rebuilt from code in a documented order ([rebuild](../guides/rebuild.md)); the states are kept in a backend that is itself backed up | every campaign rebuilds it from empty projects |
 | Tenant data | Backed up by the tenants through the backup integration point; restored the same way | no: yours |
 
 **What the cloud must provide** for the zones to protect anything:
@@ -269,6 +269,7 @@ flowchart TB
 | Publish or withdraw a domain | `scripts/publish-domains.sh`: the entry point's metadata is updated in place |
 | Add a tenant | [add a tenant](../guides/add-a-tenant.md) |
 | Upgrade Kubernetes | new node image, then `spec.topology.version` of the Cluster |
+| Rebuild after a loss | [rebuild](../guides/rebuild.md): the same order, from the first lost step |
 | Tear down | [teardown](../guides/teardown.md): Kubernetes clusters first, then the internal services, the tenants, the entry point, the receivers, the planes |
 
 ## Kubernetes cluster creation

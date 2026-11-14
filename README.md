@@ -187,6 +187,7 @@ isolated t1-isolated-1 internal service 198.51.100.3                          80
 | Check the isolation after a change | [check-isolation](docs/guides/check-isolation.md) |
 | Discover the published cluster | [kubernetes-tour](docs/guides/kubernetes-tour.md) |
 | Upgrade a Kubernetes cluster, rotate its credential | [kubernetes-lifecycle](docs/guides/kubernetes-lifecycle.md) |
+| Rebuild after a loss | [rebuild](docs/guides/rebuild.md) |
 | Tear down | [teardown](docs/guides/teardown.md) |
 
 ## Before production
@@ -204,7 +205,7 @@ This is a reference, not an operated platform. What stays yours:
 | | |
 |---|---|
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
-| **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Tear down](docs/guides/teardown.md) |
+| **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md): [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [Certificates of the tenants](docs/specs/tenant-certificates.md) |
 | **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [internal service](tests/fixtures/internal-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |

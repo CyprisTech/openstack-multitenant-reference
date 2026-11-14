@@ -86,6 +86,11 @@ if os.path.exists("/opt/platform/cacert.pem"):
     print("ca-file=/etc/config/ca.crt")
 print("[LoadBalancer]")
 print("create-monitor=true")
+%{ if storage_zone != null ~}
+# Shared storage: volumes are not tied to the zone of the node that asked for them.
+print("[BlockStorage]")
+print("ignore-volume-az=true")
+%{ endif ~}
 # No internal-lb = true: with it, the cloud controller ignores the annotation
 # openstack-internal-load-balancer: "false" and puts the requested floating IP (loadBalancerIP)
 # in the cluster network as the VIP address. Every Service of type LoadBalancer says what it
@@ -119,6 +124,28 @@ subjects:
   name: cloud-controller-manager
   namespace: kube-system
 RBAC
+# The default storage class: a volume is created once its pod is placed.
+%{ if storage_zone == null ~}
+# Storage per zone: in the pod's zone (Cinder CSI takes the node's zone, which Cinder must have).
+%{ else ~}
+# Shared storage: in the storage zone ${storage_zone}, usable from every zone.
+%{ endif ~}
+kubectl --kubeconfig "$workload" apply -f - <<'STORAGE'
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-cinder
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: cinder.csi.openstack.org
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+%{ if storage_zone != null ~}
+parameters:
+  availability: ${storage_zone}
+%{ endif ~}
+STORAGE
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 %{ for name, i in ingresses ~}
 kubectl --kubeconfig "$workload" create namespace ${i.namespace} --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -

@@ -246,6 +246,8 @@ def main():
         for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
             rows.append(("shared pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(sk, b, 22)))
+        # Positive control: the shared cluster pushes to the receiver, so the probe pod reaches it.
+        rows.append(("shared pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(sk, receiver, 9090)))
         rows.append(("shared pod (default)", f"whoami backend {whoami_pod}", 80, "closed", lambda: p.pod(sk, whoami_pod, 80)))
         rows.append(("shared pod (default)", f"echo backend {echo_pod}", 7000, "closed", lambda: p.pod(sk, echo_pod, 7000)))
         rows.append(("receiver", "series pushed by shared", "-", "yes", lambda: pushed("shared")))
@@ -297,13 +299,24 @@ def main():
                              lambda n=names[0]: update(f"_acme-challenge.{n}")))
 
     failures = 0
+    passed = {}  # source -> set of expected results that matched
     print(f"{'from':<22} {'to':<52} {'port':>5}  {'expected':<8} {'actual':<8}")
     for src, dst, port, expected, probe in rows:
         actual = probe()
         ok = actual == expected
         failures += 0 if ok else 1
+        if ok:
+            passed.setdefault(src.removesuffix(" (default)"), set()).add(expected)
         print(f"{src:<22} {dst:<52} {port:>5}  {expected:<8} {actual:<8} {'✅' if ok else '❌'}")
     print(f"\n{len(rows) - failures}/{len(rows)} rows as expected")
+
+    # A closed result proves something only if the same source reaches what it should: a probe
+    # that cannot connect at all would report every target closed.
+    positive, negative = {"open", "yes", "valid", "accepted"}, {"closed", "refused", "no"}
+    for src, results in sorted(passed.items()):
+        if results & negative and not results & positive:
+            print(f"❌ no positive control from {src}: its closed results prove nothing")
+            failures += 1
     for kubectl in probe_pods:
         subprocess.run(kubectl + ["-n", "default", "delete", "pod", "isolation-probe", "--wait=false"], capture_output=True)
     return 1 if failures else 0
