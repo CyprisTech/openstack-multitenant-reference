@@ -49,7 +49,7 @@ A need is placed by who owns the decision:
 
 | Level | Question | Examples | Owner | Where |
 |---|---|---|---|---|
-| 1. Cloud foundation | What do the projects get from the cloud? | projects, quotas, roles, flavors, images, external networks, identity federation, cost | the cloud operator, or the customer through the provider's IAM | cloud-baseline ([terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant)) on a private cloud; the provider's IAM on a public one |
+| 1. Cloud foundation | What do the projects get from the cloud? | projects, quotas, roles, flavors, images, external networks, identity federation, cost | the cloud operator, or the customer through the provider's IAM | [cloud-baseline](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) on a private cloud; the provider's IAM on a public one |
 | **2. Multi-tenant architecture** | How are the projects organised, connected, exposed and kept available? | tenants, planes, isolation, entry point, anti-affinity, availability zones, sites, tenant types | the platform architect | **this repository** |
 | 3. Platform services | Which shared services run on it? | metrics, logs, audit, security tooling, backup service, secrets | the platform or operations team, with its own tools | integration points of this repository; the tools are yours |
 | 4. Workloads | What do the tenants run? | applications, their data and deployments | each tenant | out of scope |

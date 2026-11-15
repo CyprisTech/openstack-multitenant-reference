@@ -113,7 +113,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 8. Tenant-owned security groups or a central catalogue
 
-**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant).
+**Choice.** Each tenant declares its own security groups. A central catalogue shared by RBAC is an operator option, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline).
 
 **Why.** It works on any cloud, with one project or many, and needs no admin rights. Rules between tenants use CIDRs because `remote_group_id` only works inside one project.
 

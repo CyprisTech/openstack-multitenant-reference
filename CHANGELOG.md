@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Guide [existing projects](docs/guides/existing-projects.md): why move, three ways chosen per project (connect, take over, rebuild beside), and how to proceed with thousands of objects (one stack per project, an inventory generated from the API, `import` with `for_each`).
 - Availability zones ([ADR-0012](docs/adr/0012-resilience-scope.md)): input `zones` (a list, at least one) on the `vm`, `isolated`, `entry-point`, `kubernetes` and shared `kubernetes` stacks. The instances of a role are spread over the zones in order, the single ones (bastion, isolated workload, bootstrap instance) go to the first. Kubernetes: the control plane is spread by Cluster API, the workers get one machine deployment per zone; a warning when the quorum of the control plane does not survive the loss of a zone.
 - Input `volume_zones`: the block storage zone of the root volumes for each compute zone; a compute zone missing from the map gets the cloud's default storage zone. The root volumes of the Kubernetes machines take the zone of their machine.
 - Tests with a mocked OpenStack provider (`tofu test`), run by CI: placement over zones in each stack, quorum warning of the Kubernetes module.

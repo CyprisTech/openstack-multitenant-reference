@@ -86,4 +86,4 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 |---|---|---|
 | Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
 | Public, planes built with a member role | private networks shared by RBAC | 2 — interface, through the hub's transit router |
-| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |
+| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |

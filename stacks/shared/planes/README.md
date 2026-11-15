@@ -8,7 +8,7 @@ The single description of the shared planes, read by every other stack whatever 
 
 ## Two kinds of plane
 
-A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. `nat` in the attachments output follows the mode for now: an operator plane (`gateway`) translates addresses, a hub plane (`interface`) does not. A third kind, the operator plane routed without translation, is adopted like any operator plane: an input of this stack, built by the operator by any means ([`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) is one). Declaring it (an operator plane with `nat = false`) comes in `v0.6`; it is shown here for comparison.
+A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. `nat` in the attachments output follows the mode for now: an operator plane (`gateway`) translates addresses, a hub plane (`interface`) does not. A third kind, the operator plane routed without translation, is adopted like any operator plane: an input of this stack, built by the operator by any means ([`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) is one). Declaring it (an operator plane with `nat = false`) comes in `v0.6`; it is shown here for comparison.
 
 
 ```mermaid

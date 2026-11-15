@@ -9,7 +9,7 @@
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/CyprisTech/openstack-multitenant-reference?label=OpenSSF%20Scorecard)](https://scorecard.dev/viewer/?uri=github.com/CyprisTech/openstack-multitenant-reference)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/16343?label=OpenSSF%20Best%20Practices)](https://www.bestpractices.dev/projects/16343)
 
-A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules.
+A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules. It needs a member role only, on a public, sovereign or private cloud.
 
 ![Architecture overview: shared services and tenants, each in its own project, meet on shared networks (planes); arrows show who opens each connection](docs/images/architecture-overview.png)
 
@@ -26,7 +26,7 @@ A landing zone for OpenStack: a reference architecture, with deployable OpenTofu
 
 Public clouds call it a *landing zone*: the structure an organisation puts in place before running workloads — how resources are divided, how networks connect, how services are exposed, observed and administered, and how isolation is enforced. AWS, Azure and Google Cloud provide one, and the design areas they cover are well established.
 
-OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them: no transit gateway or peering between projects, no shared ingress, no conventions spanning the projects of an organisation. Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify. This repository proposes that layer as a reference: decisions, reusable code and a tested scenario.
+OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them: no transit gateway or peering between projects, no shared ingress, no conventions spanning the projects of an organisation. Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify. Some providers publish a landing zone for their own cloud, built on their account model and network services; for the other OpenStack clouds, public or private, and for teams that hold a member role only, this repository proposes that layer as a reference: decisions, reusable code and a tested scenario. Next to a provider's landing zone, it organises the projects inside: the provider's keeps accounts, identity and central inspection.
 
 ## Terms
 
@@ -61,7 +61,7 @@ The design areas of a landing zone, and the answer of this reference to each. Th
 | Resilience and continuity | What survives the loss of a host, a zone, a site? | Instances, Kubernetes nodes and volumes spread over hosts and the zones you give; a site per region with its own entry point, ready for a failover by DNS that you run; the architecture rebuilt from code and protected states; tenant data backed up through an integration point. The placement is tested, the failover is yours ([resilience](docs/concepts/architecture.md#resilience-and-continuity)) |
 | Automation | How is it all described and changed? | Independent stacks, one state and one credential each, contracts passed as outputs, a tested procedure, a GitOps pipeline as an integration point ([ADR-0005](docs/adr/0005-stacks-contracts-and-access.md)) |
 | Workload platforms | What runs in a project? | Virtual machines, or Kubernetes created with Cluster API, both in the same isolation model. The reference owns what the landing zone requires of the cluster lifecycle; upgrades and scaling are Cluster API's ([ADR-0003](docs/adr/0003-scope-and-boundary.md) D3, [ADR-0002](docs/adr/0002-platform-kubernetes.md), [ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)) |
-| Governance, identity federation, cost | Quotas, single sign-on, budgets | Level 1, not in this repository: projects, quotas and roles through the module's [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) on a private cloud, or the provider's IAM on a public one; single sign-on and budgets are yours ([scope](#scope)) |
+| Governance, identity federation, cost | Quotas, single sign-on, budgets | Level 1, not in this repository: projects, quotas and roles through [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) on a private cloud, or the provider's IAM on a public one; single sign-on and budgets are yours ([scope](#scope)) |
 
 ## Principles
 
@@ -112,11 +112,19 @@ Every stack describes its project with the [terraform-openstack-tenant](https://
 - **Safe day-to-day changes.** Every resource key comes from the input: one plan, no `-target`, and an empty plan after apply. Lifecycle behaviours are fixed and documented, and inputs are validated before anything is created.
 - **Least privilege by construction.** A member role on the project is enough; the module reads no other project and creates no unnecessary secret.
 - **No imposed tooling.** No backend, secret store or CI tool; OpenTofu and Terraform on equal footing; tested on a real cloud before every release.
-- **The same model down to the foundation.** Its [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant) module describes what needs the administrator role — projects, quotas, users, shared networks — with the same model, for private clouds.
+- **The same model down to the foundation.** The [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) module, in its own repository, describes what needs the administrator role — projects, quotas, users, shared networks — with the same model, for private clouds.
 
 ## Scope
 
 The reference owns how the projects are organised, connected, exposed and kept available. The cloud foundation below, the platform services and the workloads above, and what joins from outside connect to it at a stated place ([ADR-0003](docs/adr/0003-scope-and-boundary.md)).
+
+| Layer | What it does | Who owns it | Here |
+|---|---|---|---|
+| Deploying OpenStack | installs, upgrades and runs the cloud's services (Nova, Neutron, Octavia…) | the cloud's operator, with a deployment tool | no |
+| 1. Cloud foundation | what the projects get from the cloud: projects, quotas, roles, flavors, images, external networks | the cloud's operator, or the customer through the provider's IAM | no: consumed |
+| **2. Multi-tenant architecture (the landing zone)** | how the projects are organised, connected, exposed and kept available | the platform architect | **yes** |
+| 3. Platform services | metrics, logs, audit, backups, secrets, with their own tools | the platform or operations team | no: connected at integration points |
+| 4. Workloads | what the tenants run | each tenant | no |
 
 ![What the reference owns (level 2, multi-tenant architecture) and what connects to it: the cloud foundation below, platform services and workloads above through integration points, on-premises networks, an inspection firewall, a WAF and other clouds or regions on the sides](docs/images/scope.png)
 
@@ -180,6 +188,7 @@ isolated t1-isolated-1 internal service 198.51.100.3                          80
 
 | Task | Guide |
 |---|---|
+| Bring existing projects in | [existing-projects](docs/guides/existing-projects.md) |
 | Add a tenant | [add-a-tenant](docs/guides/add-a-tenant.md) |
 | Publish a domain | [publish-a-domain](docs/guides/publish-a-domain.md) |
 | Open a service after qualification | [open-a-service](docs/guides/open-a-service.md) |
@@ -205,7 +214,7 @@ This is a reference, not an operated platform. What stays yours:
 | | |
 |---|---|
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
-| **Guides** | [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
+| **Guides** | [Existing projects](docs/guides/existing-projects.md) · [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md): [Kubernetes cluster for shared services](docs/specs/kubernetes-shared-services.md), [Certificates of the tenants](docs/specs/tenant-certificates.md) |
 | **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [internal service](tests/fixtures/internal-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |
@@ -221,8 +230,8 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 | `v0.3` | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; the integration point for metrics (push contract, the receiver is yours); identity and access; automation; VM and Kubernetes tenants | released |
 | **`v0.4`** | Certificates of the tenants ([spec](docs/specs/tenant-certificates.md)); a Kubernetes cluster for shared services ([spec](docs/specs/kubernetes-shared-services.md)); the Kubernetes lifecycle the landing zone requires ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)); direct exposure of both tenant types, without the entry point | released |
 | `v0.5` | Availability zones: placement over the zones and requirements on the cloud; recovery of the architecture ([ADR-0012](docs/adr/0012-resilience-scope.md)) | |
-| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-tenant)) | |
-| `v0.7` | Integration points, contracts only (the tools are yours): logs and audit; backups of tenant data; secrets; a GitOps pipeline | |
+| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline)) | |
+| `v0.7` | Integration points, contracts only (the tools are yours): logs and audit; backups of tenant data; secrets; a GitOps pipeline, with continuous verification (the isolation test and a drift plan, run on a schedule) | |
 | `v0.8` | Several regions: a site per region, hubs joined by an encrypted overlay; ready for a failover of the entry point by DNS, which you run and rehearse | |
 | `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
 | after `v1.0` | Integrations of platform tools (level 3) in a separate repository, when users ask for them | |
