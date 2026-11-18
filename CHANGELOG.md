@@ -6,13 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-18
+
 ### Added
+
+- [ADR-0011](docs/adr/0011-environments.md): environments, two tiers with a landing zone each, the same code with declared differences, promotion by artifact, a deployment repository with one directory per tier; a non-production tier kept off the Internet by its entry point.
 
 - Guide [existing projects](docs/guides/existing-projects.md): why move, three ways chosen per project (connect, take over, rebuild beside), and how to proceed with thousands of objects (one stack per project, an inventory generated from the API, `import` with `for_each`).
 - Availability zones ([ADR-0012](docs/adr/0012-resilience-scope.md)): input `zones` (a list, at least one) on the `vm`, `isolated`, `entry-point`, `kubernetes` and shared `kubernetes` stacks. The instances of a role are spread over the zones in order, the single ones (bastion, isolated workload, bootstrap instance) go to the first. Kubernetes: the control plane is spread by Cluster API, the workers get one machine deployment per zone; a warning when the quorum of the control plane does not survive the loss of a zone.
 - Input `volume_zones`: the block storage zone of the root volumes for each compute zone; a compute zone missing from the map gets the cloud's default storage zone. The root volumes of the Kubernetes machines take the zone of their machine.
 - Tests with a mocked OpenStack provider (`tofu test`), run by CI: placement over zones in each stack, quorum warning of the Kubernetes module.
 - [ADR-0012](docs/adr/0012-resilience-scope.md): what the reference places, what the cloud and the workloads provide, what is tested; the documentation says which resilience claims are tested.
+- README: the member role up front, the layers in *Scope*, the reference next to a provider's landing zone; audiences: OpenShift in a tenant project, outside the reference.
 - Guide [rebuild](docs/guides/rebuild.md): what to keep outside the cloud, the order of the stacks, what to rebuild for each loss.
 - `tests/campaign`: a step `volume` on the shared cluster; the credential rotation also provisions a volume and moves an existing one, checked again after the upgrade.
 - `tests/campaign`: `NOTIFY_STEPS=1` tells the operator the start and end of each step; a `leftovers` step checks that nothing is left in the projects after the teardown; the sizes the maintainers use, documented.
@@ -187,7 +192,8 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 
-[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.0...v0.2.1
