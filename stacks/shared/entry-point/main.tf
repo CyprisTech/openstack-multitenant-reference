@@ -56,9 +56,10 @@ module "bastion" {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["publication", "observability"]
-  attachment = var.plane_attachment
-  instances  = local.instances
+  planes         = ["publication", "observability"]
+  attachment     = var.plane_attachment
+  instances      = local.instances
+  default_router = "public"
 }
 
 # The metrics agent of each instance, with the Traefik metrics: it pushes to the receiver
@@ -73,7 +74,7 @@ module "metrics" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -114,7 +115,7 @@ module "cloudinit" {
 
 module "edge" {
   # Git source: works with OpenTofu and Terraform alike (registry: CyprisTech/tenant/openstack).
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {
@@ -134,10 +135,12 @@ module "edge" {
         }
         routers = {
           # Default route and public floating IP.
-          public = { external_network = "public", internal_subnet = "main", default_gateway = true }
-          # Plane routers: their routes are pushed to the instances by DHCP (ADR-0001, D2).
+          # Public floating IP; the default route of the transit router.
+          public = { external_network = "public", internal_subnet = "main" }
+          # Plane routers, reached through the routes of the transit router (gateway of the subnet).
           publication   = module.planes.routers["publication"]
           observability = module.planes.routers["observability"]
+          transit       = module.planes.routers["transit"]
         }
       }
     }, module.bastion.networks)

@@ -23,7 +23,7 @@ flowchart LR
 1. **A creates a small network** (a `/29`, no gateway, no DHCP) and shares it with B's project by RBAC (`access_as_shared`, target: B's project ID).
 2. **Each router gets an interface** on it, at a fixed address.
 3. **Each router gets a route** to the other tenant's range, through the other router's address on the transit network.
-4. **The instances learn the route**: when the router holding the transit interface is not their default gateway — the case in this architecture, with a router per plane — the other tenant's range is pushed to them by DHCP (host route). When it is their default gateway, the router routes are enough.
+4. **The instances learn the route** from their transit router, the gateway of their subnet: the other tenant's range is a route of the transit router, through the router holding the transit interface ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). Do not push it as a host route: load balancers keep the host routes they found when their VIP was plugged.
 5. **The security groups of each side admit the other tenant's range** on the ports needed, and only those.
 
 ### Why not share A's own network with B

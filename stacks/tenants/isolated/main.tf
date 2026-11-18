@@ -26,9 +26,9 @@ locals {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes          = ["observability"]
-  attachment      = var.plane_attachment
-  default_gateway = "observability"
+  planes         = ["observability"]
+  attachment     = var.plane_attachment
+  default_router = "observability"
 }
 
 module "admission" {
@@ -60,7 +60,7 @@ module "bastion" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
 
   hostname       = local.instance
   package_update = false # no Internet access by design
@@ -84,7 +84,7 @@ module "cloudinit" {
 }
 
 module "isolated" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {

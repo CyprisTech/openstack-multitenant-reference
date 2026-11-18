@@ -175,7 +175,7 @@ ssh ops@$B 'sudo cat /opt/platform/published.kubeconfig' > published.kubeconfig
 |---|---|---|
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
-| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | duplicated release proxies after the move happen intermittently; see [test results](../concepts/test-results.md#history) (One-shot rebuild, 2026-10-29) before deleting any (deleting one uninstalls the release) |
+| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | `create-cluster.sh` repairs duplicated release proxies after the move (it deletes both proxies of the chart and CAAPH installs it again); a duplicate left means the repair timed out: delete both proxies of that chart, never one only ([test results](../concepts/test-results.md#detailed-results-campaigns-of-2026-11-18)) |
 | ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of the publication plane; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
 
 ```console
@@ -306,14 +306,14 @@ receiver               series pushed by web                                     
 
 Each tenant type that can leave the entry point is switched to `exposure = "public"`, checked, then put back.
 
-1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`, apply.
+1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`: apply, planes again (step 7), domain publication (step 8), HTTPS through the entry point once it answers steadily.
 2. **`kubernetes`**: apply with `exposure = "public"`, then apply the add-ons again in the cluster (`tofu output -json manifests | jq -r '."addons.yaml"' | kubectl apply -f -`); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, add-ons, planes again (step 7), domain publication (step 8), HTTPS through the entry point.
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS on the public address | 12 answers, certificate verified | the Service keeps its former address: the add-ons were not applied, or the cloud controller manager did not move the load balancer (`kubectl -n traefik describe svc traefik`) |
 | entry point to the former address | closed | the publication router is still there: plan of the tenant |
-| back to the entry point | HTTPS through the entry point again | domains not republished (step 8); interface mode: transit routes (step 7) |
+| back to the entry point | HTTPS through the entry point again, answered by the load balancer that existed before the change | domains not republished (step 8); interface mode: transit routes (step 7); the load balancer answers no SYN while the tenant's routes are host routes of its subnet: it keeps the next hop it found when its VIP was plugged ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)) |
 
 ### Hostile route (interface mode)
 
@@ -324,8 +324,8 @@ A tenant adds a route to another tenant through the transit router, and must sti
 jq '.plane_attachment.observability.routes += [{destination: "10.21.0.0/24", next_hop: "172.31.1.1"}]' \
   stacks/tenants/isolated/mode.auto.tfvars.json > /tmp/hostile.json
 tofu -chdir=stacks/tenants/isolated apply -var-file=/tmp/hostile.json
-# on the isolated instance (through its bastion): renew DHCP, then probe a web instance
-sudo networkctl renew ens3; for p in 443 22 9100; do timeout 4 bash -c "</dev/tcp/<web address>/$p" && echo "$p OPEN" || echo "$p closed"; done
+# the route is on the tenant's transit router at once; on the isolated instance (through its bastion), probe a web instance
+for p in 443 22 9100; do timeout 4 bash -c "</dev/tcp/<web address>/$p" && echo "$p OPEN" || echo "$p closed"; done
 tofu -chdir=stacks/tenants/isolated apply   # back to normal
 ```
 

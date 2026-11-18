@@ -12,11 +12,11 @@ locals {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes          = ["internal"]
-  attachment      = var.plane_attachment
-  default_gateway = "internal"
-  instances       = [local.name]
-  exposure        = { primary = "internal" }
+  planes         = ["internal"]
+  attachment     = var.plane_attachment
+  default_router = "internal"
+  instances      = [local.name]
+  exposure       = { primary = "internal" }
 }
 
 module "admission" {
@@ -29,7 +29,7 @@ module "admission" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
 
   hostname       = local.name
   package_update = false
@@ -44,7 +44,7 @@ module "cloudinit" {
 }
 
 module "service" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {

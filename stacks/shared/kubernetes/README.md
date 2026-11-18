@@ -102,7 +102,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | cluster | ../../../modules/kubernetes-cluster | n/a |
-| names | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns | v0.1.5 |
+| names | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns | v0.1.6 |
 
 ### Inputs
 

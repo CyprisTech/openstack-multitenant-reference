@@ -34,20 +34,23 @@ With hub planes, every attached router routes through the transit router: tenant
 
 ## Network topology of a tenant
 
-Each tenant network has **one router per network it joins**. One of them is the default gateway; the planes' ranges are routed through the others, by routes DHCP pushes to the instances. The example below is a `vm` tenant, whose default gateway reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; the `isolated` tenant has no such router, and its only router, to the observability plane, is its default gateway.
+Each tenant network has **one router per network it joins**, and a **transit router** with no external gateway, which holds the subnet's gateway address ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). The instances have one route, the default route to the transit router; the transit router routes each plane's range to that plane's router, and the default route to the egress router. The subnet pushes no host routes: Octavia load balancers copy them once, when their VIP is plugged, and would miss any later change, while a route of the transit router applies at once. The example below is a `vm` tenant, whose egress router reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; the `isolated` tenant has no egress router, and its transit router sends the default route to the observability plane's router.
 
 ```mermaid
 flowchart LR
     subgraph T["Tenant network, e.g. 10.21.0.0/24 (MTU 1362)"]
-        VM["instances<br/>default route: egress router<br/>DHCP routes: one per plane"]
+        VM["instances<br/>default route only"]
         LB["load balancer VIP<br/>(the service address)"]
     end
-    RE["router egress<br/>default gateway"]
+    RT["router transit<br/>default gateway, no external gateway<br/>routes: one per plane, default to egress"]
+    RE["router egress"]
     RS["router publication"]
     RM["router observability"]
-    VM --> RE --> PUB["egress network<br/>(input egress_network, Internet)"]
-    LB -.-> RS --> SVC["publication plane"]
-    VM --> RM --> MON["observability plane"]
+    VM --> RT
+    LB --> RT
+    RT --> RE --> PUB["egress network<br/>(input egress_network, Internet)"]
+    RT --> RS --> SVC["publication plane"]
+    RT --> RM --> MON["observability plane"]
 ```
 
 How the router joins a plane, and how the tenant is seen there, depends on the plane ([ADR-0004](../adr/0004-planes-and-isolation.md), D1):
@@ -58,13 +61,13 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 | operator plane, routed (no NAT) | its gateway, without source NAT, in a shared address scope | its own addresses: the cloud routes the tenant's range | the load balancer's own address |
 | shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |
 
-| Tenant | Default gateway | Other routers | Exposed |
+| Tenant | Default route of the transit router | Other routers | Exposed |
 |---|---|---|---|
-| entry point | public network | publication, observability | public floating IP of its load balancer |
+| entry point | public router | publication, observability | public floating IP of its load balancer |
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
 | `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
-| `isolated` | observability | — | nothing |
-| bastions | administration network | — (second port on the tenant network) | floating IP of the administration network |
+| `isolated` | observability router | — | nothing |
+| bastions | (own network) its router on the administration network, which is the gateway | — (second port on the tenant network) | floating IP of the administration network |
 
 No instance carries floating IPs of several networks ([ADR-0006](../adr/0006-exposure.md), D4): every flow on a plane is initiated from the side that holds the route back.
 
@@ -72,7 +75,8 @@ Three rules follow from this design, each learned from a test failure ([test res
 
 - **MTU.** Tenant networks use the smallest MTU of the planes they join: OVN routers do not send "fragmentation needed", so a larger MTU drops large packets silently.
 - **Sources.** An administration source is the address *as seen on the plane*, often a router's: read it on the target (`$SSH_CLIENT`), do not guess it.
-- **Routes back.** Return traffic follows the instance's routes: a plane's range, and every range routed through it, must be advertised by DHCP on the tenant network.
+- **Routes back.** Return traffic follows the routes of the transit router: a plane's range, and every range routed through it, must be a route of the transit router, through that plane's router.
+- **Routes on a router, not on the subnet.** Octavia load balancers keep the host routes they found when their VIP was plugged; a route on the transit router reaches them at once ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). Each tenant has one router more for it: plan the router quotas.
 
 ## Ingress data path
 

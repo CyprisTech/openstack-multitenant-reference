@@ -14,7 +14,7 @@ locals {
 }
 
 module "build" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {

@@ -6,7 +6,7 @@ One public address for the domains of the tenants that choose it ([ADR-0006](../
 - two Traefik instances on plain VMs, in a server group (anti-affinity), Traefik running as a Podman container started by systemd;
 - routes by **SNI with TLS passthrough** to each tenant's **service address**, PROXY protocol v2 with the client address;
 - routes delivered as **instance metadata**, updated in place: a timer on each instance renders them into Traefik's dynamic configuration within seconds;
-- routers to the publication and observability planes, with their routes pushed by DHCP;
+- routers to the publication and observability planes, and a transit router, gateway of the edge network, holding the routes to them (the default route to the public router; [ADR-0013](../../../docs/adr/0013-plane-routes-on-a-transit-router.md));
 - metrics pushed to your receiver by a Prometheus agent on each instance (node exporter and Traefik metrics, `monitoring.receiver`); nothing connects into the instances.
 
 ```mermaid
@@ -90,8 +90,8 @@ tofu apply -replace='module.edge.module.instance["SITE-edge-2"].openstack_comput
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
-| edge | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
+| edge | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
 | metrics | ../../../modules/metrics-agent | n/a |
 | planes | ../../../modules/plane-attachment | n/a |
 

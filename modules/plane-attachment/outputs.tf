@@ -24,17 +24,21 @@ output "networks" {
 }
 
 output "routers" {
-  description = "One router per plane, keyed by the plane name (publication, observability), for tenant.networks.<network>.routers."
-  value = {
-    for k, p in local.plane : replace(k, "_", "-") => {
+  description = "For tenant.networks.<network>.routers: one router per plane, keyed by the plane name (publication, observability), and the transit router, gateway of the subnet, holding the routes to the planes."
+  value = merge({
+    for k, p in local.plane : local.router_key[k] => {
       internal_subnet  = var.internal_subnet
       external_network = local.interface[k] ? null : k
       interfaces       = { for i in(local.interface[k] ? ["plane"] : []) : i => { network = k, subnet = "main" } }
       routes           = local.interface[k] ? p.routes : []
-      default_gateway  = var.default_gateway == k ? true : null
-      advertise_routes = var.default_gateway == k ? [] : distinct(concat([p.cidr], [for r in p.routes : r.destination if local.interface[k]]))
     }
-  }
+    }, {
+    transit = {
+      internal_subnet = var.internal_subnet
+      default_gateway = true
+      routes          = local.transit_routes
+    }
+  })
 }
 
 output "ports" {

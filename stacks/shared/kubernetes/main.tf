@@ -64,7 +64,7 @@ module "cluster" {
 # gives the records to write with your DNS provider.
 module "names" {
   count  = var.internal_zone == null ? 0 : 1
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns?ref=v0.1.6"
 
   records = {
     for d in var.cluster.domains : d => {

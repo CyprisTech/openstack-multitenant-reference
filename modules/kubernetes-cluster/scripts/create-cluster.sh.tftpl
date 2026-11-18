@@ -207,10 +207,42 @@ sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$
 kind delete cluster --name bootstrap
 # One release proxy per chart. CAAPH v0.6.4 may create a second one when its cache lags behind its
 # own write (kubernetes-sigs/cluster-api-addon-provider-helm#606); the duplicate blocks every later
-# change of the add-ons, so the script ends in error rather than leave it unnoticed. Checked last, once the
-# cluster is complete (certificates, bootstrap source removed).
-duplicates=$(kubectl --kubeconfig "$workload" -n platform get helmreleaseproxy \
-  -o jsonpath='{range .items[*]}{.spec.releaseNamespace}/{.spec.releaseName}{"\n"}{end}' | sort | uniq -d)
-[[ -z "$duplicates" ]] || { echo "duplicate Helm release proxies after the move: $duplicates" >&2; exit 1; }
+# change of the add-ons. Repair, once the cluster is complete (certificates, bootstrap source
+# removed): delete both proxies of each duplicated chart, CAAPH creates one again and installs the
+# chart. Deleting one only is not enough: the one left keeps a stale status. A namespace of the
+# chart may wait in Terminating behind the metrics APIService while metrics-server is reinstalled:
+# the APIService is removed then, and metrics-server installed again at the end.
+proxies() {
+  kubectl --kubeconfig "$workload" -n platform get helmreleaseproxy \
+    -o jsonpath='{range .items[*]}{.spec.releaseNamespace}/{.spec.releaseName} {.metadata.name} {.status.status}{"\n"}{end}'
+}
+duplicates=$(proxies | awk '{print $1}' | sort | uniq -d)
+if [[ -n "$duplicates" ]]; then
+  echo "duplicate Helm release proxies after the move, deleted and reinstalled:" $duplicates
+  for release in $duplicates; do
+    proxies | awk -v r="$release" '$1 == r {print $2}' | xargs kubectl --kubeconfig "$workload" -n platform delete helmreleaseproxy --wait=false
+  done
+  metrics_removed=false
+  for _ in $(seq 90); do
+    if kubectl --kubeconfig "$workload" get namespaces --no-headers | grep -q Terminating \
+      && kubectl --kubeconfig "$workload" get apiservice v1beta1.metrics.k8s.io -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null | grep -q False; then
+      kubectl --kubeconfig "$workload" delete apiservice v1beta1.metrics.k8s.io --wait=false
+      metrics_removed=true
+    fi
+    left=0
+    for release in $duplicates; do
+      [[ "$(proxies | awk -v r="$release" '$1 == r && $3 == "deployed"' | wc -l)" == 1 && "$(proxies | awk -v r="$release" '$1 == r' | wc -l)" == 1 ]] || left=1
+    done
+    [[ $left == 0 ]] && break
+    sleep 10
+  done
+  [[ $left == 0 ]] || { echo "the duplicated add-ons were not installed again: $duplicates" >&2; exit 1; }
+  if $metrics_removed; then
+    proxies | awk '$1 ~ /\/metrics-server$/ {print $2}' | xargs -r kubectl --kubeconfig "$workload" -n platform delete helmreleaseproxy
+    kubectl --kubeconfig "$workload" wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=10m
+  fi
+fi
+duplicates=$(proxies | awk '{print $1}' | sort | uniq -d)
+[[ -z "$duplicates" ]] || { echo "duplicate Helm release proxies after the repair: $duplicates" >&2; exit 1; }
 
 echo "Cluster ${cluster.name} manages itself. Kubeconfig: $workload"

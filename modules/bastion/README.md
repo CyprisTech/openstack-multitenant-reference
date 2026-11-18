@@ -25,7 +25,7 @@ The bastion has its own small network, whose only router joins an administration
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
 
 ### Inputs
 

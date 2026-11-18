@@ -6,7 +6,7 @@ Instances serving several domains behind **one service address** ([ADR-0006](../
 - with more than one instance, an Octavia load balancer in TCP on 443 is the service address; with one, the instance itself;
 - the service address is published through the shared entry point (`exposure = "entry-point"`, the default), admitting the entry point's addresses only (`edge_sources`), or exposed with its own public floating IP (`exposure = "public"`);
 - on the publication plane, the service address is a floating IP of the plane when it translates addresses, its own address otherwise; the instances have no address on the planes;
-- routers to the egress network (default route), the publication and observability planes, with plane routes pushed by DHCP; with `exposure = "public"`, no router on the publication plane: the entry point cannot reach the tenant;
+- routers to the egress network, the publication and observability planes, and a transit router, gateway of the network, holding the routes to them (the default route to the egress router; [ADR-0013](../../../docs/adr/0013-plane-routes-on-a-transit-router.md)); with `exposure = "public"`, no router on the publication plane: the entry point cannot reach the tenant;
 - metrics pushed to your receiver by a Prometheus agent on each instance (`monitoring.receiver`); nothing connects into the instances;
 - an optional bastion for administration.
 
@@ -94,10 +94,10 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | acme | ../../../modules/acme-client | n/a |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
 | metrics | ../../../modules/metrics-agent | n/a |
 | planes | ../../../modules/plane-attachment | n/a |
-| web | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
+| web | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
 
 ### Resources
 

@@ -16,6 +16,8 @@ step_plans() {
 # to remove as much as possible, then reports it.
 step_teardown() {
   local stack failed=0
+  # The next campaign publishes for the first time again: no load during that publication.
+  rm -f "${W}/published-once"
   delete_cluster "${SHARED}" "${SHARED_KUBECONFIG}" || failed=1
   delete_cluster "${PUBLISHED}" "${PUBLISHED_KUBECONFIG}" || failed=1
   for stack in "${SHARED}" "${INTERNAL_SERVICE}" "${PUBLISHED}" "${ISOLATED}" "${VM}" "${ENTRY_POINT}" "${RECEIVER}" "${ACME}" "${PLANES}"; do

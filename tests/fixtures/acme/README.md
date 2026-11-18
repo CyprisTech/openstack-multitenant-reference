@@ -50,9 +50,9 @@ tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/ten
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
-| authority | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
+| authority | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
 | planes | ../../../modules/plane-attachment | n/a |
 
 ### Resources

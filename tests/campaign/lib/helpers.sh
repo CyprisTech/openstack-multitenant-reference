@@ -241,6 +241,21 @@ isolation_test() {  # isolation_test <shared|published>
 
 # HTTPS twelve times through an address, certificate verified, results counted. Fails if one
 # request failed.
+# Up to 3 minutes for 6 answers in a row: the instances of the entry point read their routes
+# each on its own schedule, and the load balancer spreads the requests over them.
+wait_https() {  # wait_https <domain> <address>
+  local _ streak=0
+  for _ in $(seq 90); do
+    if curl -sf -o /dev/null --cacert "${W}/root.pem" --max-time 5 --resolve "$1:443:$2" "https://$1/"; then
+      streak=$((streak + 1)); [[ ${streak} -ge 6 ]] && return 0
+    else
+      streak=0
+    fi
+    sleep 2
+  done
+  echo "$1 does not answer steadily on $2"; return 1
+}
+
 https_probe() {  # https_probe <domain> <address>
   local domain=$1 address=$2 results
   results=$(for _ in $(seq 12); do

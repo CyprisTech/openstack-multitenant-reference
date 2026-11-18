@@ -109,7 +109,9 @@ module "planes" {
   # router there, and the entry point cannot reach it.
   planes     = concat(local.public ? [] : ["publication"], ["observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
   attachment = var.plane_attachment
-  instances  = local.instances
+  # The transit router sends the default route to the egress router.
+  default_router = "egress"
+  instances      = local.instances
   exposure = {
     # A single instance is the service address; behind a load balancer, instances have none.
     primary = local.load_balancer || local.public ? null : "publication"
@@ -139,7 +141,7 @@ module "metrics" {
 }
 
 module "cloudinit" {
-  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
   for_each = toset(local.instances)
 
   hostname = each.key
@@ -174,7 +176,7 @@ module "cloudinit" {
 }
 
 module "web" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {
@@ -192,7 +194,7 @@ module "web" {
         # Gateway mode: the published addresses are floating IPs of the router on publication.
         # Interface mode: the instances' own addresses, reached through the routes.
         routers = merge({
-          egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
+          egress = { external_network = "egress", internal_subnet = "main" }
         }, module.planes.routers)
       }
     }, module.bastion.networks)

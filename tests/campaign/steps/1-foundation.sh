@@ -116,7 +116,8 @@ step_isolated() {
 step_publish() {
   local status=0 load="" load_status=0
   rm -f "${W}/stop-load"
-  if [[ -f "${W}/published-once" ]]; then
+  # No load when the domains were not served before (first publication, return from direct exposure).
+  if [[ -f "${W}/published-once" && "${PUBLISH_LOAD:-1}" == 1 ]]; then
     load_during_publication & load=$!
   fi
   OS_CLOUD=${CLOUD_EDGE} show scripts/publish-domains.sh --tool "${TOOL}" || status=$?

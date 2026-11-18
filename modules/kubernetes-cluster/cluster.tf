@@ -104,7 +104,7 @@ locals {
 
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
   count  = var.bootstrap ? 1 : 0
 
   hostname = local.instance

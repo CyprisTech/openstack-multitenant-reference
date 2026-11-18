@@ -27,10 +27,16 @@ variable "internal_subnet" {
   default     = "main"
 }
 
-variable "default_gateway" {
-  description = "Plane whose router is the default gateway of the stack's network (a tenant with no other way out), or null. Its range needs no route pushed by DHCP."
+variable "default_router" {
+  description = "Key of the router that gets the default route (0.0.0.0/0) of the transit router: the stack's egress router, a plane's router (the plane's name, for a tenant whose only way out is that plane), or null for no default route (unknown destinations are dropped)."
   type        = string
   default     = null
+}
+
+variable "routes" {
+  description = "Other destinations of the stack, reached through its own routers: router key => destinations (for example the administration network through the router on it). They become routes of the transit router too."
+  type        = map(list(string))
+  default     = {}
 }
 
 variable "instances" {

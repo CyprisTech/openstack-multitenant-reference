@@ -26,10 +26,10 @@ What the module owns of the cluster's lifecycle, and what it leaves to Cluster A
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | admission | ../admission | n/a |
-| bootstrap | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
+| bootstrap | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
 | planes | ../plane-attachment | n/a |
-| tenant | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
+| tenant | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
 
 ### Resources
 

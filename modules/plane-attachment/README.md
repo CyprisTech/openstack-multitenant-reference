@@ -5,7 +5,7 @@ How a stack joins the shared planes, from the descriptor `shared/planes` outputs
 | Output | Use in the stack |
 |---|---|
 | `networks` | `tenant.existing.networks`: the planes, by ID |
-| `routers` | `tenant.networks.<network>.routers`: one router per plane — a gateway in gateway mode; an interface and routes through the transit router in interface mode; the ranges pushed by DHCP in both |
+| `routers` | `tenant.networks.<network>.routers`: one router per plane — a gateway in gateway mode; an interface and routes through the hub's transit router in interface mode — and `transit`, the gateway of the subnet: a route to each plane's range (and to every range routed through an interface plane) via that plane's router, the stack's own `routes`, and the default route to `default_router`. The subnet gets no host routes ([ADR-0013](../../docs/adr/0013-plane-routes-on-a-transit-router.md)) |
 | `ports` | per instance: `floating_ip` — a floating IP of the primary plane when it translates addresses, none otherwise (at most one floating IP per address, [ADR-0006](../../docs/adr/0006-exposure.md)) |
 | `mode`, `nat`, `cidr`, `network_name` | per plane, for the stack's own rules and outputs |
 
@@ -37,10 +37,11 @@ The other building blocks: [`bastion`](../bastion/README.md), [`admission`](../a
 | ---- | ----------- | ---- | ------- | :------: |
 | attachment | The stack's entry of the attachments output of stack shared/planes (attachments.<name>.planes), keyed by plane: one descriptor per plane, whatever provides it. | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
 | planes | Planes the stack joins, keyed by name (publication, observability, internal). | `list(string)` | n/a | yes |
-| default\_gateway | Plane whose router is the default gateway of the stack's network (a tenant with no other way out), or null. Its range needs no route pushed by DHCP. | `string` | `null` | no |
+| default\_router | Key of the router that gets the default route (0.0.0.0/0) of the transit router: the stack's egress router, a plane's router (the plane's name, for a tenant whose only way out is that plane), or null for no default route (unknown destinations are dropped). | `string` | `null` | no |
 | exposure | How the instances are reached on the planes: through a floating IP of the plane when it<br/>translates addresses, at their own address otherwise (nothing to create). At most one<br/>floating IP per address (ADR-0006, D4).<br/>- primary: plane on which each instance is a service address, or null. | <pre>object({<br/>    primary = optional(string)<br/>  })</pre> | `{}` | no |
 | instances | Instances whose ports are exposed on the planes (see exposure). | `list(string)` | `[]` | no |
 | internal\_subnet | Key of the subnet the plane routers are attached to, in the stack's network. | `string` | `"main"` | no |
+| routes | Other destinations of the stack, reached through its own routers: router key => destinations (for example the administration network through the router on it). They become routes of the transit router too. | `map(list(string))` | `{}` | no |
 
 ### Outputs
 
@@ -52,5 +53,5 @@ The other building blocks: [`bastion`](../bastion/README.md), [`admission`](../a
 | network\_name | Name of each plane's network (a floating IP pool, for nat planes). |
 | networks | Planes to adopt, for tenant.existing.networks, by ID. |
 | ports | Exposure of each instance's port, keyed by instance: the floating\_ip attribute of the tenant model (a floating IP of the primary plane when it translates addresses, null otherwise). |
-| routers | One router per plane, keyed by the plane name (publication, observability), for tenant.networks.<network>.routers. |
+| routers | For tenant.networks.<network>.routers: one router per plane, keyed by the plane name (publication, observability), and the transit router, gateway of the subnet, holding the routes to the planes. |
 <!-- END_TF_DOCS -->

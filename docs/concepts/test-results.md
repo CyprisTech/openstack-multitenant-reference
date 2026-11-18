@@ -6,24 +6,25 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Campaigns of 2026-11-14 to 2026-11-16, run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
+Campaigns of 2026-11-18 (the transit router, [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
 | Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
-| Migration from v0.4.0 | the v0.4.0 stacks applied, then `az` replaced by `zones` with the same zone: empty plan on every VM stack and fixture | ✅ | not run (same change) |
+| Migration from v0.4.0 | the v0.4.0 stacks applied, then `az` replaced by `zones` with the same zone: empty plan on every VM stack and fixture (2026-11-14, before the transit router) | ✅ | not run (same change) |
+| Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
 | Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
 | Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 54 / 0 | ✅ 24 / 0 |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 85 / 0 | ✅ 104 / 0 |
 | Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ | ✅ |
 | Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 301 / 10 | ✅ 272 / 5 |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 306 / 11 | ✅ 314 / 7 |
 | Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade; shared storage declared (`volume_zones`, one zone) | ✅ | ✅ |
-| Direct exposure of the VM tenant | the service address on its own public address | ✅ | to be run again |
-| Exposure change of the published cluster | switched to its own public address and back | to be run again | to be run again |
+| Exposure change of the VM tenant | the service address on its own public address, then back behind the entry point: the existing load balancer answers the entry point again (requests ok) | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
+| Exposure change of the published cluster | the ingress on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Teardown | no leftover in any project, load balancers included | ✅ | ✅ |
 
 **Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
@@ -35,18 +36,32 @@ Known limits, detailed in the findings below and in the [test procedure](../refe
 - On hub planes, `shared/planes` is applied again after the tenants; until then the pushes time out and the agents retry.
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
 - An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
+- Each stack has one router more, its transit router: a project hosting several stacks needs a router quota above the default of 10 (the shared services project of the scenario uses 10).
+- CAAPH created duplicate Helm release proxies after the move on every cluster of these campaigns; they were repaired by deleting both proxies of each chart. `create-cluster.sh` now does it itself; that repair has not run on the cloud yet.
 
 The isolation matrix of the earlier designs had 44 to 46 rows; the counts are not comparable.
 
 ## Environment
 
-Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.5 for the current state; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: campaigns of 2026-11-18
+
+The transit router ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)) with the whole scenario, in both plane modes, from empty projects.
+
+- **Cause of the earlier exposure failures, verified on the cloud on 2026-11-17:** after an exposure change, the router on the publication plane comes back with a new address on the tenant subnet. The Octavia load balancers (amphora provider) keep the host routes they copied when their VIP was plugged: captures on the amphora showed the SYN of the entry point arriving, then ARP requests for the old next hop and no answer. The load balancer stayed ACTIVE and ONLINE. Recreating the load balancer, or the transit router, fixes it; the transit router fixes it for every later route change. A second cause in the short campaign of 2026-11-17: the demo application of the published cluster was not deployed (the step `accept` was not run), which the `direct-k8s` scene now does itself.
+- **Exposure changes:** in both modes, the VM tenant and the published cluster exposed directly (12/12), then back behind the entry point, where the existing load balancers answer again (12/12 on each domain).
+- **Defects found and fixed** (in the campaign tooling):
+  - The marker of a first publication was never reset by the teardown: the next campaign loaded the entry point before its domains were published.
+  - After a return from direct exposure, one request in twelve could fail before both instances of the entry point had read their routes: the probe now waits for six answers in a row.
+- **Quota:** the shared services project reached its router quota (10) in hub planes; the step passed when run again.
+- **Defect, upstream:** duplicate Helm release proxies after the move on every cluster created (two to four charts, the CNI included); repaired as described in the current state.
 
 ## Detailed results: campaigns of 2026-11-14 and 2026-11-15
 
 The `v0.5` changes (zones, volume zones, one machine deployment per zone, the campaign checks of cloud-init and leftovers) with the whole scenario, in both plane modes.
 
-- **To be run again:** the direct exposure steps, and in hub planes the last publication under load, once the test cloud is fixed. Cause checked on 2026-11-16, for the direct exposure and for the entry point at the end of the hub planes run: the floating IP of the load balancer is distributed by OVN, and the virtual port of its address was bound to a compute host without an uplink to the external network; nothing answered ARP for the address. Not a defect of the reference.
+- **Run again on 2026-11-18:** the direct exposure steps, and in hub planes the last publication under load. A compute host without an uplink to the external network (fixed since) explained part of the failures; the stale routes of the load balancers after an exposure change explained the rest (see the campaigns of 2026-11-18).
 - **Defects found and fixed** (in the campaign tooling):
   - A first SSH attempt to a new instance ended the step instead of being retried (the steps run with `errexit`).
   - Run again after a cluster deletion, `delete-cluster.sh` took the unreachable API of the deleted cluster for an unadmitted instance; the teardown also tried to reach the bootstrap instance of a stack already destroyed.

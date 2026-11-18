@@ -46,8 +46,11 @@ locals {
 module "planes" {
   source = "../plane-attachment"
 
-  planes     = var.planes
-  attachment = var.plane_attachment
+  planes         = var.planes
+  attachment     = var.plane_attachment
+  default_router = "egress"
+  # The administration network, through the router on it, unless it is the internal plane.
+  routes = local.admin_on_internal ? {} : { admin = [var.admin_network.cidr] }
 }
 
 # Who may reach the bootstrap instance.
@@ -108,7 +111,7 @@ resource "terraform_data" "entries" {
 }
 
 module "tenant" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {
@@ -140,12 +143,9 @@ module "tenant" {
         # and of the bootstrap instance; CAPO adds its external address to the sources admitted
         # by the API load balancer, since the nodes reach the API through it.
         routers = merge({
-          egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
+          egress = { external_network = "egress", internal_subnet = "main" }
           }, module.planes.routers, {
-          for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
-            external_network = "admin", internal_subnet = "main",
-            advertise_routes = [var.admin_network.cidr]
-          }
+          for k in(local.admin_on_internal ? [] : ["admin"]) : k => { external_network = "admin", internal_subnet = "main" }
         })
       }
     }
@@ -174,7 +174,7 @@ resource "terraform_data" "cluster_network" {
 # depend on these addresses, and a change of an entry's plane would remove the interface before
 # the floating IP that uses it, which Neutron refuses.
 module "bootstrap" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {

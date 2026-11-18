@@ -69,10 +69,19 @@ step_direct() {
 }
 
 restore_vm() {
+  local status=0 domain address
   comment "Back to the entry point"
   scene_end "${VM}"
   # The router on publication is new: interface mode routes to it through the transit router.
-  run_apply "${VM}" && step_transit >/dev/null && scene_done "${VM}"
+  run_apply "${VM}" && step_transit >/dev/null && PUBLISH_LOAD=0 step_publish && scene_done "${VM}" || status=1
+  # The load balancer existed before the change: it must answer the entry point again, through
+  # the new router on publication (the routes are on the tenant's transit router, not copied
+  # into the load balancer). Once the entry point answers steadily, every request must succeed.
+  address=$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)
+  for domain in "site-a.${TEST_ZONE}" "site-b.${TEST_ZONE}"; do
+    wait_https "${domain}" "${address}" && https_probe "${domain}" "${address}" || status=1
+  done
+  return "${status}"
 }
 
 # The published cluster exposed directly (exposure = "public"): the ingress moves to a public
@@ -80,6 +89,9 @@ restore_vm() {
 # entry point no longer reaches the cluster. Then back to the entry point, republished.
 step_direct_k8s() {
   local inputs="${PUBLISHED}/mode.auto.tfvars.json" before address status=0
+  # The scene answers with the demo application: deploy it when the accept step has not run.
+  demo_manifest "${PUBLISHED}/demo/whoami.yaml" | kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" apply -f - >/dev/null
+  kubectl --kubeconfig "${PUBLISHED_KUBECONFIG}" -n demo rollout status deploy/whoami >/dev/null || return 1
   before=$(output_raw "${PUBLISHED}" service_address | cut -d: -f1)
   scene_begin "${PUBLISHED}"
   jq '.exposure = "public"' "$(scene_backup "${PUBLISHED}")" > "${inputs}"
@@ -102,7 +114,8 @@ step_direct_k8s() {
   comment "Back to the entry point"
   scene_end "${PUBLISHED}"
   run_apply "${PUBLISHED}" && apply_addons && step_transit >/dev/null && step_publish && scene_done "${PUBLISHED}" || status=1
-  https_probe "apps.published.${TEST_ZONE}" "$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)" || status=1
+  address=$(output_json "${ENTRY_POINT}" load_balancer | jq -r .floating_ip)
+  wait_https "apps.published.${TEST_ZONE}" "${address}" && https_probe "apps.published.${TEST_ZONE}" "${address}" || status=1
   return "${status}"
 }
 
@@ -142,8 +155,8 @@ step_hostile() {
   instance=$(instances_of "${ISOLATED}")
   target=$(first_instance_of "${VM}")
   wait_for_instances "${bastion}" "${instance}" >/dev/null
-  on_instance "${bastion}" "${instance}" "sudo networkctl renew ens3; sleep 4; ip route | grep 10.21
-    for port in 443 22 9100; do
+  # The route is on the tenant's transit router (ADR-0013): it applies at once, no DHCP renewal.
+  on_instance "${bastion}" "${instance}" "for port in 443 22 9100; do
       timeout 4 bash -c \"</dev/tcp/${target}/\${port}\" 2>/dev/null && echo \"\${port} OPEN\" || echo \"\${port} closed\"
     done" | tee "${W}/hostile.txt"
 

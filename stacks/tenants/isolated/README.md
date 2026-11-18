@@ -2,7 +2,7 @@
 
 A workload with no public exposure and no path to the other tenants ([ADR-0003](../../../docs/adr/0003-scope-and-boundary.md), D3):
 
-- one network whose **only router** joins the observability plane, its default gateway;
+- one network whose router joins the observability plane, and a transit router, gateway of the network, that sends the observability range and the default route to it ([ADR-0013](../../../docs/adr/0013-plane-routes-on-a-transit-router.md));
 - no egress network, no route to the publication plane or to the Internet;
 - the workload pushes its metrics to your receiver through the observability plane (`monitoring.receiver`); nothing connects into the tenant;
 - an optional bastion for administration.
@@ -58,8 +58,8 @@ Its router is its only way out, and the only ranges routed through it are the ob
 | ---- | ------ | ------- |
 | admission | ../../../modules/admission | n/a |
 | bastion | ../../../modules/bastion | n/a |
-| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.5 |
-| isolated | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.5 |
+| cloudinit | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit | v0.1.6 |
+| isolated | git::https://github.com/CyprisTech/terraform-openstack-tenant.git | v0.1.6 |
 | planes | ../../../modules/plane-attachment | n/a |
 
 ### Inputs

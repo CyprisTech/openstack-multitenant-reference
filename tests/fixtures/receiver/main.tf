@@ -28,10 +28,11 @@ locals {
 module "planes" {
   source = "../../../modules/plane-attachment"
 
-  planes     = ["observability"]
-  attachment = var.plane_attachment
-  instances  = [local.name]
-  exposure   = { primary = "observability" }
+  planes         = ["observability"]
+  attachment     = var.plane_attachment
+  instances      = [local.name]
+  exposure       = { primary = "observability" }
+  default_router = "egress"
 }
 
 module "admission" {
@@ -63,7 +64,7 @@ module "bastion" {
 }
 
 module "cloudinit" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
 
   hostname     = local.name
   users        = { for login, keys in var.users : login => { ssh_authorized_keys = keys, sudo = true } }
@@ -77,7 +78,7 @@ module "cloudinit" {
 }
 
 module "receiver" {
-  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.5"
+  source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git?ref=v0.1.6"
 
   tenant = {
     existing = {
@@ -90,7 +91,7 @@ module "receiver" {
         mtu     = var.network_mtu
         subnets = { main = { cidr = var.cidr, dns_nameservers = var.dns_nameservers } }
         routers = merge({
-          egress = { external_network = "egress", internal_subnet = "main", default_gateway = true }
+          egress = { external_network = "egress", internal_subnet = "main" }
         }, module.planes.routers)
       }
     }, module.bastion.networks)
