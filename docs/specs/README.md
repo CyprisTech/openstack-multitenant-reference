@@ -18,3 +18,4 @@ Specs and [ADRs](../adr/README.md) play different parts:
 
 | Spec | Status |
 |---|---|
+| [Campaign tooling by profile](campaign-tooling.md) | Proposed |
