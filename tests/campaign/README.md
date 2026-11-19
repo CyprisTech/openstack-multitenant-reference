@@ -47,11 +47,11 @@ python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
 |---|---|
 | `run.py` | Command line: the scenario, the mode, the steps; the report (`work/<scenario>-<mode>/report.json`) |
 | `campaign/` | The package: scenario loading, context (stacks, inputs, scenes), tools (`tofu`, `openstack`), retries, report |
-| `campaign/steps/` | The steps, one module per family; ported so far: `plans`, `leftovers` |
+| `campaign/steps/` | The steps, one module per family; ported so far: the foundation (`prep` to `publish`), `plans`, `leftovers` |
 | `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks and the sequences of each profile |
 | `tests/` | Unit tests, no cloud |
 
-A step not ported yet is listed as such and skipped. Python 3.11 or later, standard library only.
+A step not ported yet is listed as such and skipped. Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` with PyYAML, installed with the `openstack` client. The settings of `campaign.env` are in `campaign.local.toml` (see the example); the attachments of the planes and their ranges are in the scenario. Recording (`RECORD=1`) is not ported yet.
 
 ## How it is organised
 

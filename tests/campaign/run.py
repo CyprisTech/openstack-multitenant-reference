@@ -11,6 +11,7 @@ versioned. Python 3.11 or later, standard library only.
 """
 
 import argparse
+import os
 import sys
 import time
 import tomllib
@@ -48,6 +49,12 @@ def main(argv=None):
     elif not args.dry_run:
         parser.error(f"no configuration: copy {HERE / 'campaign.local.toml.example'} to {args.config}")
 
+    # Only the clouds.yaml entries named in the configuration may be used: the OS_* variables of
+    # the shell would mix with them.
+    for variable in [v for v in os.environ if v.startswith("OS_")]:
+        del os.environ[variable]
+    os.environ["TF_IN_AUTOMATION"] = "1"
+
     runner = Runner(dry_run=args.dry_run)
     ctx = Context(scenario, mode, config, runner, ROOT, Path(args.work) / f"{scenario.name}-{mode}")
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
@@ -74,6 +81,7 @@ def main(argv=None):
             entry.seconds = round(time.monotonic() - started, 1)
             report.write(ctx.work / "report.json")
         if entry.status == "failed":
+            ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min")
             break
 
     print("\n" + report.summary())

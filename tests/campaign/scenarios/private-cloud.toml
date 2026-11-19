@@ -25,3 +25,20 @@ full       = ["foundation", "shared", "published", "end"]
 # Settings of the steps.
 [options.plans]
 skip = ["shared"]   # removed by shared-down before the end
+
+# The attachments of the planes stack: the project of a stack, its range, the role it has on
+# each plane. Only those whose stack is in the scenario are written.
+[options.planes.attachments]
+receiver         = { stack = "receiver", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
+internal-service = { stack = "internal-service", cidr = "10.35.0.0/28", planes = { internal = "shared" } }
+acme             = { stack = "acme", cidr = "10.37.0.0/28", planes = { internal = "shared" } }
+edge             = { stack = "entry-point", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
+web              = { stack = "vm", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
+isolated         = { stack = "isolated", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
+published        = { stack = "published", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
+k8s-shared       = { stack = "shared", cidr = "10.36.0.0/24", planes = { internal = "shared", observability = "tenant" } }
+
+[options.planes.tenant_ranges]
+publication   = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
+observability = ["10.20.0.0/14", "10.24.0.0/14", "10.36.0.0/24"]
+internal      = ["10.20.0.0/14", "10.24.0.0/14"]

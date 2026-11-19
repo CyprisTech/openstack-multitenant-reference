@@ -16,3 +16,15 @@ foundation = ["prep", "planes", "receiver", "edge", "web", "isolated", "transit"
 checks     = ["accept", "direct", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
 full       = ["foundation", "checks", "end"]
+
+# Settings of the steps.
+# Hub planes only (publication and observability, interface mode): no internal plane.
+[options.planes.attachments]
+receiver = { stack = "receiver", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
+edge     = { stack = "entry-point", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
+web      = { stack = "vm", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant" } }
+isolated = { stack = "isolated", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
+
+[options.planes.tenant_ranges]
+publication   = ["10.21.0.0/16", "10.22.0.0/15"]
+observability = ["10.20.0.0/14"]
