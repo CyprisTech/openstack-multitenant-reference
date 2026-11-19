@@ -3,6 +3,7 @@
 import collections
 import os
 import re
+import time
 
 from .context import StepFailed
 from .retry import POLICIES
@@ -48,15 +49,19 @@ def curl(ctx, domain, address, *args, timeout=5):
     return ctx.runner.run(cmd, check=False, quiet=True)
 
 
-def wait_https(ctx, domain, address, streak=6):
+def wait_https(ctx, domain, address, streak=6, report=None):
     """Up to 3 minutes for `streak` answers in a row: the instances of the entry point read their
-    routes each on its own schedule, and the load balancer spreads the requests over them."""
+    routes each on its own schedule, and the load balancer spreads the requests over them. With a
+    report, the time until the answers are steady is measured."""
     policy = POLICIES["entry-point"]
     count = 0
+    started = time.monotonic()
     for _ in range(policy.attempts):
         if curl(ctx, domain, address, "-f", "-o", "/dev/null").returncode == 0:
             count += 1
             if count >= streak:
+                if report is not None:
+                    report.measures[f"steady {domain}"] = f"{round(time.monotonic() - started)} s"
                 return
         else:
             count = 0

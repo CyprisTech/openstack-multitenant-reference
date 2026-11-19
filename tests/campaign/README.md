@@ -20,7 +20,7 @@ Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` wit
 
 The campaign stops at the first failure: a command that fails, a request that fails, a plan that is not empty, an instance that does not come up. The teardown goes on after a failure, to remove as much as it can, and reports it. The two Kubernetes clusters are deployed one after the other, so that it fits a small test cloud ([sizing](#sizing)).
 
-Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
+Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures — HTTPS counts, time to a steady answer, loads — and the duration of each apply and destroy), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
 
 ## Sizing
 

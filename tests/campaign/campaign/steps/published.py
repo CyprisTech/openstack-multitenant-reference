@@ -172,7 +172,7 @@ def back_to_entry_point(ctx, report, key, names, failures, after_apply=None, loa
     address = entry_address(ctx)
     for domain in domains(ctx, *names):
         try:
-            wait_https(ctx, domain, address)
+            wait_https(ctx, domain, address, report=report)
             https_probe(ctx, report, domain, address)
         except StepFailed as error:
             failures.append(str(error))

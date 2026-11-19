@@ -108,6 +108,35 @@ class ProfileInputsTest(unittest.TestCase):
             self.assertEqual(public.options["inputs"][key]["bastion_placement"], "stack-network")
 
 
+class MeasuresTest(unittest.TestCase):
+    def test_steady_time_is_measured(self):
+        from campaign.checks import https_probe, wait_https
+
+        def fake(cmd):
+            return Result(0, "Hostname: web-1\n")
+
+        ctx = context(fake=fake, dry_run=False)
+        ctx.runner = Runner(dry_run=False, echo=lambda line: None)
+        ctx.runner.run = lambda cmd, **kwargs: fake(cmd)
+        ctx.sleep = lambda seconds: None
+        entry = StepReport("accept")
+        wait_https(ctx, "site-a.example.org", "192.0.2.80", report=entry)
+        https_probe(ctx, entry, "site-a.example.org", "192.0.2.80", requests=3)
+        self.assertEqual(entry.measures["https site-a.example.org"], "3/3")
+        self.assertIn("steady site-a.example.org", entry.measures)
+
+    def test_the_durations_of_applies_are_kept(self):
+        def fake(cmd):
+            return Result(0, "")
+
+        ctx = context(fake=fake, dry_run=False)
+        ctx.runner = Runner(dry_run=False, echo=lambda line: None)
+        ctx.runner.run = lambda cmd, **kwargs: fake(cmd)
+        ctx.tofu.runner = ctx.runner
+        ctx.apply("vm")
+        self.assertEqual([(d["stack"], d["action"]) for d in ctx.durations], [("vm", "apply")])
+
+
 class EndStepsTest(unittest.TestCase):
     def test_plans_reports_every_stack_and_fails_on_drift(self):
         steps = load()

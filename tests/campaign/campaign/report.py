@@ -22,6 +22,7 @@ class Report:
     dry_run: bool
     started: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     steps: list = field(default_factory=list)
+    durations: list = field(default_factory=list)  # applies and destroys of the stacks
 
     def step(self, name):
         entry = StepReport(name)

@@ -30,6 +30,7 @@ class Context:
         self.tofu = Tofu(runner, tool=self.tool, root=self.root)
         self.openstack = OpenStack(runner, ca_cert=config.get("ca_cert") or None)
         self._projects = {}
+        self.durations = []  # applies and destroys: {stack, action, seconds}, for the report
 
     @property
     def tool(self):
@@ -150,6 +151,7 @@ class Context:
         seconds = round(time.monotonic() - started)
         self.runner.echo(f"{key}: apply {seconds} s, plan after apply exit={plan} (0 = empty)")
         self.timing(f"{key} apply={seconds}s plan={plan}")
+        self.durations.append({"stack": key, "action": "apply", "seconds": seconds})
         if plan != 0:
             raise StepFailed(f"plan not empty after apply: {key}")
 
@@ -163,7 +165,9 @@ class Context:
             for line in (result.stdout + result.stderr).splitlines():
                 if re.search(r"Destroy complete|Error", line):
                     self.runner.echo(line)
-        self.timing(f"{key} destroy={round(time.monotonic() - started)}s status={result.returncode}")
+        seconds = round(time.monotonic() - started)
+        self.timing(f"{key} destroy={seconds}s status={result.returncode}")
+        self.durations.append({"stack": key, "action": "destroy", "seconds": seconds})
         if result.returncode != 0:
             raise StepFailed(f"destroy failed: {key}")
 

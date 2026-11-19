@@ -51,6 +51,7 @@ def record_step(args, scenario, mode, name, ctx, entry):
     except (OSError, ValueError, IndexError, KeyError) as error:
         raise RuntimeError(f"the recorded step left no result ({error}); cast: {cast}") from error
     entry.measures.update(inner_entry.get("measures", {}))
+    ctx.durations.extend(json.loads((ctx.work / INNER_REPORT).read_text()).get("durations", []))
     entry.measures["cast"] = cast.name
     if inner_entry.get("status") != "ok":
         raise RuntimeError(inner_entry.get("error") or f"step {name} failed (cast: {cast})")
@@ -111,6 +112,7 @@ def main(argv=None):
             print(f"step {name} failed: {error}", file=sys.stderr)
         finally:
             entry.seconds = round(time.monotonic() - started, 1)
+            report.durations = ctx.durations
             report.write(ctx.work / (INNER_REPORT if os.environ.get(INNER) else "report.json"))
         if entry.status == "failed":
             if not os.environ.get(INNER):  # a recorded step: the outer run tells the operator
