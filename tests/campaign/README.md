@@ -1,21 +1,26 @@
 # Test campaign
 
-`run.sh` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown: it applies each stack, requires an empty plan, runs the [isolation test](../isolation/README.md) and the HTTPS checks, and keeps the outputs.
+`run.py` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown. It applies each stack, requires an empty plan, runs the [isolation test](../isolation/README.md) and the HTTPS checks, and keeps the outputs. A scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md)) names the stacks and the steps; the steps themselves are shared.
 
 ## Usage
 
 ```bash
-cp tests/campaign/campaign.env.example tests/campaign/campaign.env   # adapt
+cp tests/campaign/campaign.local.toml.example tests/campaign/campaign.local.toml   # adapt
 # and a terraform.tfvars for each stack and fixture, from its terraform.tfvars.example
-tests/campaign/run.sh gateway full
-tests/campaign/run.sh interface planes edge    # or a few steps
+tests/campaign/run.py private-cloud --mode gateway full
+tests/campaign/run.py private-cloud --mode interface planes edge   # or a few steps
+tests/campaign/run.py public-cloud full
+tests/campaign/run.py private-cloud --dry-run full                 # the commands, without a cloud
+python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
 ```
 
-Tools on the machine that runs it: OpenTofu or Terraform, the `openstack` client with its Octavia plugin (`python-octaviaclient`, for the load balancers of the leftover check), `kubectl`, `clusterctl`, `jq`, `curl`, `python3`, and `asciinema` with `RECORD=1`.
+Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` with PyYAML, installed with the `openstack` client. Other tools on the machine that runs it: OpenTofu or Terraform, the `openstack` client with its Octavia plugin (`python-octaviaclient`, for the load balancers of the leftover check), `kubectl`, `clusterctl`, `curl`, and `asciinema` with `--record`.
+
+`campaign.local.toml` (git-ignored) holds what is specific to the maintainers' cloud: the `clouds.yaml` entry of each stack, the planes of each mode, the SSH access, the test zone, the credentials of the clusters, the hooks. Nothing else changes from a cloud to another: the attachments of the planes and their ranges are in the scenario.
 
 The campaign stops at the first failure: a command that fails, a request that fails, a plan that is not empty, an instance that does not come up. The teardown goes on after a failure, to remove as much as it can, and reports it. The two Kubernetes clusters are deployed one after the other, so that it fits a small test cloud ([sizing](#sizing)).
 
-Outputs, under `tests/campaign/work/<mode>` (git-ignored): `isolation-*.txt`, `https.txt`, `plans.txt`, `timings.txt`, the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
+Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
 
 ## Sizing
 
@@ -31,46 +36,26 @@ The campaign tests behaviour, not capacity: each instance gets the smallest size
 
 A smaller cloud can also run the shared cluster with one control plane node: the upgrade is then tested without a highly available control plane.
 
-## Python tooling, by profile (in progress)
-
-The campaign is being moved to Python, with a scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md), [spec](../../docs/specs/campaign-tooling.md)). Every step is ported. `run.sh` stays the tool that runs a campaign until a full campaign of the private cloud profile has passed with `run.py` in both modes; it is removed then.
-
-```bash
-cp tests/campaign/campaign.local.toml.example tests/campaign/campaign.local.toml   # adapt
-tests/campaign/run.py private-cloud --mode gateway full
-tests/campaign/run.py public-cloud plans leftovers      # a few steps
-tests/campaign/run.py private-cloud --dry-run full      # the commands, without a cloud
-python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
-```
+## How it is organised
 
 | Path | Content |
 |---|---|
-| `run.py` | Command line: the scenario, the mode, the steps; the report (`work/<scenario>-<mode>/report.json`) |
-| `campaign/` | The package: scenario loading, context (stacks, inputs, scenes), tools (`tofu`, `openstack`), retries, report |
-| `campaign/steps/` | The steps, one module per family: `foundation`, `shared` (the shared cluster), `published` (the published cluster and the scenes), `end`; `campaign/kube.py` and `campaign/checks.py` hold what several families use |
-| `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks and the sequences of each profile |
+| `run.py` | Command line: the scenario, the mode, the steps; recording; the report |
+| `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks, the sequences and the settings of the steps of each profile |
+| `campaign/` | Scenario loading, the context of a step (stacks, inputs, scenes, apply), the tools (`tofu`, `openstack`, a runner with a dry run), retries, the report |
+| `campaign/kube.py`, `campaign/checks.py` | The clusters and their bootstrap instance; the isolation test and the HTTPS checks |
+| `campaign/steps/` | The steps, one module per family: `foundation`, `shared` (the shared cluster), `published` (the published cluster and the scenes), `end` |
 | `tests/` | Unit tests, no cloud |
 
-Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` with PyYAML, installed with the `openstack` client. The settings of `campaign.env` are in `campaign.local.toml` (see the example); the attachments of the planes and their ranges are in the scenario. Recording (`RECORD=1`) is not ported yet.
+A step that changes a stack and restores it (direct exposure, a consumer, the hostile route) is a scene: it keeps the stack's inputs first and restores them even when it fails; run again after a failure, it starts from the inputs it kept. An instance whose cloud-init ends in error stops the campaign, it is not retried.
 
-## How it is organised
+The inputs a stack receives from the others are written to its `mode.auto.tfvars.json`, which tofu loads by itself: a plain apply of the stack, or `scripts/publish-domains.sh`, uses them too.
 
-| File | Content |
-|---|---|
-| `run.sh` | Arguments, configuration, the sequences, recording of each step |
-| `lib/helpers.sh` | Stack inputs and outputs, apply and destroy, access to the instances, clusters, checks |
-| `steps/1-foundation.sh` | Sequence `foundation`: planes, fixtures, entry point, `vm` and `isolated` tenants, publication |
-| `steps/2-shared-cluster.sh` | Sequence `shared`: the shared cluster, its acceptance, a consumer added, removal |
-| `steps/3-published-cluster.sh` | Sequence `published`: the published cluster, acceptance, hostile route |
-| `steps/4-end.sh` | Sequence `end`: plans still empty, teardown, nothing left in the projects |
-
-A step that changes a stack and restores it (direct exposure, a consumer, the hostile route) keeps the stack's inputs first and restores them at the end; run again after a failure, it starts from the inputs it kept. An instance whose cloud-init ends in error stops the campaign, it is not retried.
-
-A step is a function `step_<name>`; `full` runs the four sequences in order. The inputs a stack receives from the others are written by `set_inputs` to its `mode.auto.tfvars.json`.
+`notify_hook` (optional) tells the operator, given a message: when the campaign waits for someone (the revocation of the old credential, in step `rotate`) and when it stops. `repair_hook` (optional) may clean a known failure of your test cloud after a failed apply: given the stack path, it prints extra apply arguments.
 
 ## Recordings
 
-With `RECORD=1`, each step is recorded with [asciinema](https://asciinema.org) in `casts/`, with the full output of the tools. Recordings show real addresses: before publishing one, run
+With `--record`, each step is recorded with [asciinema](https://asciinema.org) in `casts/`, with the full output of the tools. Recordings show real addresses: before publishing one, run
 
 ```bash
 tests/campaign/sanitize-cast.py input.cast output.cast --replace internal.name=example.org --forbid internal

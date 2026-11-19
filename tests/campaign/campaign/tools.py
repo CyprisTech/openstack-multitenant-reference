@@ -35,14 +35,17 @@ class Runner:
         self.fake = fake or (lambda cmd: Result(0, ""))
         self.commands = []
 
-    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None):
-        """`input` goes to the standard input: what must not be printed (secrets) goes there."""
+    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None, stream=False):
+        """`input` goes to the standard input: what must not be printed (secrets) goes there.
+        With `stream`, the output is printed line by line as it comes (long scripts), and kept."""
         cmd = [str(c) for c in cmd]
         if not quiet:
             self.echo("$ " + shlex.join(cmd))
         if self.dry_run:
             self.commands.append((cmd, str(cwd) if cwd else None))
             result = self.fake(cmd)
+        elif stream:
+            result = self._stream(cmd, cwd, env)
         else:
             try:
                 done = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, input=input, timeout=timeout)
@@ -52,6 +55,16 @@ class Runner:
         if check and result.returncode != 0:
             raise CommandError(cmd, result)
         return result
+
+
+    def _stream(self, cmd, cwd, env):
+        lines = []
+        with subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True, bufsize=1) as process:  # fmt: skip
+            for line in process.stdout:
+                self.echo(line.rstrip("\n"))
+                lines.append(line)
+        return Result(process.returncode, "".join(lines), "")
 
 
 class Tofu:

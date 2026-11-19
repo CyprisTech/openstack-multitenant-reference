@@ -6,7 +6,7 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Campaigns of 2026-11-18 (the transit router, [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
+Campaigns of 2026-11-19 (the Python campaign tooling, the private cloud profile of [ADR-0014](../adr/0014-profiles.md); the transit router of [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
@@ -18,10 +18,10 @@ Campaigns of 2026-11-18 (the transit router, [ADR-0013](../adr/0013-plane-routes
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 85 / 0 | ✅ 104 / 0 |
-| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ | ✅ |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0 | ✅ 24 / 0 |
+| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ open after 20 s | ✅ open after 20 s |
 | Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 306 / 11 | ✅ 314 / 7 |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 334 / 1 | ✅ 310 / 1 |
 | Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade; shared storage declared (`volume_zones`, one zone) | ✅ | ✅ |
 | Exposure change of the VM tenant | the service address on its own public address, then back behind the entry point: the existing load balancer answers the entry point again (requests ok) | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Exposure change of the published cluster | the ingress on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
@@ -44,6 +44,22 @@ The isolation matrix of the earlier designs had 44 to 46 rows; the counts are no
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: campaigns of 2026-11-19
+
+First full campaigns with the Python tooling (`tests/campaign/run.py private-cloud`), one per plane mode, which replaces `run.sh`. Every check of the current state passed in both modes; 8 stacks plan no change at the end, the teardown removes the 9 stacks and leaves nothing in the 7 projects.
+
+The repair of duplicated add-on release proxies (CAAPH) ran on the cloud for the first time, and showed three defects, fixed in `create-cluster.sh`:
+
+| Seen | Cause | Fix |
+|---|---|---|
+| Gateway, shared cluster: the creation script did not end for two hours; the cluster itself was complete | the repair ran after the bootstrap instance's address left the API sources, so its requests no longer reached the API | the address leaves the API sources last; requests of the repair time out after 15 s |
+| Gateway, published cluster: Traefik reported deployed, its Service missing | the uninstall of the deleted proxies ran while the new proxy installed the same release | each repaired chart is installed once more from its single proxy |
+| Interface, shared cluster: the Service of the internal ingress missing after that second installation | Helm deletes a LoadBalancer Service without waiting for its load balancer cleanup; the new release found it still there | the Services of the release are deleted, and waited for, before the last installation |
+
+The first two missing Services were restored by hand (the single-proxy installation, without the Service left), then the campaigns went on. With the three fixes, the published cluster of the interface campaign repaired three duplicated charts (Cinder CSI, metrics-server, cloud controller) by itself. A duplicated ingress with all three fixes has not occurred yet.
+
+A load balancer of the `vm` tenant went to `ERROR` at creation (test cloud): deleted, removed from the state, the step run again.
 
 ## Detailed results: campaigns of 2026-11-18
 

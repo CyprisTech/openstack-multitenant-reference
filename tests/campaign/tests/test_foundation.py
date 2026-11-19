@@ -37,7 +37,7 @@ class FakeRunner(Runner):
         super().__init__(dry_run=False, echo=lambda line: None)
         self.answer = answer
 
-    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None):
+    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None, stream=False):
         cmd = [str(c) for c in cmd]
         self.commands.append((cmd, env))
         result = self.answer(cmd)

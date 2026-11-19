@@ -346,8 +346,8 @@ def wait_for_revocation(ctx, cloud, attempts=90, delay=20):
     """The upgrade proves the new credential only once the old one no longer authenticates.
     Revoking it needs rights the campaign does not have: waits for an administrator, 30 minutes."""
     ctx.notify(
-        f"Rotation done: revoke the old application credential ({cloud}) now; the upgrade starts once it "
-        "no longer authenticates (30 minutes at most)."
+        f"Action: revoke the old application credential {cloud} now. The rotation is done; the upgrade "
+        "starts once the old credential no longer authenticates (30 minutes at most)."
     )
     if ctx.runner.dry_run:
         return

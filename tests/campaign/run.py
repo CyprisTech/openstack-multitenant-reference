@@ -11,7 +11,10 @@ versioned. Python 3.11 or later, standard library only.
 """
 
 import argparse
+import json
 import os
+import shlex
+import subprocess
 import sys
 import time
 import tomllib
@@ -28,6 +31,31 @@ from campaign.steps import load  # noqa: E402
 from campaign.tools import Runner  # noqa: E402
 
 
+# A recorded step runs in its own process under asciinema; its result comes back in a file.
+INNER = "CAMPAIGN_INNER"
+INNER_REPORT = "step-report.json"
+
+
+def record_step(args, scenario, mode, name, ctx, entry):
+    """Runs one step under asciinema (one cast per step), then takes its result."""
+    casts = ctx.work / "casts"
+    casts.mkdir(exist_ok=True)
+    cast = casts / f"{time.strftime('%m%d-%H%M', time.gmtime())}-{mode}-{name}.cast"
+    inner = [sys.executable, str(Path(__file__).resolve()), scenario.name, name, "--mode", mode,
+             "--config", args.config, "--work", args.work]  # fmt: skip
+    (ctx.work / INNER_REPORT).unlink(missing_ok=True)
+    subprocess.run(["asciinema", "rec", "-q", "--overwrite", "--cols", "130", "--rows", "40", "--title", name,
+                    "-c", shlex.join(inner), str(cast)], env=dict(os.environ, **{INNER: "1"}), check=False)  # fmt: skip
+    try:
+        inner_entry = json.loads((ctx.work / INNER_REPORT).read_text())["steps"][-1]
+    except (OSError, ValueError, IndexError, KeyError) as error:
+        raise RuntimeError(f"the recorded step left no result ({error}); cast: {cast}") from error
+    entry.measures.update(inner_entry.get("measures", {}))
+    entry.measures["cast"] = cast.name
+    if inner_entry.get("status") != "ok":
+        raise RuntimeError(inner_entry.get("error") or f"step {name} failed (cast: {cast})")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("scenario", help="a scenario of scenarios/, by name (private-cloud, public-cloud)")
@@ -36,6 +64,7 @@ def main(argv=None):
     parser.add_argument("--config", default=str(HERE / "campaign.local.toml"), help="maintainers' configuration")
     parser.add_argument("--work", default=str(HERE / "work"), help="outputs of the runs (git-ignored)")
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
+    parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
     args = parser.parse_intermixed_args(argv)
 
     scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
@@ -71,7 +100,10 @@ def main(argv=None):
             continue
         started = time.monotonic()
         try:
-            function(ctx, entry)
+            if args.record and not args.dry_run and not os.environ.get(INNER):
+                record_step(args, scenario, mode, name, ctx, entry)
+            else:
+                function(ctx, entry)
             entry.status = "ok"
         except Exception as error:  # a step fails in any way; the campaign stops and says why
             entry.status = "failed"
@@ -79,9 +111,10 @@ def main(argv=None):
             print(f"step {name} failed: {error}", file=sys.stderr)
         finally:
             entry.seconds = round(time.monotonic() - started, 1)
-            report.write(ctx.work / "report.json")
+            report.write(ctx.work / (INNER_REPORT if os.environ.get(INNER) else "report.json"))
         if entry.status == "failed":
-            ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min")
+            if not os.environ.get(INNER):  # a recorded step: the outer run tells the operator
+                ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min")
             break
 
     print("\n" + report.summary())

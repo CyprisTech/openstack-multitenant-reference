@@ -1,11 +1,11 @@
 # Spec: campaign tooling by profile
 
-- **Status:** Proposed
+- **Status:** In progress: steps 1 and 2 delivered; the private cloud scenario passed in both plane modes (2026-11-19), the Bash tooling removed
 - **Related:** [ADR-0014](../adr/0014-profiles.md) (profiles, a campaign per profile), [test procedure](../reference/test-procedure.md), [`tests/campaign`](../../tests/campaign/README.md), [isolation test](../guides/check-isolation.md)
 
 ## Problem
 
-`tests/campaign` runs the whole scenario from empty projects to an empty teardown, about 1,000 lines of Bash. It works, but:
+`tests/campaign` ran the whole scenario from empty projects to an empty teardown, about 1,000 lines of Bash. It worked, but:
 
 - The sequences, the inputs of each stack and the steps are mixed: a step builds its own inputs from environment variables. A second scenario, the public cloud profile, would copy most of it.
 - Errors are easy to lose: `errexit` stopped a step on a first SSH attempt; the status of a pipeline is the status of its last command.
@@ -95,7 +95,7 @@ A step is a function of the context. It raises an error to fail; a scene (a chan
 
 1. The skeleton: `run.py`, the context, the tools, the dry run, the unit tests.
 2. The steps, ported one family at a time, each with the same checks as its Bash version. The dry run of a step is compared with the commands its Bash version runs.
-3. `examples/private-cloud` and the private cloud scenario; a full campaign in both plane modes. The Bash tooling is removed only then.
+3. `examples/private-cloud` and the private cloud scenario; a full campaign in both plane modes. The Bash tooling is removed only then. *(Scenario and campaigns done, Bash removed; the examples remain.)*
 4. `examples/public-cloud` and the public cloud scenario.
 
 ## Proposed decisions

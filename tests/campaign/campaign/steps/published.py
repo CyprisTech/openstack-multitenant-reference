@@ -54,7 +54,8 @@ def deploy_demo(ctx):
 
 
 def ingress_address(ctx):
-    return kubectl(ctx).out("-n", "traefik", "get", "svc", "traefik", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
+    # The Service may not exist yet: an empty address, waited for by the caller.
+    return kubectl(ctx).out("-n", "traefik", "get", "svc", "traefik", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False)
 
 
 # --- steps -----------------------------------------------------------------------------------------

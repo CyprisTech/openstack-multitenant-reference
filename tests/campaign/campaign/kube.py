@@ -59,10 +59,11 @@ def demo_manifest(ctx, path):
 # --- the bootstrap instance ---------------------------------------------------------------------
 
 
-def remote(ctx, host, command, check=True, quiet=False, tty=False, timeout=None):
-    """A command on an instance the campaign reaches directly (the bootstrap instance)."""
-    cmd = ["ssh", "-F", ctx.ssh_config, *(["-t"] if tty else []), host, command]
-    return ctx.runner.run(cmd, check=check, quiet=quiet, timeout=timeout)
+def remote(ctx, host, command, check=True, quiet=False, stream=False, timeout=None):
+    """A command on an instance the campaign reaches directly (the bootstrap instance). With
+    `stream`, its output is printed as it comes: the cluster scripts run for many minutes."""
+    cmd = ["ssh", "-F", ctx.ssh_config, host, command]
+    return ctx.runner.run(cmd, check=check, quiet=quiet, timeout=timeout, stream=stream)
 
 
 def copy(ctx, source, destination):
@@ -108,7 +109,7 @@ def create_cluster(ctx, key, credential, kubeconfig):
     host = ctx.value(key, "bootstrap")
     install_credential(ctx, host, credential)
     started = time.monotonic()
-    result = remote(ctx, host, "sudo /opt/platform/create-cluster.sh", check=False, tty=True)
+    result = remote(ctx, host, "sudo /opt/platform/create-cluster.sh", check=False, stream=True)
     write_log(ctx, f"create-cluster-{key}", result)
     ctx.timing(f"create-cluster {key} {round(time.monotonic() - started)}s")
     if result.returncode != 0:
@@ -151,7 +152,7 @@ def delete_cluster(ctx, key, kubeconfig):
             kubectl("-n", "platform", "patch", name, "--type=json", "-p", patch)
         ctx.sleep(60)
     started = time.monotonic()
-    result = remote(ctx, host, "sudo /opt/platform/delete-cluster.sh", check=False, tty=True)
+    result = remote(ctx, host, "sudo /opt/platform/delete-cluster.sh", check=False, stream=True)
     write_log(ctx, f"delete-cluster-{key}", result)
     ctx.timing(f"delete-cluster {key} {round(time.monotonic() - started)}s")
     if result.returncode != 0:
@@ -164,6 +165,3 @@ def write_log(ctx, name, result):
     logs = ctx.work / "logs"
     logs.mkdir(exist_ok=True)
     (logs / f"{name}.log").write_text(result.stdout + result.stderr)
-    tail = (result.stdout + result.stderr).strip().splitlines()[-5:]
-    for line in tail:
-        ctx.runner.echo(line)

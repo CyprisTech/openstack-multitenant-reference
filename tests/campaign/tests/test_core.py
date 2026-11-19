@@ -55,6 +55,14 @@ class RunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(CommandError, "boom"):
             runner.run(["false"])
 
+    def test_stream_prints_each_line_and_keeps_the_output(self):
+        printed = []
+        cmd = [sys.executable, "-c", "print('one'); import sys; print('two', file=sys.stderr); sys.exit(3)"]
+        result = Runner(echo=printed.append).run(cmd, check=False, quiet=True, stream=True)
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(sorted(printed), ["one", "two"])
+        self.assertIn("one", result.stdout)
+
     def test_real_run(self):
         result = Runner(echo=lambda line: None).run([sys.executable, "-c", "print('hi')"])
         self.assertEqual(result.stdout.strip(), "hi")
