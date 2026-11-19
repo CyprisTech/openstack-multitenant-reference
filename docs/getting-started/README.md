@@ -40,6 +40,7 @@ The fixtures stand for your own receivers, internal services and certificate aut
 - One region of the cloud, where every stack is deployed, and projects: one for the **entry point**, one for the **shared services** (receivers, internal services), one **per tenant** — plus a **hub** project holding the network only if you build the planes. A `clouds.yaml` entry for each with a project-scoped credential (`member`, plus `load-balancer_member`). Mind the provider's limit of projects per customer. No `OS_*` variable in the shell.
 - Operator planes: the [planes contract](../reference/planes-contract.md) met by the cloud operator (names, ranges, MTU, reserved ranges).
 - Hub planes: check that a member may share a network, with the hub's credentials — `openstack network create probe && openstack network rbac create --target-project <another project> --action access_as_shared --type network probe` must succeed; then delete both. Check also the quotas of each project and the number of projects the provider allows. Some clouds forbid it (the Sovereign Cloud Stack recommends it in scs-0126).
+- Each project can create security groups: `openstack quota show` gives `secgroups` 3 or more and `secgroup-rules` 20 or more. Some public clouds create new projects with none until their support raises the quota (seen on OVHcloud, 2026-11-19).
 - Kubernetes tenant only: build the [node image](../../images/kubernetes-node/README.md) now; it depends on nothing else.
 
 ## 1. Planes
