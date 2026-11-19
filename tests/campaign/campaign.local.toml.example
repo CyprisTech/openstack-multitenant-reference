@@ -8,6 +8,7 @@ ssh_user = "ops"
 ssh_key  = "~/.ssh/id_ed25519"
 test_zone = "example.org"   # the zone of the test names (site-a, site-b, apps.published, services)
 name_server = "192.0.2.53"  # the DNS server that serves the test zone to the tenants
+hostile_next_hop = "172.31.1.1"  # the transit router on the observability plane (interface mode, step hostile)
 # consumer_cidr = "203.0.113.10/32"            # this machine, as the shared cluster sees it (step consumer)
 # capture_replace = ["real.example=example.org"] # replacements of the tour captures
 # clouds_yaml = "~/.config/openstack/clouds.yaml"

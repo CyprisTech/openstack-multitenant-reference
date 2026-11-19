@@ -1,7 +1,14 @@
 """The end of a campaign: nothing drifted, then nothing left."""
 
+from ..checks import kubeconfig
 from ..context import StepFailed
+from ..kube import delete_cluster
 from . import step
+
+# The clusters first (Cluster API deletes their servers and load balancers), then the stacks,
+# consumers before what they consume.
+CLUSTERS = ["shared", "published"]
+DESTROY_ORDER = ["shared", "internal-service", "published", "isolated", "vm", "entry-point", "receiver", "acme", "planes"]
 
 # Listings of the leftover check: a kind of object and the column holding its ID. The Octavia
 # plugin names its columns in lower case. Images are kept (the Kubernetes node image).
@@ -30,6 +37,29 @@ def plans(ctx, report):
     report.measures["plans"] = f"{len(keys) - len(drifted)}/{len(keys)} empty"
     if drifted:
         raise StepFailed(f"plan not empty: {', '.join(drifted)}")
+
+
+@step("teardown")
+def teardown(ctx, report):
+    """Removes everything; goes on after a failure to remove as much as possible, then reports."""
+    # The next campaign publishes for the first time again: no load during that publication.
+    (ctx.work / "published-once").unlink(missing_ok=True)
+    failed = []
+    for key in CLUSTERS:
+        if ctx.has(key):
+            try:
+                delete_cluster(ctx, key, kubeconfig(ctx, key))
+            except Exception as error:
+                failed.append(f"cluster {key}: {error}")
+    keys = [k for k in DESTROY_ORDER if ctx.has(k)] + [k for k in ctx.scenario.stacks if k not in DESTROY_ORDER]
+    for key in keys:
+        try:
+            ctx.destroy(key)
+        except Exception as error:
+            failed.append(f"{key}: {error}")
+    report.measures["destroyed"] = f"{len(keys) - len([f for f in failed if not f.startswith('cluster')])}/{len(keys)}"
+    if failed:
+        raise StepFailed("; ".join(failed))
 
 
 @step("leftovers")

@@ -123,8 +123,8 @@ class Context:
                     self.runner.echo(line)
         return result.returncode
 
-    def apply(self, key):
-        """Applies a stack, then requires an empty plan.
+    def apply(self, key, empty_plan=True):
+        """Applies a stack, then requires an empty plan (unless empty_plan is false: a scene).
 
         repair_hook (optional, outside this repository) may clean a known failure of the test
         cloud: given the stack path, it prints extra apply arguments, or fails.
@@ -144,6 +144,8 @@ class Context:
             self.timing(f"{key} repaired ({attempt}), apply status={status}")
         if status != 0:
             raise StepFailed(f"apply failed: {key}")
+        if not empty_plan:
+            return
         plan = self.tofu.plan_exitcode(self.stack(key))
         seconds = round(time.monotonic() - started)
         self.runner.echo(f"{key}: apply {seconds} s, plan after apply exit={plan} (0 = empty)")
