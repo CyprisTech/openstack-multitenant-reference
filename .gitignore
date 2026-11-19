@@ -41,3 +41,4 @@ stacks/shared/entry-point/.domains-publication-pending
 # Test campaign: local configuration, outputs and recordings
 tests/campaign/campaign.env
 tests/campaign/work/
+tests/campaign/campaign.local.toml

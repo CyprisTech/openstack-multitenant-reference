@@ -1,0 +1,27 @@
+# The private cloud profile (ADR-0014): the whole scenario, both plane modes. The two clusters are
+# deployed one after the other, so that the campaign fits a small test cloud.
+profile = "private-cloud"
+modes   = ["gateway", "interface"]
+
+# Every stack of the scenario, in the order they are applied: key = path from the repository root.
+[stacks]
+planes           = "stacks/shared/planes"
+receiver         = "tests/fixtures/receiver"
+acme             = "tests/fixtures/acme"
+internal-service = "tests/fixtures/internal-service"
+entry-point      = "stacks/shared/entry-point"
+vm               = "stacks/tenants/vm"
+isolated         = "stacks/tenants/isolated"
+shared           = "stacks/shared/kubernetes"
+published        = "stacks/tenants/kubernetes"
+
+[sequences]
+foundation = ["prep", "planes", "receiver", "acme", "internal", "edge", "web", "isolated", "transit", "publish"]
+shared     = ["k8s-shared", "transit", "cluster-shared", "tour-shared", "accept-shared", "consumer", "volume", "rotate", "upgrade", "shared-down"]
+published  = ["k8s", "cluster", "internal-open", "transit", "tour", "publish", "accept", "direct", "direct-k8s", "hostile"]
+end        = ["plans", "teardown", "leftovers"]
+full       = ["foundation", "shared", "published", "end"]
+
+# Settings of the steps.
+[options.plans]
+skip = ["shared"]   # removed by shared-down before the end

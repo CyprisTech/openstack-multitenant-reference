@@ -107,5 +107,6 @@ A step is a function of the context. It raises an error to fail; a scene (a chan
 
 ## Open questions
 
-- The format of the examples: one `tfvars` per stack, or one file per profile split by the tooling.
+Settled while writing the skeleton: the examples are one `tfvars` per stack, `examples/<profile>/<stack>.tfvars`, the form a user passes to the tool.
+
 - How much of the test results is generated: the summary table only, or the detailed sections too.

@@ -1,0 +1,17 @@
+# The maintainers' configuration of a campaign: copy to campaign.local.toml (git-ignored).
+# Nothing here is versioned: names and addresses of the test cloud stay on the maintainers' side.
+
+tool    = "tofu"            # or "terraform"
+ca_cert = ""                # CA bundle of the cloud APIs, when they use a private authority
+
+# The clouds.yaml entry of each stack's project, by stack key of the scenario.
+[clouds]
+planes           = "my-hub"
+receiver         = "my-shared-services"
+acme             = "my-shared-services"
+internal-service = "my-shared-services"
+entry-point      = "my-edge"
+vm               = "my-web"
+isolated         = "my-isolated"
+shared           = "my-k8s-shared"
+published        = "my-published"

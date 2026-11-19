@@ -1,0 +1,18 @@
+# The public cloud profile (ADR-0014): what differs from the private cloud, with the member role,
+# hub planes only. Kubernetes, the internal authority and the internal service are proven by the
+# private cloud campaign and not run again here.
+profile = "public-cloud"
+modes   = ["interface"]
+
+[stacks]
+planes      = "stacks/shared/planes"
+receiver    = "tests/fixtures/receiver"
+entry-point = "stacks/shared/entry-point"
+vm          = "stacks/tenants/vm"
+isolated    = "stacks/tenants/isolated"
+
+[sequences]
+foundation = ["prep", "planes", "receiver", "edge", "web", "isolated", "transit", "publish"]
+checks     = ["accept", "direct", "hostile"]
+end        = ["plans", "teardown", "leftovers"]
+full       = ["foundation", "checks", "end"]

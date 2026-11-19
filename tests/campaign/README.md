@@ -31,6 +31,28 @@ The campaign tests behaviour, not capacity: each instance gets the smallest size
 
 A smaller cloud can also run the shared cluster with one control plane node: the upgrade is then tested without a highly available control plane.
 
+## Python tooling, by profile (in progress)
+
+The campaign is being moved to Python, with a scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md), [spec](../../docs/specs/campaign-tooling.md)). `run.sh` stays the tool that runs a campaign until every step is ported and a full campaign of the private cloud profile has passed with `run.py`.
+
+```bash
+cp tests/campaign/campaign.local.toml.example tests/campaign/campaign.local.toml   # adapt
+tests/campaign/run.py private-cloud --mode gateway full
+tests/campaign/run.py public-cloud plans leftovers      # a few steps
+tests/campaign/run.py private-cloud --dry-run full      # the commands, without a cloud
+python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
+```
+
+| Path | Content |
+|---|---|
+| `run.py` | Command line: the scenario, the mode, the steps; the report (`work/<scenario>-<mode>/report.json`) |
+| `campaign/` | The package: scenario loading, context (stacks, inputs, scenes), tools (`tofu`, `openstack`), retries, report |
+| `campaign/steps/` | The steps, one module per family; ported so far: `plans`, `leftovers` |
+| `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks and the sequences of each profile |
+| `tests/` | Unit tests, no cloud |
+
+A step not ported yet is listed as such and skipped. Python 3.11 or later, standard library only.
+
 ## How it is organised
 
 | File | Content |
