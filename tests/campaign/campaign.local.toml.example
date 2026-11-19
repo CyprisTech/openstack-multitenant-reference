@@ -7,6 +7,9 @@ site     = "t1"             # prefix of the names
 ssh_user = "ops"
 ssh_key  = "~/.ssh/id_ed25519"
 test_zone = "example.org"   # the zone of the test names (site-a, site-b, apps.published, services)
+name_server = "192.0.2.53"  # the DNS server that serves the test zone to the tenants
+# consumer_cidr = "203.0.113.10/32"            # this machine, as the shared cluster sees it (step consumer)
+# capture_replace = ["real.example=example.org"] # replacements of the tour captures
 # clouds_yaml = "~/.config/openstack/clouds.yaml"
 # notify_hook = "/path/to/notify"   # tells the operator: revocation awaited, campaign stopped
 # repair_hook = "/path/to/repair"   # repairs a known failure of your cloud, prints extra apply arguments
@@ -28,6 +31,14 @@ published        = "my-published"
 [cluster_clouds]
 published = "my-published-cluster"
 shared    = "my-k8s-shared-cluster"
+# The credential the shared cluster moves to (step rotate). After the check, the campaign waits
+# until an administrator revokes the old one (shared above).
+shared_next = "my-k8s-shared-cluster-2"
+
+# Step upgrade: deploy the shared cluster with the previous minor version, name the next one here.
+[upgrade]
+version = "v1.36.5"
+image   = "ubuntu-2404-kube-v1.36.5"
 
 # The planes of each mode, as the planes map of stacks/shared/planes.
 [planes.gateway]

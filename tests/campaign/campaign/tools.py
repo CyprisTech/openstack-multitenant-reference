@@ -35,7 +35,8 @@ class Runner:
         self.fake = fake or (lambda cmd: Result(0, ""))
         self.commands = []
 
-    def run(self, cmd, cwd=None, env=None, check=True, quiet=False):
+    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None):
+        """`input` goes to the standard input: what must not be printed (secrets) goes there."""
         cmd = [str(c) for c in cmd]
         if not quiet:
             self.echo("$ " + shlex.join(cmd))
@@ -43,8 +44,11 @@ class Runner:
             self.commands.append((cmd, str(cwd) if cwd else None))
             result = self.fake(cmd)
         else:
-            done = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
-            result = Result(done.returncode, done.stdout, done.stderr)
+            try:
+                done = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, input=input, timeout=timeout)
+                result = Result(done.returncode, done.stdout, done.stderr)
+            except subprocess.TimeoutExpired:
+                result = Result(124, "", f"timed out after {timeout} s")
         if check and result.returncode != 0:
             raise CommandError(cmd, result)
         return result

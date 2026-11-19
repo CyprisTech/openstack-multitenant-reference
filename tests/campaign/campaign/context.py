@@ -151,6 +151,20 @@ class Context:
         if plan != 0:
             raise StepFailed(f"plan not empty after apply: {key}")
 
+    def destroy(self, key):
+        """Destroys a stack; its full output in the log."""
+        started = time.monotonic()
+        cmd = [self.tool, f"-chdir={self.stack(key)}", "destroy", "-auto-approve", "-no-color"]
+        result = self.runner.run(cmd, cwd=self.root, check=False)
+        if not self.runner.dry_run:
+            self._log(key).write_text(result.stdout + result.stderr)
+            for line in (result.stdout + result.stderr).splitlines():
+                if re.search(r"Destroy complete|Error", line):
+                    self.runner.echo(line)
+        self.timing(f"{key} destroy={round(time.monotonic() - started)}s status={result.returncode}")
+        if result.returncode != 0:
+            raise StepFailed(f"destroy failed: {key}")
+
     # --- instances ------------------------------------------------------------------------------
 
     @property
@@ -182,9 +196,10 @@ class Context:
                 self.runner.echo(f"  {address} not reachable yet")
                 return False
 
-            retry("instance", ready, sleep=self._sleep)
+            retry("instance", ready, sleep=self.sleep)
 
-    def _sleep(self, seconds):
+    def sleep(self, seconds):
+        """Waits, except in a dry run."""
         if not self.runner.dry_run:
             time.sleep(seconds)
 

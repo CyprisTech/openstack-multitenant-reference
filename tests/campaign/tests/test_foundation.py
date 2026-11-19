@@ -37,7 +37,7 @@ class FakeRunner(Runner):
         super().__init__(dry_run=False, echo=lambda line: None)
         self.answer = answer
 
-    def run(self, cmd, cwd=None, env=None, check=True, quiet=False):
+    def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None):
         cmd = [str(c) for c in cmd]
         self.commands.append((cmd, env))
         result = self.answer(cmd)
@@ -67,7 +67,7 @@ def context(answer=answer_outputs, stacks=STACKS, options=None, config=None):
     config = config or {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "vm": "web"},
                         "site": "t1", "ssh_user": "ops", "planes": {"gateway": {"publication": {"mode": "gateway"}}}}  # fmt: skip
     ctx = Context(scenario, "gateway", config, FakeRunner(answer), root, root / "work")
-    ctx._sleep = lambda seconds: None
+    ctx.sleep = lambda seconds: None
     return ctx
 
 

@@ -47,7 +47,7 @@ python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
 |---|---|
 | `run.py` | Command line: the scenario, the mode, the steps; the report (`work/<scenario>-<mode>/report.json`) |
 | `campaign/` | The package: scenario loading, context (stacks, inputs, scenes), tools (`tofu`, `openstack`), retries, report |
-| `campaign/steps/` | The steps, one module per family; ported so far: the foundation (`prep` to `publish`), `plans`, `leftovers` |
+| `campaign/steps/` | The steps, one module per family; ported so far: the foundation (`prep` to `publish`), the shared cluster (`k8s-shared` to `shared-down`), `plans`, `leftovers`; `campaign/kube.py` and `campaign/checks.py` hold what several families use |
 | `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks and the sequences of each profile |
 | `tests/` | Unit tests, no cloud |
 
