@@ -19,6 +19,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | [0011](0011-environments.md) | Environments: development, qualification, production | Proposed; refines 0003 and 0005 |
 | [0012](0012-resilience-scope.md) | Resilience, what the reference places and what it tests | Proposed; refines 0001 D9, 0003 D4, 0004 D5 |
 | [0013](0013-plane-routes-on-a-transit-router.md) | Plane routes on a transit router | Proposed; refines 0001 D2, 0004 D1 |
+| [0014](0014-profiles.md) | Two profiles, private cloud and public cloud | Proposed; refines 0003, 0004 D1, 0005, 0012 |
 
 ## Writing an ADR
 
