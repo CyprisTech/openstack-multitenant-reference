@@ -27,7 +27,7 @@ The needs a reader brings — high availability, backups, logs, audit, single si
 ### D2 — Projects by role, in one or several regions
 
 - **Each tenant has its own project**, credentials and quotas.
-- **Shared services** (the entry point, a metrics receiver, internal services) run in projects of their own, never with tenant workloads; one such project may host several of them, for example on a Kubernetes cluster ([spec](../specs/kubernetes-shared-services.md)).
+- **Shared services** (the entry point, a metrics receiver, internal services) run in projects of their own, never with tenant workloads; one such project may host several of them, for example on a Kubernetes cluster ([ADR-0010](0010-kubernetes-shared-services.md)).
 - **The hub project holds the network only** when the planes are built with a member role ([ADR-0004](0004-planes-and-isolation.md)): its credentials share the planes and see every port on them, so nothing else runs with them.
 - **Projects are created by the organisation that runs them** (the provider's console or API, or cloud-baseline on a private cloud). The stacks consume existing projects; the documentation warns about the project limit of each provider.
 - **Regions.** A project is not tied to a region: Keystone is global to a cloud, and a project has resources in each region where it creates some. A stack works in one region, the one of its `clouds.yaml` entry, and the planes, being Neutron networks, exist in one region only. A site (ADR-0001, D9) is one region: several regions are several deployments of the stacks, possibly with the same projects, each with its own planes; they are joined by an encrypted overlay between their hubs ([ADR-0004](0004-planes-and-isolation.md), D5).

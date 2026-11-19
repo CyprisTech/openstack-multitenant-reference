@@ -81,7 +81,7 @@ The whole scenario with [`tests/campaign`](../../tests/campaign/README.md), in b
 
 ## Detailed results: the shared cluster (2026-11-08)
 
-`modules/kubernetes-cluster` extracted from the Kubernetes tenant, and `stacks/shared/kubernetes` ([spec](../specs/kubernetes-shared-services.md)), on operator planes (gateway), from empty projects.
+`modules/kubernetes-cluster` extracted from the Kubernetes tenant, and `stacks/shared/kubernetes` ([ADR-0010](../adr/0010-kubernetes-shared-services.md)), on operator planes (gateway), from empty projects.
 
 - **The Kubernetes tenant after the extraction:** every stack applied with an empty plan; the published cluster created and moved into itself; the isolation rows of the tenant as expected.
 - **The shared cluster:** created and moved into itself (3 control-plane nodes, 2 workers). From the `web` tenant, its consumer: HTTPS to `services.example.org` through the internal ingress, certificate verified with the authority's root, 6/6 across both replicas; the TCP echo reached. The other tenants, the entry point, the receiver and the test runner do not reach its services; a pod of the cluster reaches no tenant instance, service address or bastion; a pod of another namespace reaches no backend (default-deny); the cluster's series reach the receiver.

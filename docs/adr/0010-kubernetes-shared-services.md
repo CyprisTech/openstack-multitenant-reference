@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-08
 - **Deciders:** maintainers
-- **Refines:** [ADR-0002](0002-platform-kubernetes.md) (Kubernetes cluster), [ADR-0006](0006-exposure.md) (exposure), [ADR-0008](0008-tenant-certificates.md) (certificates). Design details: [spec](../specs/kubernetes-shared-services.md).
+- **Refines:** [ADR-0002](0002-platform-kubernetes.md) (Kubernetes cluster), [ADR-0006](0006-exposure.md) (exposure), [ADR-0008](0008-tenant-certificates.md) (certificates). Design details: [shared cluster](../../stacks/shared/kubernetes/README.md).
 
 ## Context
 

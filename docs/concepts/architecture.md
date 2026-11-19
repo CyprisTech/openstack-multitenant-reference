@@ -159,7 +159,7 @@ TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)); each tenant obtain
 |---|---|---|---|
 | `vm` | each instance (nginx in front of the application) | lego, run by a systemd timer | one per instance; the site is enabled once it is issued |
 | `kubernetes` | the ingress | cert-manager (`ClusterIssuer`, `Certificate`) | one for the cluster's domains, shared by the ingress replicas |
-| shared services on Kubernetes | their own entry | cert-manager, the organisation's authority | see the [shared-services spec](../specs/kubernetes-shared-services.md) |
+| shared services on Kubernetes | their own entry | cert-manager, the organisation's authority | see the [shared cluster](../../stacks/shared/kubernetes/README.md) |
 
 | Choice | Values |
 |---|---|

@@ -49,6 +49,8 @@ Points of attention, outside the reference itself:
 
 This path uses the same tools and configuration as the tested one; it is not tested by the maintainers. Report what fails in an issue.
 
+With a self-hosted DNS in production, the usual pattern is a hidden primary: a private primary receives the updates (RFC 2136), public secondaries serve the zone.
+
 ## Other DNS providers
 
 - `vm`: any [lego DNS provider](https://go-acme.github.io/lego/dns/): set `dns.provider` to its code and `dns.settings` to its environment variables.
@@ -56,4 +58,4 @@ This path uses the same tools and configuration as the tested one; it is not tes
 
 ## Credentials
 
-The DNS provider's credentials reach the instances (`/etc/lego/dns.env`, root only) and the cluster (a Secret in `cert-manager`) through user data, readable by the members of the project. Give a key restricted to the `_acme-challenge` records of the tenant's names. A secrets manager can write the same places instead, as part of the secrets integration point ([spec](../specs/tenant-certificates.md#6-credentials-of-the-dns-provider)).
+The DNS provider's credentials reach the instances (`/etc/lego/dns.env`, root only) and the cluster (a Secret in `cert-manager`) through user data, readable by the members of the project. Give a key restricted to the `_acme-challenge` records of the tenant's names. A secrets manager can write the same places instead, as part of the [secrets integration point](../reference/integration-points.md#secrets).

@@ -91,6 +91,11 @@ The design is [ADR-0006](../adr/0006-exposure.md).
 | Direction | Tenants read their secrets from your secret store; nothing is written in instance metadata or `user_data` |
 | You provide | A secret store in a project of shared services, admitting each tenant to its own secrets only |
 
+The tools of the reference read their secrets from one place per platform, whatever writes it: the DNS provider's credentials of the [certificates](../guides/certificates.md#credentials) are `/etc/lego/dns.env` on an instance and a Secret in the `cert-manager` namespace of a cluster. Today the stacks write them, through user data. A secret store plugs into the same places, the logic that reads them unchanged:
+
+- on virtual machines, a command run at boot writes the file: from Vault or OpenBao with a response-wrapped, single-use secret ID, or from Barbican with an application credential restricted to that secret. OpenStack gives instances no identity of their own, so a first token is always delivered; wrapping makes it useless once used;
+- in Kubernetes, External Secrets Operator keeps the Secret in sync.
+
 ## Name resolution, time and package mirrors
 
 | | |
