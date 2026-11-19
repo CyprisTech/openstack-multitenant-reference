@@ -45,7 +45,7 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
+| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. placement: "own-network" (default) or "stack-network" when external\_network is the egress network (ADR-0014, D2). | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    placement        = optional(string, "own-network")<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
 | egress\_network | External network giving the default route (package and image download). | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | n/a | `string` | n/a | yes |

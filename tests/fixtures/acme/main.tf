@@ -83,6 +83,7 @@ module "bastion" {
   default_cidr  = "10.38.0.0/28"
   network       = local.name
   port          = "authority"
+  egress        = { pool = "egress", network = var.egress_network.network }
   users         = var.users
   instance = {
     az     = var.zones[0]

@@ -89,16 +89,23 @@ variable "bastion" {
     external_network (an administration network such as an intranet) and carries a floating
     IP on it. A second port on the isolated network gives it access to the instance; the isolated
     network itself gets no route to the administration network.
+    - placement: "own-network" only: the stack has no egress (ADR-0014, D2).
     - ssh_cidrs: sources allowed to reach the bastion on port 22.
     The users of var.admin are created on the bastion and on the isolated instance.
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
+    placement        = optional(string, "own-network")
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
   default = null
+
+  validation {
+    condition     = var.bastion == null || try(var.bastion.placement, "own-network") == "own-network"
+    error_message = "The isolated tenant has no egress: its bastion keeps its own network (bastion.placement \"own-network\", ADR-0014, D2)."
+  }
 }
 
 variable "network_mtu" {

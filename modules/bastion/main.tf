@@ -5,6 +5,8 @@
 locals {
   enabled = var.bastion != null
   keys    = local.enabled ? [var.name] : []
+  # Own network: a network and a router of its own, a second port on the stack's network.
+  own = local.enabled && try(var.bastion.placement, "own-network") == "own-network"
 }
 
 module "cloudinit" {
@@ -16,10 +18,10 @@ module "cloudinit" {
     for login, keys in var.users : login => { ssh_authorized_keys = keys, sudo = true }
   }
 
-  # The second interface (on the stack's network) must not take the routes and resolvers that
-  # DHCP pushes there: the bastion keeps a single default route through the administration
-  # network.
-  write_files = {
+  # On its own network, the second interface (on the stack's network) must not take the routes
+  # and resolvers that DHCP pushes there: the bastion keeps a single default route through the
+  # administration network. On the stack's network, its only interface takes them.
+  write_files = { for path, file in {
     "/etc/netplan/60-second-interface.yaml" = {
       permissions = "0600"
       content     = <<-EOT
@@ -33,6 +35,6 @@ module "cloudinit" {
                 use-dns: false
       EOT
     }
-  }
-  runcmd = ["netplan apply"]
+  } : path => file if local.own }
+  runcmd = local.own ? ["netplan apply"] : []
 }

@@ -5,17 +5,45 @@ variable "name" {
 
 variable "bastion" {
   description = <<-EOT
-    The bastion, or null for none. It lives in its own small network whose router joins
-    external_network (an administration network such as an intranet) and carries a floating IP
-    on it; a second port on the stack's network gives it access to the stack's instances.
+    The bastion, or null for none (ADR-0005, D5; ADR-0014, D2).
+    - placement "own-network" (default): the bastion lives in its own small network whose
+      router joins external_network (an administration network such as an intranet) and
+      carries a floating IP on it; a second port on the stack's network gives it access to the
+      stack's instances. The stack's network gets no path to the administration network.
+    - placement "stack-network": one port on the stack's network, its floating IP on the
+      stack's egress router. Only when external_network is the stack's egress network (the
+      Internet on a public cloud): the separation would add nothing, and the bastion's replies
+      follow the default route to that same router. Saves a network and a router.
     - ssh_cidrs: sources allowed to reach the bastion on port 22.
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
+    placement        = optional(string, "own-network")
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
+
+  validation {
+    condition     = var.bastion == null || contains(["own-network", "stack-network"], try(var.bastion.placement, "own-network"))
+    error_message = "bastion.placement is \"own-network\" or \"stack-network\"."
+  }
+
+  validation {
+    condition = var.bastion == null || try(var.bastion.placement, "own-network") == "own-network" || (
+      var.egress != null && try(var.bastion.external_network.network == var.egress.network, false)
+    )
+    error_message = "bastion.placement \"stack-network\" needs a stack with an egress network, and bastion.external_network must be that network."
+  }
+}
+
+variable "egress" {
+  description = "The stack's egress: key of its network in tenant.existing.networks (the floating IP pool) and that network's name; null for a stack with no egress."
+  type = object({
+    pool    = string
+    network = string
+  })
+  default = null
 }
 
 variable "admin_network" {

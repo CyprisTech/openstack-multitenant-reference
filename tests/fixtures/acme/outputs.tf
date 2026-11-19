@@ -33,7 +33,7 @@ output "address" {
 
 output "bastion" {
   description = "Floating IP of the bastion on the administration network."
-  value       = module.authority.instances["${local.name}-bastion"].ports["admin"].floating_ip
+  value       = module.authority.instances["${local.name}-bastion"].ports[module.bastion.floating_ip_port].floating_ip
 }
 
 output "zone" {

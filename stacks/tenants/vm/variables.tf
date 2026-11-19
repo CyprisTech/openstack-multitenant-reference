@@ -152,16 +152,30 @@ variable "bastion" {
     external_network (an administration network such as an intranet) and carries a floating
     IP on it. A second port on the web network gives it access to the instances; the web
     network itself gets no route to the administration network.
+    - placement: "own-network" (default), or "stack-network" when external_network is the
+      stack's egress network: one port on the stack's network, its floating IP on the egress
+      router (ADR-0014, D2).
     - ssh_cidrs: sources allowed to reach the bastion on port 22.
     The users of var.admin are created on the bastion and on the instances.
   EOT
   type = object({
     external_network = object({ network = string, subnet = string })
+    placement        = optional(string, "own-network")
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)
   })
   default = null
+
+  validation {
+    condition     = var.bastion == null || try(var.bastion.placement, "own-network") != "stack-network" || try(var.bastion.external_network.network == var.egress_network.network, false)
+    error_message = "bastion.placement \"stack-network\" needs bastion.external_network to be the egress_network (ADR-0014, D2)."
+  }
+
+  validation {
+    condition     = var.bastion == null || contains(["own-network", "stack-network"], try(var.bastion.placement, "own-network"))
+    error_message = "bastion.placement is \"own-network\" or \"stack-network\"."
+  }
 }
 
 variable "network_mtu" {

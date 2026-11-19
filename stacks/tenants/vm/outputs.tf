@@ -20,7 +20,7 @@ output "instances" {
 
 output "bastion" {
   description = "Floating IP of the bastion on the administration network, or null."
-  value       = var.bastion != null ? module.web.instances[local.bastion_name].ports["admin"].floating_ip : null
+  value       = var.bastion != null ? module.web.instances[local.bastion_name].ports[module.bastion.floating_ip_port].floating_ip : null
 }
 
 

@@ -67,7 +67,7 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
 | `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
 | `isolated` | observability router | — | nothing |
-| bastions | (own network) its router on the administration network, which is the gateway | — (second port on the tenant network) | floating IP of the administration network |
+| bastions | on its own network: its router on the administration network, which is the gateway; on the stack's network ([ADR-0014](../adr/0014-profiles.md), D2, when the administration network is the egress): the stack's transit router | — (second port on the tenant network), or none | floating IP of the administration network |
 
 No instance carries floating IPs of several networks ([ADR-0006](../adr/0006-exposure.md), D4): every flow on a plane is initiated from the side that holds the route back.
 

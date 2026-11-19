@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Bastion placement ([ADR-0014](docs/adr/0014-profiles.md), D2): `bastion.placement = "stack-network"` puts the bastion on the stack's network, its floating IP on the egress router (the public router for the entry point), when the administration network is the stack's egress network. It saves a network and a router per project: the stacks of the public cloud profile fit in 4 routers. The default stays `"own-network"`; the isolated tenant, with no egress, accepts only the default. Mocked tests in `stacks/tenants/vm`.
+
 ## [0.5.0] - 2026-11-18
 
 ### Added

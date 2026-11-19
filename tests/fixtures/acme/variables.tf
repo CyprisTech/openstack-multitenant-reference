@@ -51,11 +51,22 @@ variable "egress_network" {
 }
 
 variable "bastion" {
-  description = "Administration bastion: floating IP on external_network, SSH from ssh_cidrs."
+  description = "Administration bastion: floating IP on external_network, SSH from ssh_cidrs. placement: \"own-network\" (default) or \"stack-network\" when external_network is the egress network (ADR-0014, D2)."
   type = object({
     external_network = object({ network = string, subnet = string })
+    placement        = optional(string, "own-network")
     ssh_cidrs        = list(string)
   })
+
+  validation {
+    condition     = var.bastion == null || try(var.bastion.placement, "own-network") != "stack-network" || try(var.bastion.external_network.network == var.egress_network.network, false)
+    error_message = "bastion.placement \"stack-network\" needs bastion.external_network to be the egress_network (ADR-0014, D2)."
+  }
+
+  validation {
+    condition     = var.bastion == null || contains(["own-network", "stack-network"], try(var.bastion.placement, "own-network"))
+    error_message = "bastion.placement is \"own-network\" or \"stack-network\"."
+  }
 }
 
 variable "users" {
