@@ -212,13 +212,15 @@ class Context:
 
     # --- inputs ---------------------------------------------------------------------------------
 
-    def example(self, key):
-        """The profile's example inputs of a stack, if any (examples/<profile>/<stack>.tfvars)."""
-        path = self.root / "examples" / self.scenario.profile / f"{key}.tfvars"
-        return path if path.exists() else None
+    def profile_inputs(self, key):
+        """The inputs the profile sets for a stack (options.inputs.<stack> of the scenario), the
+        ones the README's table of profiles gives (ADR-0014)."""
+        return dict(self.options.get("inputs", {}).get(key, {}))
 
     def set_inputs(self, key, **values):
-        """Writes the inputs a stack receives from the others; they become its reference inputs."""
+        """Writes the inputs a stack receives from the others, and those of the profile; they
+        become its reference inputs."""
+        values = {**self.profile_inputs(key), **values}
         path = self.root / self.stack(key) / INPUTS
         self.runner.echo(f"inputs of {key}: {', '.join(values)}")
         if not self.runner.dry_run:

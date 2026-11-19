@@ -134,6 +134,13 @@ For each need outside it, where it connects: [who it is for](docs/concepts/audie
 
 - [Getting started](docs/getting-started/README.md): one path for every cloud; only the configuration of the planes differs. About 20 minutes with the entry point and a `vm` tenant.
 
+Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintainers. They are the same stacks; only a few inputs differ, set in each stack's `terraform.tfvars`:
+
+| Profile | For | Inputs that differ | Tested by |
+|---|---|---|---|
+| `private-cloud` | a cloud you or your operator run | planes of the operator or of a hub project ([`examples/planes`](examples/planes/README.md)); the defaults otherwise; `internal_zone` of the shared cluster when the cloud has Designate | [`scenarios/private-cloud.toml`](tests/campaign/scenarios/private-cloud.toml), both plane modes |
+| `public-cloud` | a public cloud, with the member role only | hub planes ([`hub.tfvars.example`](examples/planes/hub.tfvars.example)); `bastion_placement = "stack-network"` in `entry-point` and `vm`: the bastion on the stack's network, its floating IP on the egress router, 4 routers per project at most | [`scenarios/public-cloud.toml`](tests/campaign/scenarios/public-cloud.toml) |
+
 <details>
 <summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-03)</summary>
 
@@ -213,7 +220,7 @@ This is a reference, not an operated platform. What stays yours:
 
 | | |
 |---|---|
-| **Getting started** | [Getting started](docs/getting-started/README.md) · [Where the planes come from](examples/planes/README.md) |
+| **Getting started** | [Getting started](docs/getting-started/README.md) · [Profiles](#getting-started) · [Where the planes come from](examples/planes/README.md) |
 | **Guides** | [Existing projects](docs/guides/existing-projects.md) · [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md) |

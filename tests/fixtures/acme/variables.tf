@@ -51,22 +51,11 @@ variable "egress_network" {
 }
 
 variable "bastion" {
-  description = "Administration bastion: floating IP on external_network, SSH from ssh_cidrs. placement: \"own-network\" (default) or \"stack-network\" when external_network is the egress network (ADR-0014, D2)."
+  description = "Administration bastion: floating IP on external_network, SSH from ssh_cidrs. Where it lives: var.bastion_placement."
   type = object({
     external_network = object({ network = string, subnet = string })
-    placement        = optional(string, "own-network")
     ssh_cidrs        = list(string)
   })
-
-  validation {
-    condition     = var.bastion == null || try(var.bastion.placement, "own-network") != "stack-network" || try(var.bastion.external_network.network == var.egress_network.network, false)
-    error_message = "bastion.placement \"stack-network\" needs bastion.external_network to be the egress_network (ADR-0014, D2)."
-  }
-
-  validation {
-    condition     = var.bastion == null || contains(["own-network", "stack-network"], try(var.bastion.placement, "own-network"))
-    error_message = "bastion.placement is \"own-network\" or \"stack-network\"."
-  }
 }
 
 variable "users" {
@@ -99,4 +88,25 @@ variable "step_version" {
   description = "Versions of step-ca and step-cli (Debian packages of the smallstep releases), pinned."
   type        = object({ ca = string, cli = string })
   default     = { ca = "0.30.2", cli = "0.31.0" }
+}
+
+variable "bastion_placement" {
+  description = <<-EOT
+    Where the bastion lives (ADR-0014, D2): "own-network" (default), its own small network whose
+    router joins bastion.external_network; or "stack-network", one port on the stack's network
+    and its floating IP on the egress router, when bastion.external_network is the egress_network.
+    A choice of the profile: private-cloud keeps "own-network", public-cloud takes "stack-network".
+  EOT
+  type        = string
+  default     = "own-network"
+
+  validation {
+    condition     = contains(["own-network", "stack-network"], var.bastion_placement)
+    error_message = "bastion_placement is \"own-network\" or \"stack-network\"."
+  }
+
+  validation {
+    condition     = var.bastion_placement != "stack-network" || var.bastion == null || try(var.bastion.external_network.network == var.egress_network.network, false)
+    error_message = "bastion_placement \"stack-network\" needs bastion.external_network to be the egress_network (ADR-0014, D2)."
+  }
 }

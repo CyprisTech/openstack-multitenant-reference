@@ -76,8 +76,9 @@ run "bastion_on_stack_network" {
   expect_failures = [check.certificates]
 
   variables {
-    zones   = ["az-1"]
-    bastion = { external_network = { network = "public", subnet = "public-subnet" }, placement = "stack-network", ssh_cidrs = ["203.0.113.50/32"] }
+    zones             = ["az-1"]
+    bastion           = { external_network = { network = "public", subnet = "public-subnet" }, ssh_cidrs = ["203.0.113.50/32"] }
+    bastion_placement = "stack-network"
   }
 
   assert {
@@ -95,9 +96,10 @@ run "bastion_on_stack_network_needs_the_egress_network" {
   command = plan
 
   variables {
-    zones   = ["az-1"]
-    bastion = { external_network = { network = "intranet", subnet = "intranet-subnet" }, placement = "stack-network", ssh_cidrs = ["203.0.113.50/32"] }
+    zones             = ["az-1"]
+    bastion           = { external_network = { network = "intranet", subnet = "intranet-subnet" }, ssh_cidrs = ["203.0.113.50/32"] }
+    bastion_placement = "stack-network"
   }
 
-  expect_failures = [var.bastion, check.certificates]
+  expect_failures = [var.bastion_placement, check.certificates]
 }

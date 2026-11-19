@@ -1,6 +1,6 @@
 # Spec: campaign tooling by profile
 
-- **Status:** In progress: steps 1 and 2 delivered; the private cloud scenario passed in both plane modes (2026-11-19), the Bash tooling removed
+- **Status:** In progress: steps 1 to 3 delivered (private cloud scenario passed in both plane modes on 2026-11-19, Bash removed); the public cloud campaign remains
 - **Related:** [ADR-0014](../adr/0014-profiles.md) (profiles, a campaign per profile), [test procedure](../reference/test-procedure.md), [`tests/campaign`](../../tests/campaign/README.md), [isolation test](../guides/check-isolation.md)
 
 ## Problem
@@ -15,11 +15,11 @@
 
 ## Goal
 
-One tooling for both profiles of ADR-0014, where only the scenario and the example inputs change:
+One tooling for both profiles of ADR-0014, where only the scenario changes:
 
 - generic steps, written once;
 - a scenario per profile: which stacks, which steps, which scenes;
-- the inputs of each stack taken from the profile's example (`examples/<profile>`), the same ones the documentation shows, plus the outputs of the stacks applied before;
+- the inputs of the profile set by its scenario, the ones the README lists, plus the outputs of the stacks applied before;
 - a report the test results are written from;
 - a dry run and unit tests that need no cloud.
 
@@ -70,7 +70,7 @@ A step reads the scenario to know what exists: `accept` probes only the domains 
 
 Two sources, in this order:
 
-1. **The profile's example**, `examples/<profile>/<stack>.tfvars`, versioned: everything a user sets by hand.
+1. **The profile's inputs**, in the scenario (`[options.inputs.<stack>]`), versioned: the few inputs that differ between the profiles, the ones the README lists. The values of the cloud stay in each stack's `terraform.tfvars`.
 2. **The contracts**, computed by the steps from the outputs of the stacks applied before (`plane_attachment`, admission sources, the receiver's URL), written to `mode.auto.tfvars.json` as today.
 
 What only the maintainers have stays in an unversioned `campaign.local.toml`: the `clouds.yaml` entries per stack, the administrator addresses, the test zone, the upgrade versions. No name or address of a test cloud is in the repository.
@@ -87,7 +87,7 @@ A step is a function of the context. It raises an error to fail; a scene (a chan
 
 ### 6. Without a cloud
 
-- `--dry-run` loads the scenario, expands the sequences, renders the inputs from the example and fake outputs, and prints the commands each step would run.
+- `--dry-run` loads the scenario, expands the sequences, renders the inputs from the scenario and fake outputs, and prints the commands each step would run.
 - Unit tests: scenario loading and expansion, input rendering, retry policies, report.
 - CI runs both, for both scenarios.
 
@@ -95,18 +95,18 @@ A step is a function of the context. It raises an error to fail; a scene (a chan
 
 1. The skeleton: `run.py`, the context, the tools, the dry run, the unit tests.
 2. The steps, ported one family at a time, each with the same checks as its Bash version. The dry run of a step is compared with the commands its Bash version runs.
-3. `examples/private-cloud` and the private cloud scenario; a full campaign in both plane modes. The Bash tooling is removed only then. *(Scenario and campaigns done, Bash removed; the examples remain.)*
-4. `examples/public-cloud` and the public cloud scenario.
+3. The private cloud scenario; a full campaign in both plane modes. The Bash tooling is removed only then. *(Done.)*
+4. The public cloud scenario, on a public cloud.
 
 ## Proposed decisions
 
 1. **Python with its standard library only**: the isolation test is already written in it, a user installs nothing, and the core can be tested without a cloud. Set aside: Bash (error handling, structured data, no unit tests); Go with Terratest (another toolchain for whoever reruns a campaign).
 2. **Scenarios in TOML** (`tomllib`, in the standard library).
-3. **The examples are the inputs of the campaigns**: what the documentation shows is what is tested.
+3. **The scenario sets the inputs of its profile**: the ones the README lists are the ones tested.
 4. **One JSON report per run**, the source of the test results.
 
 ## Open questions
 
-Settled while writing the skeleton: the examples are one `tfvars` per stack, `examples/<profile>/<stack>.tfvars`, the form a user passes to the tool.
+Settled (2026-11-19): no directory of examples per profile. The profiles differ by a few inputs (the bastion placement, a variable of its own), listed in the README and set by each scenario; the values of the cloud stay in each stack's `terraform.tfvars`.
 
 - How much of the test results is generated: the summary table only, or the detailed sections too.

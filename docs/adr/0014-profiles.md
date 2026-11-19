@@ -25,13 +25,13 @@ The core does not differ: planes by role, the entry point, the isolation model, 
 
 1. **One reference, one campaign for every cloud.** The public cloud run either needs raised quotas and costs every scenario again, or is a subset nobody names.
 2. **Two references, one per kind of cloud.** The core is duplicated and drifts; the message "the same model on every OpenStack cloud" is lost.
-3. **One reference, two named profiles, each with its examples and its campaign** (chosen).
+3. **One reference, two named profiles, each with its documented inputs and its campaign** (chosen).
 
 ## Decision
 
 ### D1 — Two profiles
 
-A profile is a documented combination of inputs, with its example and its test campaign. There are two:
+A profile is a documented combination of inputs, with its test campaign. The stacks are the same; only a few inputs differ, listed in the README. There are two:
 
 | | `private-cloud` | `public-cloud` |
 |---|---|---|
@@ -51,12 +51,12 @@ The bastion keeps its own network when the administration network is an intranet
 - `private-cloud`: the full campaign, both plane modes. It proves the core.
 - `public-cloud`: what differs from the private cloud, on a public cloud with the member role: the hub planes shared between projects, the provider's Neutron and Octavia, the transit router, publication and direct exposure from the real Internet, no Designate, the default quotas, the cost of a run. Kubernetes, certificates from an internal authority, the internal service and the operator planes are not run again.
 
-The campaign tooling is shared: generic steps, a scenario per profile, and the profile's example inputs, the same ones the documentation shows.
+The campaign tooling is shared: generic steps, and a scenario per profile that sets the inputs of the profile, the ones the README lists.
 
 ## Consequences
 
 - The bastion module and the stacks get an input for D2; the default stays the bastion on its own network.
-- `examples/private-cloud` and `examples/public-cloud` show the inputs of each profile.
-- The campaign tooling is reorganised into steps, scenarios and example inputs, in Python with its standard library only (the isolation test is already written in it).
+- The README lists the inputs that differ between the profiles; no directory of examples per profile: the difference is a few inputs, set in each stack's `terraform.tfvars`.
+- The campaign tooling is reorganised into steps and scenarios, in Python with its standard library only (the isolation test is already written in it).
 - The README's status and the test results say what each profile has tested.
 - A project of the public profile needs no raised quota; the number of projects stays one per stack.

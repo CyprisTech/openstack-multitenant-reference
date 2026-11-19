@@ -68,6 +68,8 @@ The services that admit named consumers — internal services — come after the
 
 ## 3. Entry point
 
+On a public cloud, set `bastion_placement = "stack-network"` here and in the `vm` tenant ([profiles](../../README.md#getting-started)).
+
 ```bash
 cp stacks/shared/entry-point/terraform.tfvars.example stacks/shared/entry-point/terraform.tfvars   # adapt
 tofu -chdir=stacks/shared/entry-point init && tofu -chdir=stacks/shared/entry-point apply

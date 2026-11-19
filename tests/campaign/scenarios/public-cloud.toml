@@ -18,6 +18,16 @@ end        = ["plans", "teardown", "leftovers"]
 full       = ["foundation", "checks", "end"]
 
 # Settings of the steps.
+# The inputs of the profile (README, profiles): the bastion on the stack's network.
+[options.inputs.entry-point]
+bastion_placement = "stack-network"
+
+[options.inputs.vm]
+bastion_placement = "stack-network"
+
+[options.inputs.receiver]
+bastion_placement = "stack-network"
+
 # Hub planes only (publication and observability, interface mode): no internal plane.
 [options.planes.attachments]
 receiver = { stack = "receiver", cidr = "10.34.0.0/28", planes = { observability = "shared" } }

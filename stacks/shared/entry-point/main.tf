@@ -35,6 +35,7 @@ module "bastion" {
 
   name          = local.bastion_name
   bastion       = var.bastion
+  placement     = var.bastion_placement
   admin_network = "${local.prefix}-admin"
   default_cidr  = "10.32.0.0/28"
   network       = local.prefix

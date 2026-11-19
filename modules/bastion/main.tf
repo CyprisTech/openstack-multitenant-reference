@@ -6,7 +6,7 @@ locals {
   enabled = var.bastion != null
   keys    = local.enabled ? [var.name] : []
   # Own network: a network and a router of its own, a second port on the stack's network.
-  own = local.enabled && try(var.bastion.placement, "own-network") == "own-network"
+  own = local.enabled && var.placement == "own-network"
 }
 
 module "cloudinit" {

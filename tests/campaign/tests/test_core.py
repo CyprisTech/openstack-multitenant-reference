@@ -92,6 +92,22 @@ class SceneTest(unittest.TestCase):
         self.assertFalse(backup.exists())
 
 
+class ProfileInputsTest(unittest.TestCase):
+    def test_the_profile_inputs_join_those_of_the_other_stacks(self):
+        ctx = context(dry_run=False)
+        ctx.scenario.options = {"inputs": {"vm": {"bastion_placement": "stack-network"}}}
+        ctx.set_inputs("vm", cloud="web")
+        written = json.loads((ctx.root / "stacks/tenants/vm" / INPUTS).read_text())
+        self.assertEqual(written, {"bastion_placement": "stack-network", "cloud": "web"})
+
+    def test_the_public_scenario_sets_the_bastion_placement(self):
+        from campaign.scenario import load as load_scenario
+
+        public = load_scenario(Path(__file__).resolve().parents[1] / "scenarios" / "public-cloud.toml")
+        for key in ("entry-point", "vm", "receiver"):
+            self.assertEqual(public.options["inputs"][key]["bastion_placement"], "stack-network")
+
+
 class EndStepsTest(unittest.TestCase):
     def test_plans_reports_every_stack_and_fails_on_drift(self):
         steps = load()

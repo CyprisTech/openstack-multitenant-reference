@@ -45,7 +45,7 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. placement: "own-network" (default) or "stack-network" when external\_network is the egress network (ADR-0014, D2). | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    placement        = optional(string, "own-network")<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
+| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. Where it lives: var.bastion\_placement. | <pre>object({<br/>    external_network = object({ network = string, subnet = string })<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
 | egress\_network | External network giving the default route (package and image download). | `object({ network = string, subnet = string })` | n/a | yes |
 | flavor | n/a | `string` | n/a | yes |
@@ -54,6 +54,7 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 | site | n/a | `string` | n/a | yes |
 | users | SSH users (login => public keys, sudo granted), on the bastion and the receiver. | `map(list(string))` | n/a | yes |
 | zones | Availability zones; the fixture runs in the first one, as the single instances of the stacks. | `list(string)` | n/a | yes |
+| bastion\_placement | Where the bastion lives (ADR-0014, D2): "own-network" (default), its own small network whose<br/>router joins bastion.external\_network; or "stack-network", one port on the stack's network<br/>and its floating IP on the egress router, when bastion.external\_network is the egress\_network.<br/>A choice of the profile: private-cloud keeps "own-network", public-cloud takes "stack-network". | `string` | `"own-network"` | no |
 | boot\_volume\_size | n/a | `number` | `null` | no |
 | cidr | Range of the receiver's network; on a hub plane, the attachment's cidr in shared/planes. | `string` | `"10.34.0.0/28"` | no |
 | dns\_nameservers | n/a | `list(string)` | `[]` | no |
