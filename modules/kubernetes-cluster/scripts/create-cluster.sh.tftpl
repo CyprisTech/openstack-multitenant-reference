@@ -202,19 +202,19 @@ kubectl --kubeconfig "$workload" -n ${i.namespace} wait certificate/${i.tls_secr
 %{ endfor ~}
 %{ endif ~}
 
-# The bootstrap instance no longer manages the cluster: its address leaves the API sources.
-sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 kind delete cluster --name bootstrap
 # One release proxy per chart. CAAPH v0.6.4 may create a second one when its cache lags behind its
 # own write (kubernetes-sigs/cluster-api-addon-provider-helm#606); the duplicate blocks every later
-# change of the add-ons. Repair, once the cluster is complete (certificates, bootstrap source
-# removed): delete both proxies of each duplicated chart, CAAPH creates one again and installs the
-# chart. Deleting one only is not enough: the one left keeps a stale status. A namespace of the
+# change of the add-ons. Repair, once the add-ons are installed (after the move and the
+# certificates): delete both proxies of each duplicated chart, CAAPH creates one again and installs
+# the chart. Deleting one only is not enough: the one left keeps a stale status. A namespace of the
 # chart may wait in Terminating behind the metrics APIService while metrics-server is reinstalled:
-# the APIService is removed then, and metrics-server installed again at the end.
+# the APIService is removed then, and metrics-server installed again at the end. The repair runs
+# while the bootstrap instance is still in the API sources: once its address is removed, it no
+# longer reaches the API.
 proxies() {
-  kubectl --kubeconfig "$workload" -n platform get helmreleaseproxy \
-    -o jsonpath='{range .items[*]}{.spec.releaseNamespace}/{.spec.releaseName} {.metadata.name} {.status.status}{"\n"}{end}'
+  kubectl --kubeconfig "$workload" --request-timeout=15s -n platform get helmreleaseproxy \
+    -o jsonpath='{range .items[*]}{.spec.namespace}/{.spec.releaseName} {.metadata.name} {.status.status}{"\n"}{end}'
 }
 duplicates=$(proxies | awk '{print $1}' | sort | uniq -d)
 if [[ -n "$duplicates" ]]; then
@@ -241,8 +241,30 @@ if [[ -n "$duplicates" ]]; then
     proxies | awk '$1 ~ /\/metrics-server$/ {print $2}' | xargs -r kubectl --kubeconfig "$workload" -n platform delete helmreleaseproxy
     kubectl --kubeconfig "$workload" wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=10m
   fi
+  # The uninstall of the deleted proxies may still run while the new one installs the same
+  # release: it then deletes resources the new release reports as deployed. Seen: the Service of an
+  # ingress, whose deletion waits for its load balancer to be removed; the new release finds it
+  # still there, and the Service is gone a few seconds later. Each repaired chart is installed once
+  # more from a single proxy, after the Services of its release are deleted and gone.
+  for release in $duplicates; do
+    kubectl --kubeconfig "$workload" -n "$${release%%/*}" get svc --no-headers \
+      -o custom-columns='NAME:.metadata.name,RELEASE:.metadata.annotations.meta\.helm\.sh/release-name' \
+      | awk -v r="$${release#*/}" '$2 == r {print $1}' \
+      | xargs -r kubectl --kubeconfig "$workload" -n "$${release%%/*}" delete svc --wait=true --timeout=10m
+    proxies | awk -v r="$release" '$1 == r {print $2}' | xargs kubectl --kubeconfig "$workload" -n platform delete helmreleaseproxy --wait=true --timeout=10m
+    for _ in $(seq 60); do
+      [[ "$(proxies | awk -v r="$release" '$1 == r && $3 == "deployed"' | wc -l)" == 1 ]] && break
+      sleep 10
+    done
+    [[ "$(proxies | awk -v r="$release" '$1 == r && $3 == "deployed"' | wc -l)" == 1 ]] \
+      || { echo "$release was not installed again from a single proxy" >&2; exit 1; }
+  done
 fi
 duplicates=$(proxies | awk '{print $1}' | sort | uniq -d)
 [[ -z "$duplicates" ]] || { echo "duplicate Helm release proxies after the repair: $duplicates" >&2; exit 1; }
+
+# The bootstrap instance no longer manages the cluster: its address leaves the API sources. Last,
+# since it no longer reaches the API afterwards. The add-ons do not depend on the API sources.
+sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl --kubeconfig "$workload" apply -f -
 
 echo "Cluster ${cluster.name} manages itself. Kubeconfig: $workload"
