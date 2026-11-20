@@ -23,7 +23,10 @@ acl:
 template:
   - id: default
     storage: /var/lib/knot
-    zonefile-sync: -1
+    # Each update is written to the zone file at once: a restart of Knot (unattended upgrades
+    # restart it in the first hour of the instance) reloads the zone file, and would drop a
+    # challenge record kept only in the journal.
+    zonefile-sync: 0
     zonefile-load: difference-no-serial
     journal-content: all
 zone:
