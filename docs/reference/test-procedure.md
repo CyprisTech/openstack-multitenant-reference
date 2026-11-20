@@ -175,7 +175,7 @@ ssh ops@$B 'sudo cat /opt/platform/published.kubeconfig' > published.kubeconfig
 |---|---|---|
 | script ends with "manages itself" | output | run it again: each step skips what exists |
 | 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
-| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | `create-cluster.sh` repairs duplicated release proxies after the move: it deletes both proxies of the chart, CAAPH installs it again, then it deletes the Services of the release and installs it once more from its single proxy; a duplicate left means the repair timed out: delete both proxies of that chart, never one only ([test results](../concepts/test-results.md#detailed-results-campaigns-of-2026-11-18)) |
+| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | CAAPH v0.6.6 creates one per chart; `create-cluster.sh` stops if a duplicate appears. To repair one by hand, delete both proxies of the chart, never one only: CAAPH installs it again ([test results](../concepts/test-results.md#detailed-results-campaigns-of-2026-11-18)) |
 | ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of the publication plane; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
 
 ```console

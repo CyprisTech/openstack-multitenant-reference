@@ -45,6 +45,12 @@ The isolation matrix of the earlier designs had 44 to 46 rows; the counts are no
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
+## Detailed results: CAAPH v0.6.6 (2026-11-21)
+
+The whole scenario on hub planes (`tests/campaign/run.py private-cloud --mode interface --record full`), from empty projects, with CAAPH v0.6.6 and without the repair of duplicated release proxies. Both clusters were created with one release proxy per chart: the duplicates that CAAPH v0.6.4 created after the move on most clusters did not appear. Isolation 45/45 with the shared cluster, before and after the upgrade, and 47/47 with the published cluster; HTTPS 6/6 and 12/12 on each domain; upgrade under load 435 ok, 2 failed; publication under load 21 ok, 0 failed; empty plans; teardown without leftover.
+
+The entry point failed once: its public router held an address of the external network that a device of the test site's network also used, and its instances had no egress at first boot. The address was removed from the external network's allocation pool, the entry point redeployed, and the campaign went on from that step.
+
 ## Detailed results: release campaign of v0.5.1 (2026-11-20)
 
 The whole scenario on hub planes (`tests/campaign/run.py private-cloud --mode interface --record full`), from empty projects, on `main` before the last fix below, which this campaign found and did not exercise. Every check of the current state passed; the 8 stacks planned no change at the end, and the teardown removed the 9 stacks and left nothing in the projects.

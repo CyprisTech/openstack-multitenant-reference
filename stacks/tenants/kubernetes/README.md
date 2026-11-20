@@ -69,7 +69,7 @@ The settings of the cluster:
 | Metrics | in-cluster Prometheus, pushed to the receiver (remote write) |
 | API | floating IP on the administration network, administration sources only |
 | Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
-| Add-ons after the move | CAAPH may duplicate the release proxy of a chart after `clusterctl move` (kubernetes-sigs/cluster-api-addon-provider-helm#606); `create-cluster.sh` repairs it before the bootstrap instance leaves the API sources, and waits for the load balancers of the repaired add-ons |
+| Add-ons after the move | one Helm release proxy per chart: CAAPH v0.6.6 no longer duplicates them after `clusterctl move` (kubernetes-sigs/cluster-api-addon-provider-helm#606); `create-cluster.sh` stops if a duplicate appears |
 
 ## Prerequisites
 

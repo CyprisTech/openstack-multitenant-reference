@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Kubernetes: CAAPH v0.6.6, which no longer duplicates the Helm release proxies after `clusterctl move` ([kubernetes-sigs/cluster-api-addon-provider-helm#606](https://github.com/kubernetes-sigs/cluster-api-addon-provider-helm/pull/606)). The repair in `create-cluster.sh` is removed; the script stops if a duplicate still appears.
+
 ## [0.5.1] - 2026-11-20
 
 ### Added

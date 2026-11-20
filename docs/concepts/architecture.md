@@ -276,7 +276,7 @@ The operations and their order:
 
 ## Kubernetes clusters
 
-**Status:** delivered: published cluster in `v0.2`, shared cluster and lifecycle in `v0.4`, repair of duplicated add-ons in `v0.5.1`.
+**Status:** delivered: published cluster in `v0.2`, shared cluster and lifecycle in `v0.4`, repair of duplicated add-ons in `v0.5.1`, no longer needed with CAAPH v0.6.6.
 
 A cluster is created by Cluster API with the OpenStack provider, from a temporary bootstrap instance, then manages itself ([ADR-0002](../adr/0002-platform-kubernetes.md)); its add-ons are declared with Cluster API, and its lifecycle beyond the landing zone is Cluster API's ([ADR-0009](../adr/0009-kubernetes-lifecycle.md)). A published cluster is a tenant ([`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md#how-the-cluster-is-created), where the creation and the settings are described); a cluster of shared services is a [shared service](../../stacks/shared/kubernetes/README.md) ([ADR-0010](../adr/0010-kubernetes-shared-services.md)).
 

@@ -6,7 +6,7 @@ locals {
     kubectl       = "v1.36.5"
     cluster_api   = "v1.14.3"
     capo          = "v0.15.1"
-    caaph         = "v0.6.4"
+    caaph         = "v0.6.6"
     orc           = "v2.6.0"
     cilium        = "1.20.4"
     occm          = "2.36.5"
