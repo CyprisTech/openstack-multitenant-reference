@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-20
+
 ### Added
 
-- Campaign tooling in Python (`tests/campaign/run.py`, standard library only), replacing the Bash `run.sh`: a scenario per profile (`private-cloud`, `public-cloud`) that also sets the inputs of the profile, a dry run, a JSON report with the duration of every step, apply and destroy, the time until the entry point answers steadily, one asciinema recording per step (`--record`), the output of the cluster scripts streamed as they run, unit tests run by CI. Validated by full campaigns in both plane modes (2026-11-19).
+- Campaign tooling in Python (`tests/campaign/run.py`, standard library only), replacing the Bash `run.sh`: a scenario per profile (`private-cloud`, `public-cloud`) that also sets the inputs of the profile, a dry run, a JSON report with the duration of every step, apply and destroy, the time until the entry point answers steadily, one asciinema recording per step (`--record`), the output of the cluster scripts streamed as they run, unit tests run by CI. Validated by full campaigns in both plane modes (2026-11-19). The public cloud scenario has not run on a public cloud yet.
 - Profiles in the README ([ADR-0014](docs/adr/0014-profiles.md)): the inputs that differ between `private-cloud` and `public-cloud`; each campaign scenario sets them.
 - Bastion placement ([ADR-0014](docs/adr/0014-profiles.md), D2): `bastion_placement = "stack-network"` puts the bastion on the stack's network, its floating IP on the egress router (the public router for the entry point), when the administration network is the stack's egress network. It saves a network and a router per project: the stacks of the public cloud profile fit in 4 routers. The default stays `"own-network"`; the isolated tenant, with no egress, has no such input. A variable of its own, not an attribute of `bastion`: the profile's choice can be set without repeating the cloud's values of `bastion`. Mocked tests in `stacks/tenants/vm`.
 
@@ -18,10 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - ADR-0011 to ADR-0014 accepted.
 - Planes contract: two planes must not route the same destination; security group quotas; DNS is optional. Isolation matrix: what the isolated tenant reaches is what its plane routes.
 - The `subnet` of an external network (`egress_network`, `public_network`, `bastion.external_network`, `admin_network`) is optional: without it, Neutron chooses. A public network with several subnets of the same name (OVHcloud's `Ext-Net`) could not be looked up by name.
+- Documentation: a README introduction that covers the whole reference, both exposures included, and a [glossary](docs/concepts/glossary.md); the [architecture](docs/concepts/architecture.md) states for each part whether it is delivered or planned, and links to its detail, moved to the guides, the stacks' READMEs, a [security model](docs/concepts/security.md), [sizing and limits](docs/reference/sizing-and-limits.md) and a [spec of several regions](docs/specs/regions.md); two more [trade-offs](docs/concepts/trade-offs.md) (hub planes as shared segments, a bastion per stack).
 
 ### Fixed
 
 - Kubernetes, repair of the duplicated CAAPH release proxies after `clusterctl move` (shipped in v0.5.0, run on a cloud for the first time on 2026-11-19): the repair ran after the bootstrap instance's address had left the API sources and could wait for hours; it now runs first, with a request timeout. Each repaired chart is installed once more from its single proxy, after the Services of its release are deleted: the uninstall of the deleted proxies removed the Service of the new release (an ingress without its load balancer). The script then waits for the load balancers of the repaired release: the cluster used to be handed over while an ingress was still without an address. Duplicates occur at the creation of a cluster, not at its upgrades.
+- Kubernetes, `create-cluster.sh` run again after `clusterctl move` (an earlier run stopped later, on a certificate for example): it created the cluster a second time in an empty kind cluster, which adopted the API load balancer and waited for machines. It now continues on the cluster itself, and stops if the cluster cannot be reached. The script reaches the bootstrap instance at its creation: an apply does not update it on an existing instance.
+- Kubernetes, the namespace of an ingress created by CAAPH while `create-cluster.sh` created it: the script stopped on `AlreadyExists`.
+- Test ACME authority: a restart of Knot (unattended upgrades restart it in the first hour of the instance) dropped the challenge records kept in its journal only, and a certificate never became ready. Each update is now written to the zone file.
 
 ### Known issues
 
@@ -213,7 +219,8 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 
-[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CyprisTech/openstack-multitenant-reference/compare/v0.2.1...v0.3.0

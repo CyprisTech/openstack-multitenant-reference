@@ -6,22 +6,22 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-Campaigns of 2026-11-19 (the Python campaign tooling, the private cloud profile of [ADR-0014](../adr/0014-profiles.md); the transit router of [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
+The release campaign of v0.5.1 (2026-11-20, hub planes; the interface column gives its results) and the campaigns of 2026-11-19 (the Python campaign tooling, the private cloud profile of [ADR-0014](../adr/0014-profiles.md); the transit router of [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
 | Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
-| Migration from v0.4.0 | the v0.4.0 stacks applied, then `az` replaced by `zones` with the same zone: empty plan on every VM stack and fixture (2026-11-14, before the transit router) | ✅ | not run (same change) |
+| Upgrade from v0.4.0 | the v0.4.0 stacks applied, then the v0.5 stacks applied over them (2026-11-20) | ❌ the planes upgrade in place; every tenant with an egress fails (known issue: redeploy the tenant stacks) | not run |
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
 | Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
 | Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
 | Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0 | ✅ 24 / 0 |
-| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ open after 20 s | ✅ open after 20 s |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0 | ✅ 28 / 0 |
+| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ open after 20 s | ✅ open after 30 s |
 | Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 334 / 1 | ✅ 310 / 1 |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 334 / 1 | ✅ 306 / 0 |
 | Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade; shared storage declared (`volume_zones`, one zone) | ✅ | ✅ |
 | Exposure change of the VM tenant | the service address on its own public address, then back behind the entry point: the existing load balancer answers the entry point again (requests ok) | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Exposure change of the published cluster | the ingress on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
@@ -37,13 +37,34 @@ Known limits, detailed in the findings below and in the [test procedure](../refe
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
 - An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
 - Each stack has one router more, its transit router: a project hosting several stacks needs a router quota above the default of 10 (the shared services project of the scenario uses 10).
-- CAAPH created duplicate Helm release proxies after the move on every cluster of these campaigns; they were repaired by deleting both proxies of each chart. `create-cluster.sh` now does it itself; that repair has not run on the cloud yet.
+- CAAPH created duplicate Helm release proxies after the move on every cluster of the campaigns of 2026-11-19, and on none of the release campaign; `create-cluster.sh` repairs them by itself (it did so on the 2026-11-19 interface campaign).
 
 The isolation matrix of the earlier designs had 44 to 46 rows; the counts are not comparable.
 
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: release campaign of v0.5.1 (2026-11-20)
+
+The whole scenario on hub planes (`tests/campaign/run.py private-cloud --mode interface --record full`), from empty projects, on `main` before the last fix below, which this campaign found and did not exercise. Every check of the current state passed; the 8 stacks planned no change at the end, and the teardown removed the 9 stacks and left nothing in the projects.
+
+| Step | Result |
+|---|---|
+| Shared cluster | HTTPS 6/6, isolation 45/45, before and after the upgrade |
+| Upgrade under load | 306 requests ok, 0 failed (1 038 s) |
+| Published cluster | isolation 47/47; HTTPS 12/12 on each domain, through the entry point and exposed directly |
+| Domain publication under load | 28 ok, 0 failed |
+
+The validation run that preceded it, on the same scenario, found the first two defects below, fixed before the release campaign; the release campaign found the third:
+
+| Seen | Cause | Fix |
+|---|---|---|
+| The certificate of the published cluster never became ready | unattended upgrades restarted Knot, the test ACME authority's DNS server, 24 s after the challenge record was written; Knot kept dynamic updates in its journal only and reloaded its zone file | the fixture writes each update to the zone file |
+| `create-cluster.sh` run again after that failure created the cluster a second time in the empty kind cluster, which adopted the API load balancer | the script did not know the cluster had already moved | a run after the move continues on the cluster itself |
+| The release campaign's first creation of the published cluster stopped on `namespaces "traefik" already exists` | CAAPH created the namespace of the ingress chart while the script created it | the script accepts a namespace that appeared meanwhile; run again, the step passed |
+
+That run's upgrade had 35 failed requests out of 336; the release campaign had none: the failures did not come back on new clusters, and their cause, likely on the test cloud at that time, was not established.
 
 ## Detailed results: campaigns of 2026-11-19
 
