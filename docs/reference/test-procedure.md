@@ -284,7 +284,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (47 with the published cluster and the internal service; 44 with the shared cluster, [section 11](#11-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| isolation test | every row as expected (51 with the published cluster and the internal service; 49 with the shared cluster, [section 11](#11-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console

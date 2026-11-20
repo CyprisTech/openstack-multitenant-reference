@@ -184,6 +184,17 @@ def main():
     rows.append((f"web {web_vm[0]}", f"isolated {iso_vm[0]} (private {iso_vm[1]})", 22, "closed", from_web(iso_vm[1], 22)))
     rows.append((f"isolated {iso_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_iso(web_vm[1], 443)))
     rows.append((f"isolated {iso_vm[0]}", "Internet (1.1.1.1)", 443, "closed", from_iso("1.1.1.1", 443)))
+    # IPv6 (ADR-0015, D2): no global IPv6 address and no IPv6 default route on any instance, so
+    # that no IPv6 path exists next to the IPv4 rules. A cloud that adds IPv6 by itself shows here.
+    def ipv6(jump, host):
+        out = p.run(jump, host, "ip -6 -o addr show scope global; ip -6 route show default")
+        if out.startswith("error"):
+            return out
+        return "none" if not out else "present: " + out.splitlines()[0][:60]
+
+    for name, jump, host in ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
+                             (f"isolated {iso_vm[0]}", iso["bastion"], iso_vm[1]), ("receiver", rcv["bastion"], rcv["address"])):
+        rows.append((name, "routed IPv6 (global address, default route)", "-", "none", lambda j=jump, h=host: ipv6(j, h)))
 
     probe_pod = None
     if args.published_kubeconfig:

@@ -13,6 +13,7 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | a tenant | another tenant's service address | 443 | denied | load balancer sources = entry point only |
 | a tenant | another tenant, at its private address | any | denied | NAT plane: no route between tenants; routed plane: routes go to the shared services only, and the security groups of the target admit only its load balancer, its bastion or the administrators — also when a tenant adds a route to another through the transit router |
 | a tenant | the metrics receiver | 9090 | allowed | route to the observability plane; security group of the receiver (sources = the plane, or the routed tenant ranges) |
+| any instance | IPv6: a global address or a default route | — | none | the reference creates no IPv6 subnet ([ADR-0015](../adr/0015-ipv6.md), D2) |
 | the receiver, or anything on the observability plane | a tenant's metrics ports | 9100 | denied | NAT plane: no address on the plane; routed plane: security groups (no metrics rule) |
 | the receiver | series of every tenant | — | present | agents push with `site`, `tenant`, `instance` labels |
 | a tenant, or the entry point | the receiver | 22 | denied | security group of the receiver: SSH from the administrator addresses only |
