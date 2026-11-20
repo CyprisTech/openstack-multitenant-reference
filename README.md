@@ -9,7 +9,9 @@
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/CyprisTech/openstack-multitenant-reference?label=OpenSSF%20Scorecard)](https://scorecard.dev/viewer/?uri=github.com/CyprisTech/openstack-multitenant-reference)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/16343?label=OpenSSF%20Best%20Practices)](https://www.bestpractices.dev/projects/16343)
 
-A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising your projects on an OpenStack cloud — tenants isolated from each other, sharing networks and services under explicit, tested rules. It needs a member role only, on a public, sovereign or private cloud.
+A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising the projects of an organisation on an OpenStack cloud. Each tenant and each shared service has its own project. They meet on shared networks by role (planes), joined through a hub or provided by the cloud operator, and are published either behind a shared HTTPS entry point or directly on their own public address. Isolation rules are stated as a matrix and checked by a test you run on your own deployment.
+
+It covers VM and Kubernetes tenants (Cluster API), shared services such as an internal cluster and push-based monitoring, certificates, availability zones and the rebuild of the architecture. It needs a member role only, on a public, sovereign or private cloud.
 
 ![Architecture overview: shared services and tenants, each in its own project, meet on shared networks (planes); arrows show who opens each connection](docs/images/architecture-overview.png)
 
@@ -26,7 +28,15 @@ A landing zone for OpenStack: a reference architecture, with deployable OpenTofu
 
 Public clouds call it a *landing zone*: the structure an organisation puts in place before running workloads — how resources are divided, how networks connect, how services are exposed, observed and administered, and how isolation is enforced. AWS, Azure and Google Cloud provide one, and the design areas they cover are well established.
 
-OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them: no transit gateway or peering between projects, no shared ingress, no conventions spanning the projects of an organisation. Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify. Some providers publish a landing zone for their own cloud, built on their account model and network services; for the other OpenStack clouds, public or private, and for teams that hold a member role only, this repository proposes that layer as a reference: decisions, reusable code and a tested scenario. Next to a provider's landing zone, it organises the projects inside: the provider's keeps accounts, identity and central inspection.
+OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them:
+
+- no transit gateway or peering between projects;
+- no shared ingress;
+- no conventions spanning the projects of an organisation.
+
+Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify.
+
+Some providers publish a landing zone for their own cloud, built on their account model and network services. For the other OpenStack clouds, public or private, and for teams that hold a member role only, this repository proposes that layer as a reference: decisions, reusable code and a tested scenario. Next to a provider's landing zone, it organises the projects inside; the provider's keeps accounts, identity and central inspection.
 
 ## Terms
 
@@ -37,13 +47,8 @@ OpenStack provides the building blocks — projects, Neutron networks and router
 | Plane | A shared network that connects tenants and shared services; any number, each with its own purpose. Each project joins it through its own router and, on each plane, either provides a service (role `shared`) or consumes (role `tenant`) |
 | Operator plane | A plane provided by the cloud operator as an external network |
 | Hub plane, hub project | A plane you build yourself, with a member role, as a network of a hub project shared with the other projects; the hub project holds the planes and a transit router, and runs nothing |
-| Service address | The address through which a tenant exposes a service; the domains it serves are published to it |
-| Ingress | A cluster's entry for HTTP traffic: Traefik as a Gateway API controller, behind a load balancer at an address prepared by the stack. Applications attach `HTTPRoute`s to its `Gateway`; the Kubernetes `Ingress` object is not used |
-| Integration point | Where a platform service of your choice (metrics, logs, backups…) plugs in: plane, flows, admission, what each stack configures |
-| Region | A set of OpenStack services with its own endpoints. A project is not tied to a region; its resources and the planes are. Each region has its own planes, hub and entry point; an encrypted overlay joins the hubs of several regions |
-| Site | The name of a region in a deployment, an input of every stack and part of every name |
-| Cloud operator | Who runs the OpenStack cloud: the provider, or your own infrastructure team |
-| Administrators | Who deploys and runs the stacks of this reference, from named addresses |
+
+The other terms (service address, ingress, integration point, region, site, cloud operator, administrators): [glossary](docs/concepts/glossary.md).
 
 ## Design areas
 
@@ -128,7 +133,7 @@ The reference owns how the projects are organised, connected, exposed and kept a
 
 ![What the reference owns (level 2, multi-tenant architecture) and what connects to it: the cloud foundation below, platform services and workloads above through integration points, on-premises networks, an inspection firewall, a WAF and other clouds or regions on the sides](docs/images/scope.png)
 
-For each need outside it, where it connects: [who it is for](docs/concepts/audiences.md#outside-the-reference-compatible-with-it). For a single project, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly.
+For each need outside it, where it connects: [who it is for](docs/concepts/audiences.md#outside-the-reference-compatible-with-it). For a single project of instances, use [terraform-openstack-tenant](https://github.com/CyprisTech/terraform-openstack-tenant) and its examples directly. A Kubernetes cluster comes with this reference ([`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md), built on [`modules/kubernetes-cluster`](modules/kubernetes-cluster/README.md)), published through the entry point or directly.
 
 ## Getting started
 
