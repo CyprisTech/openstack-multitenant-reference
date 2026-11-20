@@ -24,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 
+from campaign import preflight  # noqa: E402
 from campaign import scenario as scenarios  # noqa: E402
 from campaign.context import Context  # noqa: E402
 from campaign.report import Report  # noqa: E402
@@ -66,6 +67,7 @@ def main(argv=None):
     parser.add_argument("--work", default=str(HERE / "work"), help="outputs of the runs (git-ignored)")
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
+    parser.add_argument("--no-preflight", action="store_true", help="skip the check of the credentials")
     args = parser.parse_intermixed_args(argv)
 
     scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
@@ -90,6 +92,12 @@ def main(argv=None):
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
     steps = load()
     names = scenario.expand(args.items)
+    if not (args.dry_run or args.no_preflight or os.environ.get(INNER)):
+        try:
+            preflight.check(ctx, names)
+        except Exception as error:  # nothing has run: say why and stop
+            ctx.notify(f"campaign {scenario.name} {mode} not started: {error}")
+            return 1
 
     for name in names:
         entry = report.step(name)

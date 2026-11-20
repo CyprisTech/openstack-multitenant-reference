@@ -18,6 +18,8 @@ Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` wit
 
 `campaign.local.toml` (git-ignored) holds what is specific to the maintainers' cloud: the `clouds.yaml` entry of each stack, the planes of each mode, the SSH access, the test zone, the credentials of the clusters, the hooks. Nothing else changes from a cloud to another: the attachments of the planes and their ranges are in the scenario.
 
+Before the first step, the campaign checks that every `clouds.yaml` entry it will use authenticates, those of the clusters included, and, when the rotation runs, that the next credential of the shared cluster exists and is not the current one; `--no-preflight` skips it. A credential revoked or misspelled stops the run before anything is created.
+
 The campaign stops at the first failure: a command that fails, a request that fails, a plan that is not empty, an instance that does not come up. The teardown goes on after a failure, to remove as much as it can, and reports it. The two Kubernetes clusters are deployed one after the other, so that it fits a small test cloud ([sizing](#sizing)).
 
 Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures — HTTPS counts, time to a steady answer, loads — and the duration of each apply and destroy), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
