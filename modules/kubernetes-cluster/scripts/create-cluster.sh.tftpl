@@ -163,7 +163,11 @@ parameters:
 STORAGE
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 %{ for name, i in ingresses ~}
-kubectl --kubeconfig "$workload" create namespace ${i.namespace} --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+# CAAPH may create the namespace of the ingress chart at the same moment: a create that finds it
+# already there is not an error.
+kubectl --kubeconfig "$workload" get namespace ${i.namespace} >/dev/null 2>&1 \
+  || kubectl --kubeconfig "$workload" create namespace ${i.namespace} \
+  || kubectl --kubeconfig "$workload" get namespace ${i.namespace} >/dev/null
 %{ if certificates == null ~}
 if ! kubectl --kubeconfig "$workload" -n ${i.namespace} get secret ${i.tls_secret} >/dev/null 2>&1; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${i.domains[0]}" \
