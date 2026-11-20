@@ -258,6 +258,13 @@ if [[ -n "$duplicates" ]]; then
     done
     [[ "$(proxies | awk -v r="$release" '$1 == r && $3 == "deployed"' | wc -l)" == 1 ]] \
       || { echo "$release was not installed again from a single proxy" >&2; exit 1; }
+    # The load balancers of the release's Services went with them: the cluster is ready once
+    # they have an address again (2 to 3 minutes with Octavia).
+    kubectl --kubeconfig "$workload" -n "$${release%%/*}" get svc --no-headers \
+      -o custom-columns='NAME:.metadata.name,TYPE:.spec.type,RELEASE:.metadata.annotations.meta\.helm\.sh/release-name' \
+      | awk -v r="$${release#*/}" '$2 == "LoadBalancer" && $3 == r {print $1}' \
+      | xargs -r -I{} kubectl --kubeconfig "$workload" -n "$${release%%/*}" wait svc/{} \
+          --for=jsonpath='{.status.loadBalancer.ingress[0].ip}' --timeout=10m
   done
 fi
 duplicates=$(proxies | awk '{print $1}' | sort | uniq -d)

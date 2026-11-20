@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Kubernetes, repair of the duplicated CAAPH release proxies after `clusterctl move` (shipped in v0.5.0, run on a cloud for the first time on 2026-11-19): the repair ran after the bootstrap instance's address had left the API sources and could wait for hours; it now runs first, with a request timeout. Each repaired chart is installed once more from its single proxy, after the Services of its release are deleted: the uninstall of the deleted proxies removed the Service of the new release (an ingress without its load balancer). Duplicates occur at the creation of a cluster, not at its upgrades.
+- Kubernetes, repair of the duplicated CAAPH release proxies after `clusterctl move` (shipped in v0.5.0, run on a cloud for the first time on 2026-11-19): the repair ran after the bootstrap instance's address had left the API sources and could wait for hours; it now runs first, with a request timeout. Each repaired chart is installed once more from its single proxy, after the Services of its release are deleted: the uninstall of the deleted proxies removed the Service of the new release (an ingress without its load balancer). The script then waits for the load balancers of the repaired release: the cluster used to be handed over while an ingress was still without an address. Duplicates occur at the creation of a cluster, not at its upgrades.
 
 ### Known issues
 
