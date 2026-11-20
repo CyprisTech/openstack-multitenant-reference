@@ -10,6 +10,17 @@ The entry point routes each domain by SNI to the tenant that serves it, without 
    ```
 
    The script gathers the `published_domains` output of every tenant and applies the entry point: the routes are metadata items of its instances, updated in place, which a timer on each instance renders into Traefik's configuration within seconds. No instance is replaced, no request is lost. It stops if a deployed tenant's state lacks the output (apply the tenant first) and refuses to remove every published domain (`--allow-empty` to force).
+
+   ```mermaid
+   flowchart LR
+       O["published_domains<br/>of each tenant"] --> S["scripts/publish-domains.sh"]
+       S --> TF["apply shared/entry-point<br/>metadata updated in place"]
+       TF --> M["Nova metadata<br/>one route item per domain"]
+       M -->|"every 10 s"| R["traefik-routes timer<br/>on each instance"]
+       R --> D["/etc/traefik/dynamic/routes.yml<br/>reloaded by Traefik"]
+   ```
+
+   The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route.
 3. **Point the domain to the entry point**: an A record on its public address (`tofu output load_balancer` in `stacks/shared/entry-point`), with a short TTL.
 4. **Check**: `curl --resolve <domain>:443:<public IP> https://<domain>/` reaches the tenant, and the [isolation test](check-isolation.md) still passes.
 

@@ -87,3 +87,11 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 | Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
 | Public, planes built with a member role | private networks shared by RBAC | 2 — interface, through the hub's transit router |
 | Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |
+
+How the tenant's router joins each kind of plane, and how the tenant is seen there:
+
+| Plane | Router joins with | The tenant is seen at | Service address on the publication plane |
+|---|---|---|---|
+| operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of the plane on the load balancer |
+| operator plane, routed (no NAT) | its gateway, without source NAT, in a shared address scope | its own addresses: the cloud routes the tenant's range | the load balancer's own address |
+| shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |

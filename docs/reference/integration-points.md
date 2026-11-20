@@ -103,7 +103,7 @@ The tools of the reference read their secrets from one place per platform, whate
 | Plane | `internal`, or a plane of their own |
 | Direction | Tenants query the resolvers, time servers and mirrors; the tenants' subnets point to them |
 | Provided by | The architecture, as level 2 network services ([ADR-0003](../adr/0003-scope-and-boundary.md), D4), or the cloud operator ([network services](../concepts/architecture.md#network-services)) |
-| Reflection | Name resolution and time answer on UDP: a project able to send spoofed sources can use them for reflection ([lateral movement](../concepts/architecture.md#lateral-movement)) |
+| Reflection | Name resolution and time answer on UDP: a project able to send spoofed sources can use them for reflection ([lateral movement](../concepts/security.md#lateral-movement)) |
 
 ## Automation: a GitOps pipeline
 

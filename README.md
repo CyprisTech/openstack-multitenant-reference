@@ -227,7 +227,7 @@ This is a reference, not an operated platform. What stays yours:
 - **the tools** behind the integration points: metrics, logs and audit receivers, backup and secret stores;
 - **identity**: single sign-on for the administration access (your identity provider, or the provider's IAM);
 - **certificates**: the tenants run in demonstration mode (self-signed) until `certificates` is set ([guide](docs/guides/certificates.md));
-- **capacity**: quotas per project ([sizing](docs/concepts/architecture.md#sizing)) and room per compute host — the entry point instances are in anti-affinity, and a replacement needs room on another host;
+- **capacity**: quotas per project ([sizing](docs/reference/sizing-and-limits.md)) and room per compute host — the entry point instances are in anti-affinity, and a replacement needs room on another host;
 - **the trade-offs**: read [them](docs/concepts/trade-offs.md) against your own constraints.
 
 ## Documentation
@@ -236,8 +236,8 @@ This is a reference, not an operated platform. What stays yours:
 |---|---|
 | **Getting started** | [Getting started](docs/getting-started/README.md) · [Profiles](#getting-started) · [Where the planes come from](examples/planes/README.md) |
 | **Guides** | [Existing projects](docs/guides/existing-projects.md) · [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
-| **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
-| **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md) |
+| **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Sizing and limits](docs/reference/sizing-and-limits.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
+| **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [Security model](docs/concepts/security.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md) |
 | **Tests** | [Isolation test](tests/isolation/README.md) · fixtures: [metrics receiver](tests/fixtures/receiver/README.md), [internal service](tests/fixtures/internal-service/README.md), [ACME authority](tests/fixtures/acme/README.md) · [node image boot check](tests/integration/node-image/README.md) |
 | **Project** | [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) |
 
@@ -271,7 +271,7 @@ The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansib
 | Credentials | One project per tenant and per shared service, plus the hub project for hub planes; project-scoped credentials (`member`, plus `load-balancer_member` if your Octavia policy requires it), one `clouds.yaml` entry per stack |
 | Planes | Operator planes: the [planes contract](docs/reference/planes-contract.md) (names, ranges, MTUs, reserved ranges). Hub planes: built by [`stacks/shared/planes`](stacks/shared/planes/README.md) |
 
-Quotas per project: [sizing](docs/concepts/architecture.md#sizing).
+Quotas per project: [sizing](docs/reference/sizing-and-limits.md).
 
 ## Contributing
 

@@ -1,10 +1,21 @@
 # Architecture
 
-The living specification of the reference architecture, for the `v1.0` design: topology, data paths, network services, resilience, lifecycle and sizing. The terms are defined in the [README](../../README.md#terms). The decisions behind it are recorded in the [ADRs](../adr/README.md); when the two disagree, the ADR states the intent and this document must be fixed.
+The living specification of the reference architecture, for the `v1.0` design: topology, data paths, network services, resilience and lifecycle; each part links to the page that details it. The terms are defined in the [README](../../README.md#terms). The decisions behind it are recorded in the [ADRs](../adr/README.md); when the two disagree, the ADR states the intent and this document must be fixed.
 
 All names are fictional: the organisation is `example.org`, and address ranges are documentation ranges or examples.
 
+Each section starts with its status: **delivered** (the release that brought it, tested by the maintainers) or **planned** (the release that will bring it, from the [status](../../README.md#status) of the README). The design of a planned part is the target; nothing of it exists in the code yet.
+
+**Contents**
+
+- Organisation: [Topology](#topology) · [Network topology of a tenant](#network-topology-of-a-tenant) · [Regions and sites](#regions-and-sites)
+- Data paths: [Public entry point](#public-entry-point) · [Ingress data path](#ingress-data-path) · [Certificates](#certificates) · [Observability data path](#observability-data-path) · [Network services](#network-services)
+- Security: [Administration paths](#administration-paths) · [Security model](#security-model) · [Planes contract](#planes-contract)
+- Operations: [Resilience and continuity](#resilience-and-continuity) · [Lifecycle](#lifecycle) · [Kubernetes clusters](#kubernetes-clusters) · [Sizing and limits](#sizing-and-limits)
+
 ## Topology
+
+**Status:** delivered: operator planes in `v0.1`, hub planes in `v0.3`.
 
 Your projects on an OpenStack cloud, **one project per role** ([ADR-0003](../adr/0003-scope-and-boundary.md)): one per tenant, one per shared service (or a project of shared services), and, in each region, a hub project holding the network only when you build the planes yourself, with a member role. Tenants and shared services meet on **planes**: networks shared by several projects for one purpose, which each project joins through its own router ([ADR-0004](../adr/0004-planes-and-isolation.md)). There can be any number of them. The reference scenario has three:
 
@@ -34,6 +45,8 @@ With hub planes, every attached router routes through the transit router: tenant
 
 ## Network topology of a tenant
 
+**Status:** delivered; the transit router in `v0.5`.
+
 Each tenant network has **one router per network it joins**, and a **transit router** with no external gateway, which holds the subnet's gateway address ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). The instances have one route, the default route to the transit router; the transit router routes each plane's range to that plane's router, and the default route to the egress router. The subnet pushes no host routes: Octavia load balancers copy them once, when their VIP is plugged, and would miss any later change, while a route of the transit router applies at once. The example below is a `vm` tenant, whose egress router reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; the `isolated` tenant has no egress router, and its transit router sends the default route to the observability plane's router.
 
 ```mermaid
@@ -53,13 +66,9 @@ flowchart LR
     RT --> RM --> MON["observability plane"]
 ```
 
-How the router joins a plane, and how the tenant is seen there, depends on the plane ([ADR-0004](../adr/0004-planes-and-isolation.md), D1):
+How the router joins a plane, and how the tenant is seen there, depends on the kind of plane: [How a tenant joins a plane](plane-attachment.md#which-mode-where) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1).
 
-| Plane | Router joins with | The tenant is seen at | Service address on the publication plane |
-|---|---|---|---|
-| operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of the plane on the load balancer |
-| operator plane, routed (no NAT) | its gateway, without source NAT, in a shared address scope | its own addresses: the cloud routes the tenant's range | the load balancer's own address |
-| shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |
+For each stack of the scenario:
 
 | Tenant | Default route of the transit router | Other routers | Exposed |
 |---|---|---|---|
@@ -67,20 +76,32 @@ How the router joins a plane, and how the tenant is seen there, depends on the p
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
 | `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
 | `isolated` | observability router | — | nothing |
-| bastions | on its own network: its router on the administration network, which is the gateway; on the stack's network ([ADR-0014](../adr/0014-profiles.md), D2, when the administration network is the egress): the stack's transit router | — (second port on the tenant network), or none | floating IP of the administration network |
+| bastions | on its own network: its router on the administration network, which is the gateway; on the stack's network (`bastion_placement = "stack-network"`, [ADR-0014](../adr/0014-profiles.md), D2, when the administration network is the egress): the stack's transit router | — (second port on the tenant network), or none | floating IP of the administration network |
 
 No instance carries floating IPs of several networks ([ADR-0006](../adr/0006-exposure.md), D4): every flow on a plane is initiated from the side that holds the route back.
 
-Three rules follow from this design, each learned from a test failure ([test results](test-results.md)):
+Four rules follow from this design, each learned from a test failure ([test results](test-results.md)):
 
 - **MTU.** Tenant networks use the smallest MTU of the planes they join: OVN routers do not send "fragmentation needed", so a larger MTU drops large packets silently.
 - **Sources.** An administration source is the address *as seen on the plane*, often a router's: read it on the target (`$SSH_CLIENT`), do not guess it.
 - **Routes back.** Return traffic follows the routes of the transit router: a plane's range, and every range routed through it, must be a route of the transit router, through that plane's router.
 - **Routes on a router, not on the subnet.** Octavia load balancers keep the host routes they found when their VIP was plugged; a route on the transit router reaches them at once ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). Each tenant has one router more for it: plan the router quotas.
 
+## Public entry point
+
+**Status:** delivered in `v0.1`; routes through instance metadata in `v0.3`.
+
+One public address for every domain published through it: an Octavia load balancer in TCP with the PROXY protocol, and two Traefik instances in anti-affinity that route by SNI with TLS passthrough. The routes are instance metadata, one item per domain, updated in place ([ADR-0006](../adr/0006-exposure.md), D3). It does not terminate TLS, route at layer 7 or filter requests: each tenant owns its certificates. Its settings are in the [stack's README](../../stacks/shared/entry-point/README.md#settings); publishing a domain is a [guide](../guides/publish-a-domain.md).
+
 ## Ingress data path
 
-The client address must reach the application; TLS is terminated by the tenant, never by the entry point. Exactly **one PROXY v2 header** travels end to end, written by the entry point.
+**Status:** delivered: through the entry point in `v0.1`, direct exposure of both tenant types in `v0.4`.
+
+On both paths, the client address reaches the application, and TLS is terminated by the tenant. A tenant is published through the shared entry point (`exposure = "entry-point"`, the default) or exposes its own public address (`exposure = "public"`, [ADR-0006](../adr/0006-exposure.md), D2).
+
+### Through the shared entry point
+
+Many domains of many tenants share one public address. The entry point does not decrypt; exactly **one PROXY v2 header** travels end to end, written by the entry point.
 
 ```mermaid
 sequenceDiagram
@@ -97,6 +118,8 @@ sequenceDiagram
     Note over B: reads PROXY v2 from the load balancer's addresses: client address<br/>terminates TLS with its own certificate
 ```
 
+What each hop sees and who admits it:
+
 | Hop | Source seen | Admitted by |
 |---|---|---|
 | Client → entry point load balancer | client | listener, public |
@@ -105,7 +128,9 @@ sequenceDiagram
 
 On the published cluster the same path ends at the ingress: no `proxy-protocol` annotation on the Traefik Service (a second header breaks the handshake), and `externalTrafficPolicy: Local` (otherwise kube-proxy replaces the amphora address and Traefik drops the client address).
 
-With `exposure = "public"`, a `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`); the shared entry point is not involved ([ADR-0006](../adr/0006-exposure.md), D2):
+### Direct exposure
+
+The tenant owns one public address and one load balancer for its domains alone; the shared entry point is not involved. A `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`):
 
 ```mermaid
 sequenceDiagram
@@ -117,62 +142,19 @@ sequenceDiagram
     Note over B: reads PROXY v2 from the load balancer's addresses<br/>terminates TLS with its own certificate
 ```
 
-With `exposure = "public"` on [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md), the ingress of the published cluster gets a floating IP of `egress_network`, open to any source; the cluster does not join the publication plane. No PROXY protocol on this path: Traefik trusts no PROXY sender and the load balancer adds no header; `externalTrafficPolicy: Local` keeps the client address.
-
-The tenant then owns one public address and one load balancer for its domains alone. The shared entry point exists for the opposite case: many domains of many tenants behind one public address.
-
-## Public entry point
-
-| Element | Setting |
-|---|---|
-| Public address | one floating IP for every domain published through it; Traefik tells the domains apart by SNI |
-| Octavia listener 443 | `TCP`, pool protocol `PROXY`, TCP health monitor on 443 |
-| Octavia listener 80 | `TCP`, pool protocol `PROXY`; Traefik answers with a redirection to HTTPS |
-| Traefik entry points | `proxyProtocol.trustedIPs` limited to the entry point network |
-| Traefik routers | TCP routers, `HostSNI` per domain, `tls.passthrough: true`, connection limit per client |
-| Traefik services | the tenant's service address, PROXY protocol v2 |
-| Runtime | Traefik container started by a systemd unit, pinned image, no orchestrator |
-| Static configuration | cloud-init; a change replaces the instances one at a time |
-| Routes | instance metadata, one item per domain, updated in place ([ADR-0006](../adr/0006-exposure.md), D3) |
-| Dashboard | not exposed |
-
-What the entry point does not do: TLS termination, L7 routing, WAF. Each tenant owns its certificates ([Certificates](#certificates)).
-
-### Publishing a domain
-
-```mermaid
-flowchart LR
-    O["published_domains<br/>of each tenant"] --> S["scripts/publish-domains.sh"]
-    S --> TF["apply shared/entry-point<br/>metadata updated in place"]
-    TF --> M["Nova metadata<br/>one route item per domain"]
-    M -->|"every 10 s"| R["traefik-routes timer<br/>on each instance"]
-    R --> D["/etc/traefik/dynamic/routes.yml<br/>reloaded by Traefik"]
-```
-
-The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route. Limit: about 120 domains per entry point (Nova quota `metadata_items`, 128 by default).
+On [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md), the ingress of the published cluster gets a floating IP of `egress_network`, open to any source; the cluster does not join the publication plane. No PROXY protocol on this path: Traefik trusts no PROXY sender and the load balancer adds no header; `externalTrafficPolicy: Local` keeps the client address.
 
 ## Certificates
 
-TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)); each tenant obtains and renews its certificates with the standard tool of its platform, from an ACME directory, through the DNS-01 challenge ([ADR-0008](../adr/0008-tenant-certificates.md)).
+**Status:** delivered in `v0.4`, tested with an internal ACME authority; Let's Encrypt takes the same path and is not tested by the maintainers.
 
-| Tenant | TLS ends on | Tool | Certificate |
-|---|---|---|---|
-| `vm` | each instance (nginx in front of the application) | lego, run by a systemd timer | one per instance; the site is enabled once it is issued |
-| `kubernetes` | the ingress | cert-manager (`ClusterIssuer`, `Certificate`) | one for the cluster's domains, shared by the ingress replicas |
-| shared services on Kubernetes | their own entry | cert-manager, the organisation's authority | see the [shared cluster](../../stacks/shared/kubernetes/README.md) |
-
-| Choice | Values |
-|---|---|
-| Authority | an ACME directory: Let's Encrypt for names published on the Internet, the organisation's authority (step-ca, Vault PKI, EJBCA…) for names served on internal planes only, with its root certificate |
-| Challenge | DNS-01: works for public and internal names and any number of instances, needs no inbound port 80 |
-| DNS provider | any provider of the tool; RFC 2136 with TSIG in the examples, one key per tenant restricted to the `_acme-challenge` records of its names |
-| Provider credentials | one place per platform: `/etc/lego/dns.env` on the instances, a Secret in the `cert-manager` namespace; delivered by the stack today, by a secrets manager through the secrets integration point |
-
-Without `certificates`, a tenant runs in **demonstration mode**: a self-signed certificate, with a warning at every plan. It is meant for evaluation only.
+TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)); each tenant obtains and renews its certificates with the standard tool of its platform (lego on the instances, cert-manager in a cluster), from an ACME directory, through the DNS-01 challenge ([ADR-0008](../adr/0008-tenant-certificates.md)). Without `certificates`, a tenant runs in demonstration mode, with a self-signed certificate. The tools, the authorities and the credentials: [certificates guide](../guides/certificates.md).
 
 **A reverse-proxy tier** in front of the application instances (load balancer, two proxies, then the instances) is not shipped. Use it when one domain serves several applications or routes by path, when a web application firewall is needed, or when the application instances must not hold keys: the proxies then terminate TLS and hold the certificate. For one application, the instances terminate TLS themselves, which avoids a tier.
 
 ## Observability data path
+
+**Status:** metrics delivered in `v0.3`; logs and audit events planned in `v0.7` (integration points).
 
 Observability is an integration point ([ADR-0007](../adr/0007-monitoring.md)): the reference states the contract, the receivers are yours. Metrics, logs and audit events follow the same pattern: an agent next to the source pushes through the observability plane; nothing connects into a project.
 
@@ -185,6 +167,8 @@ flowchart LR
     I["isolated workload"] -->|"OTLP"| R
 ```
 
+The contract between the sources and the receivers:
+
 | | Contract |
 |---|---|
 | Receivers | accept Prometheus remote write and OTLP for metrics, and a push protocol for logs and audit events; run in a project of shared services, role `shared` on the observability plane |
@@ -194,6 +178,8 @@ flowchart LR
 
 ## Network services
 
+**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered.
+
 What every tenant needs from the network, offered the same way as any shared service ([ADR-0003](../adr/0003-scope-and-boundary.md), D4):
 
 | Service | Design |
@@ -201,10 +187,12 @@ What every tenant needs from the network, offered the same way as any shared ser
 | Name resolution | Resolvers as a shared service on a plane, reachable by every tenant; the tenants' subnets point to them |
 | Time | NTP servers as a shared service on the same plane |
 | Packages and images | Mirrors and a registry as shared services, so that tenants without Internet access, such as `isolated`, can still be built and updated |
-| Egress to the Internet | Only through a declared path: a router to an egress network in the tenant's own project, or a shared egress on a plane; never by default |
+| Egress to the Internet | Only through a declared path: a router to an egress network in the tenant's own project, or a shared egress on a plane; never by default. **Today**, a tenant with an egress router reaches the Internet without filtering beyond the egress rules of its security groups; the shared egress, a single place to filter and log, comes with `v0.6` |
 | IPv6 | IPv4 until `v1.0`: the reference creates no IPv6 subnet, and the isolation test checks that tenants have no routed IPv6. Afterwards, one family per deployment, IPv4 or IPv6 ([ADR-0015](../adr/0015-ipv6.md)) |
 
 ## Resilience and continuity
+
+**Status:** placement over hosts and zones delivered in `v0.5`, with the rebuild guide; several regions planned in `v0.8`.
 
 The reference places what it deploys; the cloud and the workloads provide the behaviour on a failure, as in the landing zones of the large providers ([ADR-0012](../adr/0012-resilience-scope.md)).
 
@@ -212,7 +200,7 @@ The reference places what it deploys; the cloud and the workloads provide the be
 |---|---|---|
 | A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it | the placement |
 | An availability zone | Instances, Kubernetes nodes and volumes spread over the zones given to each stack; planes and routers are regional in Neutron | the placement, with mocked providers |
-| A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([regions and sites](#regions-and-sites)) | two sites deployed side by side; not the failover |
+| A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([spec](../specs/regions.md)) | planned with `v0.8`: two sites deployed side by side; not the failover |
 | A stack or its state | The architecture is rebuilt from code in a documented order ([rebuild](../guides/rebuild.md)); the states are kept in a backend that is itself backed up | every campaign rebuilds it from empty projects |
 | Tenant data | Backed up by the tenants through the backup integration point; restored the same way | no: yours |
 
@@ -225,7 +213,11 @@ The reference places what it deploys; the cloud and the workloads provide the be
 
 **What stays yours:** deciding and running a failover, rehearsing it, replicating the tenants' data, and setting the recovery objectives (RTO, RPO) of each workload.
 
+What each shared component takes down when it fails is listed with the [single points of failure](../reference/sizing-and-limits.md#single-points-of-failure).
+
 ## Administration paths
+
+**Status:** delivered.
 
 ```mermaid
 flowchart LR
@@ -245,6 +237,8 @@ flowchart LR
     BS -->|"6443, until clusterctl move"| API
 ```
 
+Who is admitted on each endpoint:
+
 | Endpoint | Admitted | Not admitted |
 |---|---|---|
 | Bastions (SSH) | the administrator addresses | every tenant, including the Kubernetes tenant (tested) |
@@ -254,6 +248,8 @@ flowchart LR
 With one network for the administration and internal services roles, administrator addresses must be single addresses, never the network range: tenants joining that plane appear inside its range ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5).
 
 ## Lifecycle
+
+**Status:** delivered.
 
 ```mermaid
 flowchart TB
@@ -267,6 +263,8 @@ flowchart TB
     P --> S --> E --> T --> S2 --> P2 --> D
 ```
 
+The operations and their order:
+
 | Operation | Order |
 |---|---|
 | Deploy | planes → shared services the tenants push to → entry point → tenants (Kubernetes: node image first) → shared services that admit named consumers (they need the tenants' sources) → planes again on hub planes → publish the domains |
@@ -276,60 +274,17 @@ flowchart TB
 | Rebuild after a loss | [rebuild](../guides/rebuild.md): the same order, from the first lost step |
 | Tear down | [teardown](../guides/teardown.md): Kubernetes clusters first, then the internal services, the tenants, the entry point, the receivers, the planes |
 
-## Kubernetes cluster creation
+## Kubernetes clusters
 
-The design is [ADR-0002](../adr/0002-platform-kubernetes.md); the stack is [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md).
+**Status:** delivered: published cluster in `v0.2`, shared cluster and lifecycle in `v0.4`, repair of duplicated add-ons in `v0.5.1`.
 
-```mermaid
-sequenceDiagram
-    participant TF as OpenTofu (stack tenants/kubernetes)
-    participant OS as OpenStack APIs
-    participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
-    participant W as Workload cluster
-    TF->>OS: network, routers to the planes, server groups, ingress address, bootstrap instance
-    Note over B: an administrator copies the cluster credential (clouds.yaml)
-    B->>OS: CAPO: API load balancer (floating IP on the administration network)
-    B->>OS: 3 control-plane servers, then workers (anti-affinity)
-    B->>W: CAAPH: cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus
-    W->>OS: ingress load balancer at the address created by the stack
-    B->>W: clusterctl move: the cluster manages itself
-    Note over TF,B: optional: bootstrap = false removes the bootstrap instance
-```
+A cluster is created by Cluster API with the OpenStack provider, from a temporary bootstrap instance, then manages itself ([ADR-0002](../adr/0002-platform-kubernetes.md)); its add-ons are declared with Cluster API, and its lifecycle beyond the landing zone is Cluster API's ([ADR-0009](../adr/0009-kubernetes-lifecycle.md)). A published cluster is a tenant ([`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md#how-the-cluster-is-created), where the creation and the settings are described); a cluster of shared services is a [shared service](../../stacks/shared/kubernetes/README.md) ([ADR-0010](../adr/0010-kubernetes-shared-services.md)).
 
-| Element | Setting |
-|---|---|
-| Cluster definition | ClusterClass and a `Cluster` object; versions pinned |
-| Control plane | 3 nodes behind the CAPO load balancer |
-| Workers | one machine deployment, anti-affinity |
-| Pod network | Cilium, VXLAN, MTU = network MTU − 50 |
-| Ingress | Traefik (Gateway API) behind a load balancer at the service address, PROXY v2 from the entry point; with `exposure = "public"`, a floating IP of `egress_network`, no PROXY protocol |
-| Metrics | in-cluster Prometheus, pushed to the receiver (remote write) |
-| API | floating IP on the administration network, administration sources only |
-| Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
+## Security model
 
-## Isolation matrix
+**Status:** delivered.
 
-The expected flows between the Internet, the planes, the tenants and the shared services are listed, row by row, in the [isolation matrix](../reference/isolation-matrix.md); the [isolation test](../guides/check-isolation.md) checks them on a deployment.
-
-## Lateral movement
-
-The shared services are the only points that several tenants reach, and the entry point is the only one that reaches the tenants: a hub-and-spoke design concentrates lateral movement there rather than removing it. Their reach is bounded by the security groups of each target and checked by the [isolation test](../guides/check-isolation.md):
-
-| Shared service | Reaches | Never reaches |
-|---|---|---|
-| Entry point | the tenants' service addresses, on their service port | a tenant's instances or other ports; the other shared services, except the receiver it pushes to |
-| Receiver | nothing: every flow to it is pushed | a tenant, the other shared services |
-| Internal service | nothing: its consumers call it | a tenant, the other shared services |
-| Hub project | runs no instance | — |
-
-- **A compromised entry point** can send requests to every published application, on its service port only, and holds no key: TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)). It is the largest reach of the design, and the one the entry point needs to work.
-- **A tenant** reaches a shared service on the ports of the service it consumes, and no other: SSH is admitted from the administrators' addresses only ([ADR-0005](../adr/0005-stacks-contracts-and-access.md)).
-- **Routes exist between the shared services of a plane** ([ADR-0004](../adr/0004-planes-and-isolation.md)): only the security groups of the target close the flows that are not declared.
-- **Spoofed sources.** Port security filters the ports of the instances, not those of the routers. A project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address through its router. They are blind: the answer goes to the real owner, so no TCP connection is established, and every service of the scenario listens on TCP. Services answering on UDP, such as name resolution and time, allow reflection; their integration point states it. The [test procedure](../reference/test-procedure.md) checks this on each cloud.
-- **A tenant that offers a service to another** takes the role `shared` on a plane, and the other the role `tenant`: one provider, its consumers, one direction of opening, as AWS PrivateLink, not VPC peering ([How a tenant joins a plane](plane-attachment.md#a-tenant-offering-a-service-to-another)).
-- **A published tenant that consumes internal services** is the most exposed tenant reaching the internal services plane: compromised, it reaches the services that declared it as a consumer, on their service ports, and no other tenant. Join the plane only to consume a service; do not admit a published tenant to sensitive services (secrets, administration of the directory, backups), give it a narrower service in front of them instead; when the stakes justify it, split the tenant in two: a published front without the internal services plane, calling a back that offers its service to it and consumes the internal services.
-- **A Kubernetes cluster is published or shared, not both**: an entry from the Internet must not sit on a cluster that every tenant of the internal services plane reaches.
-- **Beyond the network** ([ADR-0003](../adr/0003-scope-and-boundary.md), D4, level 3): the integrity of what a shared service distributes (images, packages, name resolution) and whom it authenticates are properties of the tool chosen for it, not of this architecture.
+Who holds which credential, how far a compromised component reaches, and what inspects the traffic between projects: the [security model](security.md). The expected flows, row by row, are the [isolation matrix](../reference/isolation-matrix.md); the [isolation test](../guides/check-isolation.md) checks them on a deployment.
 
 ## Planes contract
 
@@ -337,54 +292,10 @@ What the stacks expect from planes provided by the cloud operator (names, ranges
 
 ## Regions and sites
 
-A project is not tied to a region, but its resources and the planes are: each region has its own planes, its own hub and its own entry point. The site is the name of a region in a deployment.
+**Status:** the site as an input of every stack, delivered; several regions joined by an overlay, planned in `v0.8`.
 
-```mermaid
-flowchart LR
-    DNS(["Public DNS<br/>short TTL"])
-    subgraph RA["Region A (active)"]
-        EPA["entry point"]
-        HA["hub · planes"]
-        TA["tenants, shared services"]
-        EPA --- HA --- TA
-    end
-    subgraph RB["Region B (passive)"]
-        EPB["entry point"]
-        HB["hub · planes"]
-        TB["tenants, shared services"]
-        EPB --- HB --- TB
-    end
-    DNS --> EPA
-    DNS -.->|"failover"| EPB
-    HA <-->|"encrypted overlay"| HB
-```
+A project is not tied to a region, but its resources and the planes are: each region has its own planes, its own hub and its own entry point. The site is the name of a region in a deployment, an input of every stack and part of every name, so that the same stacks deploy in several regions without collision. The regions are joined by an encrypted overlay between their hubs, and the published domains fail over between their entry points by DNS: the design is the [spec](../specs/regions.md).
 
-| Rule | Why |
-|---|---|
-| The site is an input of every stack and part of every name | The same stacks deploy in several regions without collision |
-| No hand-written address: routes and admission rules come from stack outputs of the same region | Each region generates its own |
-| One `shared/planes` per region; the hubs of the regions joined by an encrypted overlay | Shared services and tenants of one region reach those of another through the planes, with the same roles and checks |
-| One entry point per region, active/passive, short TTL on the public records | Failover between regions is a DNS change; you run and rehearse it, for example by replaying the isolation test in the other region |
+## Sizing and limits
 
-Replicating tenant data between regions belongs to the tenants and to the backup integration point.
-
-## Sizing
-
-What the test campaigns of 2026-11-09 and 10 ran, project by project, with the flavors of the test cloud (2 vCPU each; nodes and the bootstrap instance with 4 GiB). The Kubernetes clusters are deployed one after the other in the tests; in production both run at once.
-
-| Project | Instances | vCPU | RAM | Boot volumes | Load balancers | Floating IPs |
-|---|---|---|---|---|---|---|
-| entry point | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 public |
-| `vm` tenant | 2 | 4 | 4 GiB | 2 × 8 GiB | 1 | 1 on the publication plane with an operator plane with NAT, none otherwise |
-| `kubernetes` tenant | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB (defaults 30 and 40) | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with NAT |
-| shared cluster | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 5 × 15 GiB | 3 (API, internal ingress, TCP service) | 1 administration (API), 2 on the internal services plane with NAT |
-| bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 20 GiB | 0 | 1 administration |
-| `isolated` tenant | 1 | 2 | 2 GiB | 8 GiB | 0 | 0 |
-| shared services: receiver | 1 | 2 | 2 GiB | 8 GiB | 0 | 1 on the observability plane with NAT |
-| shared services: internal service, ACME authority (tests) | 2 | 4 | 6 GiB | 1 × 8 GiB, one local disk | 0 | 1 on the internal services plane with NAT |
-| bastions (one per stack, optional) | 1 each | 2 each | 2 GiB each | 8 GiB each | 0 | 1 each, administration |
-| **Total, both clusters, without bastions** | **19** | **38** | **62 GiB** | | **7** | **up to 10** |
-
-**Load balancers cost instances too.** With the `ACTIVE_STANDBY` topology, each load balancer runs two amphorae, in the cloud operator's Octavia project and on the same hypervisors: 14 more instances for the 7 load balancers above, of the operator's amphora flavor. On a small cloud they are what runs out first: they caused some of the "no valid host" failures seen in the tests.
-
-With hub planes, the hub project holds one router per plane and no instance.
+What the test campaigns ran, project by project, what load balancers cost in amphorae, the single points of failure and the scale limits: [sizing and limits](../reference/sizing-and-limits.md).

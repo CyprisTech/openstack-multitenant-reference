@@ -34,6 +34,23 @@ flowchart LR
 
 Arrows show who opens the connection. TLS ends in the tenants: Traefik routes by name and holds no key. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
 
+## Settings
+
+| Element | Setting |
+|---|---|
+| Public address | one floating IP for every domain published through it; Traefik tells the domains apart by SNI |
+| Octavia listener 443 | `TCP`, pool protocol `PROXY`, TCP health monitor on 443 |
+| Octavia listener 80 | `TCP`, pool protocol `PROXY`; Traefik answers with a redirection to HTTPS |
+| Traefik entry points | `proxyProtocol.trustedIPs` limited to the entry point network |
+| Traefik routers | TCP routers, `HostSNI` per domain, `tls.passthrough: true`, connection limit per client |
+| Traefik services | the tenant's service address, PROXY protocol v2 |
+| Runtime | Traefik container started by a systemd unit, pinned image, no orchestrator |
+| Static configuration | cloud-init; a change replaces the instances one at a time |
+| Routes | instance metadata, one item per domain, updated in place ([ADR-0006](../../../docs/adr/0006-exposure.md), D3; [publish a domain](../../../docs/guides/publish-a-domain.md)) |
+| Dashboard | not exposed |
+
+What the entry point does not do: TLS termination, L7 routing, WAF. Each tenant owns its certificates ([certificates](../../../docs/guides/certificates.md)).
+
 ## Usage
 
 ```bash

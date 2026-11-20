@@ -339,7 +339,7 @@ Expected: the route is there (`ip route`), every port closed — the security gr
 
 ### Spoofed source (interface mode)
 
-Neutron's port security filters the ports of the instances, not those of the routers ([lateral movement](../concepts/architecture.md#lateral-movement)). This step checks whether a member can disable port security on its own instance, then whether a packet sent with another project's address reaches anything. It changes a tenant's port, so it is manual; run it after the hostile route, with the same route in place.
+Neutron's port security filters the ports of the instances, not those of the routers ([lateral movement](../concepts/security.md#lateral-movement)). This step checks whether a member can disable port security on its own instance, then whether a packet sent with another project's address reaches anything. It changes a tenant's port, so it is manual; run it after the hostile route, with the same route in place.
 
 ```bash
 # credentials of the isolated stack (its clouds.yaml entry)

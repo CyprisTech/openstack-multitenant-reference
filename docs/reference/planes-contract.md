@@ -17,7 +17,7 @@ What the stacks expect from planes **provided by the cloud operator** as externa
 | Administration network and sources | An external network for the bastions and the Kubernetes API floating IPs, and the **administrator addresses** allowed on them. Recommended: a network distinct from the internal services plane. With one network for both roles, the administration sources must be specific addresses, never the network range ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5) |
 | Octavia | Available to the projects (amphora provider) |
 | Image | An Ubuntu LTS cloud image visible to the projects |
-| Flavors and quotas | At least the [sizing](../concepts/architecture.md#sizing), per project. Security groups: at most 3 per project and about 10 rules, the `default` group included; some public clouds create projects with none until their support raises the quota |
+| Flavors and quotas | At least the [sizing](sizing-and-limits.md), per project. Security groups: at most 3 per project and about 10 rules, the `default` group included; some public clouds create projects with none until their support raises the quota |
 | DNS | Optional. A zone per project for the public records and the tenants' ACME DNS-01 challenges, and the internal zone of the shared cluster (Designate). Without Designate, shared services are reached by their address (the stacks pass it on as outputs), public records and DNS-01 challenges go to your DNS provider |
 
 Security groups are declared by each tenant. A central catalogue shared by RBAC is an operator option that comes with cloud-baseline.

@@ -39,6 +39,38 @@ flowchart LR
 
 Arrows show who opens the connection. The cluster is published through the entry point; with `exposure = "public"`, the ingress gets a public floating IP of the egress network instead, and the cluster does not join the publication plane. The internal services plane is optional: without it, the cluster gets no certificates from an internal authority and `admin_network` is required. On the internal services plane it is only a client; a cluster that offers services to the tenants is [another cluster](../../shared/kubernetes/README.md), not this one with a second ingress. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Terraform creates the network, its routers, the bootstrap instance and the addresses of the entries; the bootstrap instance creates the cluster, which then manages itself. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
 
+## How the cluster is created
+
+```mermaid
+sequenceDiagram
+    participant TF as OpenTofu (stack tenants/kubernetes)
+    participant OS as OpenStack APIs
+    participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
+    participant W as Workload cluster
+    TF->>OS: network, routers to the planes, server groups, ingress address, bootstrap instance
+    Note over B: an administrator copies the cluster credential (clouds.yaml)
+    B->>OS: CAPO: API load balancer (floating IP on the administration network)
+    B->>OS: 3 control-plane servers, then workers (anti-affinity)
+    B->>W: CAAPH: cloud controller manager, Cinder CSI, Cilium, Traefik, Prometheus
+    W->>OS: ingress load balancer at the address created by the stack
+    B->>W: clusterctl move: the cluster manages itself
+    Note over TF,B: optional: bootstrap = false removes the bootstrap instance
+```
+
+The settings of the cluster:
+
+| Element | Setting |
+|---|---|
+| Cluster definition | ClusterClass and a `Cluster` object; versions pinned |
+| Control plane | 3 nodes behind the CAPO load balancer |
+| Workers | one machine deployment, anti-affinity |
+| Pod network | Cilium, VXLAN, MTU = network MTU − 50 |
+| Ingress | Traefik (Gateway API) behind a load balancer at the service address, PROXY v2 from the entry point; with `exposure = "public"`, a floating IP of `egress_network`, no PROXY protocol |
+| Metrics | in-cluster Prometheus, pushed to the receiver (remote write) |
+| API | floating IP on the administration network, administration sources only |
+| Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
+| Add-ons after the move | CAAPH may duplicate the release proxy of a chart after `clusterctl move` (kubernetes-sigs/cluster-api-addon-provider-helm#606); `create-cluster.sh` repairs it before the bootstrap instance leaves the API sources, and waits for the load balancers of the repaired add-ons |
+
 ## Prerequisites
 
 - With `exposure = "entry-point"`: the shared entry point (`stacks/shared/entry-point`) applied for the same site; the ingress admits its `publication_sources` only, given as `edge_sources`.

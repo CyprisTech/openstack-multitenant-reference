@@ -33,6 +33,6 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
 | `isolated` | the Internet | any | denied | no egress router: its default route goes to the transit router and the observability plane, so it reaches what that plane routes and nothing more; denied as long as the observability plane does not lead to the Internet, as in the scenario |
 
-The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/architecture.md#lateral-movement)).
+The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/security.md#lateral-movement)).
 
 The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the isolation test, which only opens TCP connections and reads the receiver. The hostile route is automated by [`tests/campaign`](../../tests/campaign/README.md) (step `hostile`, interface mode); the spoofed source is run by hand.

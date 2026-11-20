@@ -2,6 +2,21 @@
 
 How a tenant gets certificates its clients trust ([ADR-0008](../adr/0008-tenant-certificates.md), [architecture](../concepts/architecture.md#certificates)). The `vm` and `kubernetes` tenant stacks take the same `certificates` input.
 
+| Tenant | TLS ends on | Tool | Certificate |
+|---|---|---|---|
+| `vm` | each instance (nginx in front of the application) | lego, run by a systemd timer | one per instance; the site is enabled once it is issued |
+| `kubernetes` | the ingress | cert-manager (`ClusterIssuer`, `Certificate`) | one for the cluster's domains, shared by the ingress replicas |
+| shared services on Kubernetes | their own entry | cert-manager, the organisation's authority | see the [shared cluster](../../stacks/shared/kubernetes/README.md) |
+
+The choices behind them:
+
+| Choice | Values |
+|---|---|
+| Authority | an ACME directory: Let's Encrypt for names published on the Internet, the organisation's authority (step-ca, Vault PKI, EJBCA…) for names served on internal planes only, with its root certificate |
+| Challenge | DNS-01: works for public and internal names and any number of instances, needs no inbound port 80 |
+| DNS provider | any provider of the tool; RFC 2136 with TSIG in the examples, one key per tenant restricted to the `_acme-challenge` records of its names |
+| Provider credentials | one place per platform: `/etc/lego/dns.env` on the instances, a Secret in the `cert-manager` namespace; delivered by the stack today, by a secrets manager through the secrets integration point |
+
 ## Demonstration mode
 
 Without `certificates`, the tenant serves a **self-signed certificate**, and every plan warns *certificates not set: self-signed certificate, for evaluation only*. Clients must skip verification (`curl -k`). Use it to evaluate the reference, never in production.

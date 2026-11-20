@@ -22,6 +22,8 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 16 | [Routes through instance metadata](#16-routes-through-instance-metadata) | Updated in place, read by a timer |
 | 17 | [Certificates through DNS-01 only](#17-certificates-through-dns-01-only) | DNS-01 from any ACME directory; HTTP-01 not shipped |
 | 18 | [The entry point's software](#18-the-entry-points-software) | Traefik in a container; any software that keeps the contract fits |
+| 19 | [Hub planes are shared segments](#19-hub-planes-are-shared-segments) | Router ports of every attached project on one network; isolation by the targets |
+| 20 | [A bastion per stack](#20-a-bastion-per-stack) | One optional bastion per stack; a central access fits in front of it |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -39,6 +41,8 @@ Every choice of this architecture has a cost. This document states each one: wha
 **Alternative.** Terminate TLS at the edge (Traefik or Octavia `TERMINATED_HTTPS` with Barbican), then re-encrypt to the backends.
 
 **Choose it when** you need a WAF, central HTTP policies or L7 routing, and you accept that the edge holds every tenant's private key.
+
+**A WAF without changing the reference:** in the tenant, as the reverse-proxy tier in front of its application instances ([certificates](architecture.md#certificates)); or a tenant exposed directly (`exposure = "public"`) behind the provider's WAF service. In front of the shared entry point, a WAF needs the traffic in clear: that is the alternative above, not an addition.
 
 ## 2. Health monitors
 
@@ -95,7 +99,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Why.** Neutron networks, Octavia load balancers and their amphorae live in one region: a design that spans regions must join them above Neutron. An overlay works on any OpenStack cloud, unlike provider features such as OVHcloud's vRack.
 
-**Cost.** Failover is not instantaneous (DNS TTL), and the passive entry point and the overlay must be kept tested by the deployer: the reference tests the deployment of several sites, not the failover. Stateful data (volumes, databases) is not replicated by the reference: the tenants replicate it, or restore it through the backup integration point.
+**Cost.** Failover is not instantaneous (DNS TTL), and the passive entry point and the overlay must be kept tested by the deployer: the reference tests the deployment of several sites, not the failover. Stateful data (volumes, databases) is not replicated by the reference: the tenants replicate it, or restore it through the backup integration point, with recovery objectives (RTO, RPO) set per workload; the architecture itself is rebuilt from code ([rebuild](../guides/rebuild.md)).
 
 **Choose active-active when** the downtime of a DNS failover is not acceptable and the tenants' data is replicated: it needs a global load balancing service outside OpenStack.
 
@@ -110,6 +114,8 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **Alternative.** A firewall at the hub, between the plane and the tenants (OVHcloud's landing zone does so), or a dedicated transit network per tenant.
 
 **Choose it when** the tenants do not trust each other and you can run a firewall in high availability: a wrong rule on one tenant no longer opens a path.
+
+**Logs without a central firewall.** The Neutron *network log* extension records what the security groups accept and drop, with the OVN driver: the operator enables it, and the logs are written on the compute hosts. It gives the traceability of a central firewall's logs, not its inspection.
 
 ## 8. Tenant-owned security groups or a central catalogue
 
@@ -136,6 +142,8 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **Alternative.** A managed Kubernetes service (Magnum or the cloud's own offer).
 
 **Choose it when** your cloud offers one and its versions and options suit you: you give up control for less to operate.
+
+**One cluster per tenant.** A tenant is a team or a trust boundary, not an application: its cluster carries all of its applications. Sharing a cluster between tenants (namespaces with Capsule, hosted control planes with Kamaji) is a platform choice of level 3, not provided; the reference's shared cluster carries shared services, not the tenants' workloads ([ADR-0010](../adr/0010-kubernetes-shared-services.md)).
 
 ## 10. Where the planes come from
 
@@ -209,7 +217,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** About 120 domains per entry point (Nova quota `metadata_items`); a delay of seconds before a change is applied; routes are readable by the project's members (they hold no secret).
 
-**Choose object storage or a key-value store when** the cloud has one and the number of domains exceeds the metadata quota.
+**Choose object storage or a key-value store when** the cloud has one and the number of domains exceeds the metadata quota. Simpler answers come first: a quota `metadata_items` raised by the operator, or a second entry point for part of the domains.
 
 ## 17. Certificates through DNS-01 only
 
@@ -232,6 +240,26 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **The contract, whatever the software:** read the SNI without decrypting; forward to the tenant's service address with exactly one PROXY v2 header; accept PROXY only from the entry point's load balancer; reload routes without dropping connections. HAProxy (`req.ssl_sni`, `send-proxy-v2`), nginx (`stream` with `ssl_preread`, `proxy_protocol on`) and Envoy (TLS inspector, PROXY protocol transport socket) all fit it. The same holds for the other choices that look opinionated: the receivers only have to accept the push protocols ([section 15](#15-monitoring-by-push)), and the routes may come from another store ([section 16](#16-routes-through-instance-metadata)).
 
 **Choose another software when** your operators already run it at the edge: replace the role in `stacks/shared/entry-point`, keep the contract, and run the isolation test.
+
+## 19. Hub planes are shared segments
+
+**Choice.** A hub plane is one network of the hub project, shared by RBAC: the routers of every attached project have a port on it. Isolation rests on the security groups of each target ([ADR-0004](../adr/0004-planes-and-isolation.md)).
+
+**Why.** It needs a member role only and works on any OpenStack cloud; a network per pair of projects would grow with the square of their number.
+
+**Cost.** The projects share a layer 2 segment, and port security does not apply to router ports: a project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address. They are blind (the answer goes to the real owner), the isolation test and the test procedure check it, and every service of the scenario listens on TCP; UDP services allow reflection.
+
+**Close it when** the tenants do not trust each other: a policy of the operator that forbids disabling port security, or routed operator planes (`v0.6`, with cloud-baseline), where the cloud routes each project's range and no segment is shared.
+
+## 20. A bastion per stack
+
+**Choice.** Each stack may have its own bastion, with a floating IP on the administration network; administrators reach it from their declared addresses ([ADR-0005](../adr/0005-stacks-contracts-and-access.md), D5).
+
+**Why.** It needs nothing outside the stack: no VPN, no identity provider, which matters with a member role on a public cloud. A compromised bastion reaches one stack only.
+
+**Cost.** One more instance, floating IP and set of keys per stack; the administrators' addresses are repeated in every stack and must be kept current.
+
+**A central access fits in front of it:** a VPN or a zero-trust access service in front of the administration network. Its egress addresses become the administrators' addresses, and the bastions may go (they are optional) when the central access reaches the instances directly.
 
 ## Evidence
 
