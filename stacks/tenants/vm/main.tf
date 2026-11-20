@@ -183,7 +183,7 @@ module "web" {
   tenant = {
     existing = {
       networks = merge({
-        egress = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
+        egress = { name = var.egress_network.network, subnets = { for k, s in { main = var.egress_network.subnet } : k => { name = s } if s != null } }
       }, module.planes.networks, module.bastion.existing_networks)
     }
 

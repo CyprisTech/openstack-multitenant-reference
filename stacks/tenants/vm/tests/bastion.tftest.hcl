@@ -103,3 +103,21 @@ run "bastion_on_stack_network_needs_the_egress_network" {
 
   expect_failures = [var.bastion_placement, check.certificates]
 }
+
+run "egress_network_without_subnet" {
+  command = plan
+
+  expect_failures = [check.certificates]
+
+  variables {
+    zones             = ["az-1"]
+    egress_network    = { network = "public" }
+    bastion           = { external_network = { network = "public" }, ssh_cidrs = ["203.0.113.50/32"] }
+    bastion_placement = "stack-network"
+  }
+
+  assert {
+    condition     = keys(module.bastion.instances["site-a-web-bastion"].ports) == ["web"]
+    error_message = "Without a subnet name, the external network is used as it is (a public network with several subnets)."
+  }
+}

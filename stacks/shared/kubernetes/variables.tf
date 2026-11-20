@@ -69,7 +69,7 @@ variable "network_mtu" {
 
 variable "egress_network" {
   description = "External network giving the default route (packages, container images). The cluster gets no public address on it."
-  type        = object({ network = string, subnet = string })
+  type        = object({ network = string, subnet = optional(string) })
 }
 
 variable "plane_attachment" {
@@ -96,7 +96,7 @@ variable "admin_network" {
     operator plane (gateway mode): then admin.sources must be specific addresses, never the range
     of the plane.
   EOT
-  type        = object({ network = string, subnet = string, cidr = string })
+  type        = object({ network = string, subnet = optional(string), cidr = string })
   default     = null
 }
 

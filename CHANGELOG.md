@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Profiles in the README ([ADR-0014](docs/adr/0014-profiles.md)): the inputs that differ between `private-cloud` and `public-cloud`; each campaign scenario sets them.
 - Bastion placement ([ADR-0014](docs/adr/0014-profiles.md), D2): `bastion_placement = "stack-network"` puts the bastion on the stack's network, its floating IP on the egress router (the public router for the entry point), when the administration network is the stack's egress network. It saves a network and a router per project: the stacks of the public cloud profile fit in 4 routers. The default stays `"own-network"`; the isolated tenant, with no egress, has no such input. A variable of its own, not an attribute of `bastion`: the profile's choice can be set without repeating the cloud's values of `bastion`. Mocked tests in `stacks/tenants/vm`.
 
+### Changed
+
+- The `subnet` of an external network (`egress_network`, `public_network`, `bastion.external_network`, `admin_network`) is optional: without it, Neutron chooses. A public network with several subnets of the same name (OVHcloud's `Ext-Net`) could not be looked up by name.
+
 ## [0.5.0] - 2026-11-18
 
 ### Added

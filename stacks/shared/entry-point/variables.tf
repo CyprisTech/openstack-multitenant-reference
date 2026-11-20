@@ -58,10 +58,10 @@ variable "dns_nameservers" {
 }
 
 variable "public_network" {
-  description = "External network providing the public floating IP of the load balancer and the default route of the edge network."
+  description = "External network providing the public floating IP of the load balancer and the default route of the edge network. subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name)."
   type = object({
     network = string
-    subnet  = string
+    subnet  = optional(string)
   })
 }
 
@@ -181,7 +181,7 @@ variable "bastion" {
     The users of var.admin are created on the bastion and on the Traefik instances.
   EOT
   type = object({
-    external_network = object({ network = string, subnet = string })
+    external_network = object({ network = string, subnet = optional(string) })
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)

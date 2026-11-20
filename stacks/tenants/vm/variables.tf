@@ -58,10 +58,10 @@ variable "dns_nameservers" {
 }
 
 variable "egress_network" {
-  description = "External network giving the default route (package installation). The instances get no public address on it; with exposure = \"public\", the service address is a floating IP of this network."
+  description = "External network giving the default route (package installation). The instances get no public address on it; with exposure = \"public\", the service address is a floating IP of this network. subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name)."
   type = object({
     network = string
-    subnet  = string
+    subnet  = optional(string)
   })
 }
 
@@ -157,7 +157,7 @@ variable "bastion" {
     The users of var.admin are created on the bastion and on the instances.
   EOT
   type = object({
-    external_network = object({ network = string, subnet = string })
+    external_network = object({ network = string, subnet = optional(string) })
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)

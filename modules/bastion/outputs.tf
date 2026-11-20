@@ -2,7 +2,7 @@ output "existing_networks" {
   description = "For tenant.existing.networks: the administration network, under the key admin."
   value = {
     for k in(local.own ? ["admin"] : []) : k => {
-      name = var.bastion.external_network.network, subnets = { main = { name = var.bastion.external_network.subnet } }
+      name = var.bastion.external_network.network, subnets = { for k, s in { main = var.bastion.external_network.subnet } : k => { name = s } if s != null }
     }
   }
 }

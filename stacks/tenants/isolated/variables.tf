@@ -94,7 +94,7 @@ variable "bastion" {
     The users of var.admin are created on the bastion and on the isolated instance.
   EOT
   type = object({
-    external_network = object({ network = string, subnet = string })
+    external_network = object({ network = string, subnet = optional(string) })
     cidr             = optional(string)
     flavor           = optional(string)
     ssh_cidrs        = list(string)

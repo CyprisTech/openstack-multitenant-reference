@@ -122,7 +122,7 @@ module "edge" {
   tenant = {
     existing = {
       networks = merge({
-        public        = { name = var.public_network.network, subnets = { main = { name = var.public_network.subnet } } }
+        public        = { name = var.public_network.network, subnets = { for k, s in { main = var.public_network.subnet } : k => { name = s } if s != null } }
         publication   = module.planes.networks.publication
         observability = module.planes.networks.observability
       }, module.bastion.existing_networks)

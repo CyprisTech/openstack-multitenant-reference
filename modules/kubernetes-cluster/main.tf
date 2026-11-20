@@ -116,10 +116,10 @@ module "tenant" {
   tenant = {
     existing = {
       networks = merge({
-        egress = { name = var.egress_network.network, subnets = { main = { name = var.egress_network.subnet } } }
+        egress = { name = var.egress_network.network, subnets = { for k, s in { main = var.egress_network.subnet } : k => { name = s } if s != null } }
         }, module.planes.networks, {
         for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
-          name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
+          name = var.admin_network.network, subnets = { for k, s in { main = var.admin_network.subnet } : k => { name = s } if s != null }
         }
       })
     }
@@ -189,7 +189,7 @@ module "bootstrap" {
         { for k in(local.admin_on_internal ? ["internal"] : []) : k => { name = module.planes.network_name.internal } },
         {
           for k in(local.admin_on_internal ? [] : ["admin"]) : k => {
-            name = var.admin_network.network, subnets = { main = { name = var.admin_network.subnet } }
+            name = var.admin_network.network, subnets = { for k, s in { main = var.admin_network.subnet } : k => { name = s } if s != null }
           }
       })
     }

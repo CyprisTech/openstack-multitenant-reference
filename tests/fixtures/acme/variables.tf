@@ -46,14 +46,14 @@ variable "cidr" {
 }
 
 variable "egress_network" {
-  description = "External network giving the default route (package download)."
-  type        = object({ network = string, subnet = string })
+  description = "External network giving the default route (package download). subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name)."
+  type        = object({ network = string, subnet = optional(string) })
 }
 
 variable "bastion" {
   description = "Administration bastion: floating IP on external_network, SSH from ssh_cidrs. Where it lives: var.bastion_placement."
   type = object({
-    external_network = object({ network = string, subnet = string })
+    external_network = object({ network = string, subnet = optional(string) })
     ssh_cidrs        = list(string)
   })
 }
