@@ -44,14 +44,29 @@ PY
 }
 [[ -f clouds.yaml ]] || { echo "copy clouds.yaml (entry \"openstack\") to /opt/platform first" >&2; exit 1; }
 
+# A run after clusterctl move (an earlier run stopped later): the cluster manages itself, the kind
+# cluster is empty or gone. The remaining steps then run against the cluster itself; a new kind
+# cluster would create a second Cluster object for the same OpenStack resources.
+moved=false
+if [[ -s "$workload" ]] && kubectl --kubeconfig "$workload" --request-timeout=15s -n platform get cluster/${cluster.name} >/dev/null 2>&1; then
+  moved=true
+  export KUBECONFIG="$workload"
+  echo "Cluster ${cluster.name} already manages itself: the steps after the move run again."
+elif [[ -s "$workload" ]] && ! kind get clusters | grep -qx bootstrap; then
+  echo "kind cluster gone and ${cluster.name} not reachable from here: the cluster was moved, do not create it again" >&2
+  exit 1
+fi
+
 # 1. Management cluster in kind, with Cluster API, CAPO, ORC and CAAPH.
-kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
-kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
-# ORC objects must follow the Cluster API objects on clusterctl move.
-kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
 export CLUSTER_TOPOLOGY=true
-kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
-  --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+if ! $moved; then
+  kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
+  kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+  # ORC objects must follow the Cluster API objects on clusterctl move.
+  kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=
+  kubectl get namespace capo-system >/dev/null 2>&1 || clusterctl init --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+    --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+fi
 
 # 2. Credentials, cluster class, add-ons and cluster.
 kubectl create namespace platform --dry-run=client -o yaml | kubectl apply -f -
@@ -66,7 +81,7 @@ sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
 # By its value: once true, Cluster API no longer updates the observedGeneration of this condition,
 # and kubectl wait --for=condition would never return on a cluster changed since (a script run again).
 kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.conditions[?(@.type=="ControlPlaneInitialized")].status}'=True --timeout=30m
-clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
+$moved || clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
 
 # 3. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
 #    cloud controller manager and Cinder CSI, the Gateway API CRDs, and, in demonstration mode
@@ -178,7 +193,7 @@ kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc
 # The manifests are validated in the namespace they are moved to.
 kubectl --kubeconfig "$workload" create namespace platform --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
 wait_webhooks --kubeconfig "$workload" -f manifests/cluster-class.yaml -f manifests/addons.yaml
-clusterctl move -n platform --to-kubeconfig "$workload"
+$moved || clusterctl move -n platform --to-kubeconfig "$workload"
 # clusterctl move does not carry the ORC Image: declare it again in the workload cluster.
 python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
   | kubectl --kubeconfig "$workload" apply -f -
