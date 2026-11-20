@@ -176,7 +176,7 @@ Fixes from two full test cycles (teardown and rebuild), and the test procedure. 
 ### Added
 
 - Test procedure (`docs/test-procedure.md`): every step of a full cycle with its checkpoint, measured duration and the folded output of a real run; step 4b removes the bootstrap instance once the cluster manages itself.
-- Results of the two cycles of 2026-10-29 in `docs/testing.md`: `delete-cluster.sh` without manual step, capacity per host for the hard anti-affinity of the entry point, Designate delays on shared zones.
+- Results of the two cycles of 2026-10-29 in the [test results](docs/concepts/test-results.md): `delete-cluster.sh` without manual step, capacity per host for the hard anti-affinity of the entry point, Designate delays on shared zones.
 
 ### Fixed
 
@@ -202,7 +202,7 @@ The Kubernetes `platform` tenant, built with Cluster API, and everything it need
 
 - ADR-0001: D4 refined by ADR-0002; open points resolved.
 - Teardown: `delete-cluster.sh` checks that the API admits the bootstrap instance, declares the ORC image again after the move back, and removes an orphaned control-plane hook; READMEs give the destroy order.
-- Test results ([docs/testing.md](docs/concepts/test-results.md)): platform deployment, matrix 43/43, rolling replacement of every machine, Service addresses kept across a reinstall, nine defects found and fixed.
+- Test results ([test results](docs/concepts/test-results.md)): platform deployment, matrix 43/43, rolling replacement of every machine, Service addresses kept across a reinstall, nine defects found and fixed.
 
 ## [0.1.0] - 2026-10-27
 
@@ -219,7 +219,7 @@ First release: layers 20 and 30 of the reference architecture in one site, with 
 - Monitoring through floating IPs and DNS discovery: every instance gets a floating IP of the `monitoring` plane and an A record in a shared monitoring zone; metrics ports open to the collector's addresses only (`monitoring.collector_cidrs`).
 - Executable reachability matrix (`tests/reachability/check.py`): probes every flow from the outside, from inside each tenant through its bastion and from the collector, and fails on any difference.
 - Test collector (`tests/integration/collector`) for the matrix, and the two-floating-IP test (`tests/integration/dual-floating-ip`) behind the monitoring design.
-- Test results ([docs/testing.md](docs/concepts/test-results.md)): apply, empty plan after apply, HTTPS end to end through both domains, rolling replacement of the entry point, reachability matrix 27/27, destroy without leftover. Findings fed back into the layer 10 contract: reserved address ranges, path MTU (`network_mtu`), resolvers reachable at first boot.
+- Test results ([test results](docs/concepts/test-results.md)): apply, empty plan after apply, HTTPS end to end through both domains, rolling replacement of the entry point, reachability matrix 27/27, destroy without leftover. Findings fed back into the layer 10 contract: reserved address ranges, path MTU (`network_mtu`), resolvers reachable at first boot.
 - CI on GitHub Actions: `fmt`, `init` and `validate` of every configuration on OpenTofu and Terraform (lowest supported and latest), TFLint, syntax check of the matrix script, gitleaks over the full history. Actions pinned by commit SHA; Dependabot updates.
 - Apache-2.0 license, contribution guide, Code of Conduct, security policy, support page, issue and pull request templates.
 

@@ -90,8 +90,8 @@ These rules come from [ADR-0005](docs/adr/0005-stacks-contracts-and-access.md):
 
 ## Commits
 
-- One logical change per commit.
-- Subject in the imperative mood, at most 72 characters (`Add a health check port to the edge`, not `added port`).
+- One logical change per commit; a pull request is merged as one commit, by fast-forward.
+- Subject: the area, a colon, then what changes, at most 72 characters (`Kubernetes: wait for the load balancers of a repaired add-on`). The areas are the names used in the repository: a stack (`tenants/vm`, `shared/planes`), `Kubernetes`, `Campaign`, `Docs`, `README`, `ADR-NNNN`, `CI`.
 - A body that explains **why** the change is needed when it is not obvious.
 - Disclose AI assistance with an `Assisted-by:` trailer (for example `Assisted-by: Claude`). Do not use `Co-Authored-By:` for AI tools: GitHub credits it as a co-author.
 - **Never commit** state files, plan files, `terraform.tfvars` or any `*.tfvars` other than `*.tfvars.example`, `*.auto.tfvars.json` (generated routes), or `*_override.tf` files (local module overrides). `.gitignore` blocks them; do not force-add them.
@@ -108,8 +108,9 @@ These rules come from [ADR-0005](docs/adr/0005-stacks-contracts-and-access.md):
 
 Maintainers tag releases from `main` following [Semantic Versioning](https://semver.org/):
 
-1. Move the *Unreleased* entries of [CHANGELOG.md](CHANGELOG.md) under the new version with its date.
-2. Tag `vX.Y.Z` and publish a GitHub release with the changelog section.
+1. Run the test campaign of the release on `main` ([tests/campaign](tests/campaign/README.md)).
+2. One commit `Release vX.Y.Z`: the *Unreleased* entries of [CHANGELOG.md](CHANGELOG.md) moved under the new version with its date, the status in the README, the [test results](docs/concepts/test-results.md).
+3. An annotated tag `vX.Y.Z` on that commit, and a GitHub release with the changelog section.
 
 ## License
 
