@@ -1,6 +1,6 @@
 # ADR-0014: Two profiles, private cloud and public cloud
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 - **Deciders:** maintainers
 - **Refines:** [ADR-0003](0003-scope-and-boundary.md) (audiences), [ADR-0004](0004-planes-and-isolation.md) D1 (plane modes), [ADR-0005](0005-stacks-contracts-and-access.md) (administration access), [ADR-0012](0012-resilience-scope.md) (what is tested)

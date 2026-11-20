@@ -142,51 +142,65 @@ Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintaine
 | `public-cloud` | a public cloud, with the member role only | hub planes ([`hub.tfvars.example`](examples/planes/hub.tfvars.example)); `bastion_placement = "stack-network"` in `entry-point` and `vm`: the bastion on the stack's network, its floating IP on the egress router, 4 routers per project at most; security groups allowed in each project (some providers require a request) | [`scenarios/public-cloud.toml`](tests/campaign/scenarios/public-cloud.toml) |
 
 <details>
-<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-03)</summary>
+<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-19)</summary>
 
 ```console
 $ for d in site-a.example.org site-b.example.org apps.published.example.org; do
-    for i in $(seq 12); do curl -sk --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c; done
+    for i in $(seq 12); do curl -s --cacert root.pem --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c; done
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig
-from                   to                                                    port  expected actual
-test runner            entry point (public IP)                                443  open     open     ok
-test runner            entry point (public IP)                                 80  open     open     ok
-test runner            web service address 10.21.0.90                         443  closed   closed   ok
-edge t1-edge-1         web service address 10.21.0.90                         443  open     open     ok
-edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
-isolated t1-isolated-1 web service address 10.21.0.90                         443  closed   closed   ok
-web t1-web-1           edge t1-edge-1 (private 10.20.0.46)                    443  closed   closed   ok
-edge t1-edge-1         receiver 10.34.0.12                                   9090  open     open     ok
-web t1-web-1           receiver 10.34.0.12                                   9090  open     open     ok
-isolated t1-isolated-1 receiver 10.34.0.12                                   9090  open     open     ok
-receiver               t1-edge-1 metrics (private 10.20.0.46)                9100  closed   closed   ok
-receiver               t1-web-1 metrics (private 10.21.0.144)                9100  closed   closed   ok
-receiver               t1-isolated-1 metrics (private 10.22.0.127)           9100  closed   closed   ok
-receiver               series pushed by edge                                    -  yes      yes      ok
-receiver               series pushed by web                                     -  yes      yes      ok
-receiver               series pushed by isolated                                -  yes      yes      ok
-web t1-web-1           isolated t1-isolated-1 (private 10.22.0.127)            22  closed   closed   ok
-isolated t1-isolated-1 web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
-isolated t1-isolated-1 Internet (192.0.2.1)                                     443  closed   closed   ok
-published Service      ingress on the stack address                             -  yes      yes      ok
-edge t1-edge-1         published ingress 10.24.0.10                           443  open     open     ok
-test runner            published ingress 10.24.0.10                           443  closed   closed   ok
-web t1-web-1           published ingress 10.24.0.10                           443  closed   closed   ok
-isolated t1-isolated-1 published ingress 10.24.0.10                           443  closed   closed   ok
-published pod          receiver 10.34.0.12                                   9090  open     open     ok
-receiver               series pushed by published                               -  yes      yes      ok
-test runner (administrator) published Kubernetes API 198.51.100.1             6443  open     open     ok
-published pod          edge bastion 198.51.100.2 (SSH)                          22  closed   closed   ok
-published pod          web bastion 192.0.2.100 (SSH)                           22  closed   closed   ok
-published pod          isolated bastion 192.0.2.101 (SSH)                      22  closed   closed   ok
-published pod          internal service 198.51.100.3                          8080  open     open     ok
-web t1-web-1           internal service 198.51.100.3                          8080  closed   closed   ok
-isolated t1-isolated-1 internal service 198.51.100.3                          8080  closed   closed   ok
-
-33/33 rows as expected
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --acme tests/fixtures/acme \
+    --published-kubeconfig published.kubeconfig
+from                         to                                                      port  expected  actual  
+test runner                  entry point (public IP)                                  443  open      open      ✅
+test runner                  entry point (public IP)                                   80  open      open      ✅
+test runner                  web service address 10.21.0.233                          443  closed    closed    ✅
+edge t1-edge-1               web service address 10.21.0.233                          443  open      open      ✅
+edge t1-edge-1               web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
+isolated t1-isolated-1       web service address 10.21.0.233                          443  closed    closed    ✅
+web t1-web-1                 edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
+edge t1-edge-1               receiver 10.34.0.9                                      9090  open      open      ✅
+web t1-web-1                 receiver 10.34.0.9                                      9090  open      open      ✅
+isolated t1-isolated-1       receiver 10.34.0.9                                      9090  open      open      ✅
+receiver                     t1-edge-1 metrics (private 10.20.0.64)                  9100  closed    closed    ✅
+receiver                     t1-web-1 metrics (private 10.21.0.74)                   9100  closed    closed    ✅
+receiver                     t1-isolated-1 metrics (private 10.22.0.68)              9100  closed    closed    ✅
+edge t1-edge-1               receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
+web t1-web-1                 receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
+isolated t1-isolated-1       receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
+receiver                     web service address 10.21.0.233                          443  closed    closed    ✅
+receiver                     edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
+receiver                     series pushed by edge                                      -  yes       yes       ✅
+receiver                     series pushed by web                                       -  yes       yes       ✅
+receiver                     series pushed by isolated                                  -  yes       yes       ✅
+web t1-web-1                 isolated t1-isolated-1 (private 10.22.0.68)               22  closed    closed    ✅
+isolated t1-isolated-1       web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
+isolated t1-isolated-1       Internet (192.0.2.1)                                     443  closed    closed    ✅
+published Service            ingress on the stack address                               -  yes       yes       ✅
+edge t1-edge-1               published ingress 10.24.0.10                             443  open      open      ✅
+test runner                  published ingress 10.24.0.10                             443  closed    closed    ✅
+web t1-web-1                 published ingress 10.24.0.10                             443  closed    closed    ✅
+isolated t1-isolated-1       published ingress 10.24.0.10                             443  closed    closed    ✅
+published pod                receiver 10.34.0.9                                      9090  open      open      ✅
+receiver                     series pushed by published                                 -  yes       yes       ✅
+test runner (administrator)  published Kubernetes API 198.51.100.1                   6443  open      open      ✅
+published pod                edge bastion 198.51.100.2 (SSH)                           22  closed    closed    ✅
+published pod                web bastion 192.0.2.100 (SSH)                             22  closed    closed    ✅
+published pod                isolated bastion 192.0.2.101 (SSH)                        22  closed    closed    ✅
+published pod                internal service 198.51.100.3                           8080  open      open      ✅
+web t1-web-1                 internal service 198.51.100.3                           8080  closed    closed    ✅
+isolated t1-isolated-1       internal service 198.51.100.3                           8080  closed    closed    ✅
+edge t1-edge-1               internal service 198.51.100.3                           8080  closed    closed    ✅
+receiver                     internal service 198.51.100.3                           8080  closed    closed    ✅
+receiver                     published ingress 10.24.0.10                             443  closed    closed    ✅
+test runner                  published certificate of apps.published.example.org      443  valid     valid     ✅
+test runner                  web certificate of site-a.example.org                    443  valid     valid     ✅
+test runner                  web certificate of site-b.example.org                    443  valid     valid     ✅
+web t1-web-1                 TSIG update _acme-challenge.site-a.example.org            53  accepted  accepted  ✅
+web t1-web-1                 TSIG update _acme-challenge.apps.published.example.org    53  refused   refused   ✅
+web t1-web-1                 TSIG update _acme-challenge.services.example.org          53  refused   refused   ✅
+47/47 rows as expected
 ```
 
 </details>
@@ -233,15 +247,16 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 
 | Release | Design areas delivered | |
 |---|---|---|
-| `v0.1` – `v0.2` | First entry point, tenants and isolation test, operator planes only | released |
+| `v0.1` | First entry point (SNI, TLS passthrough), VM and isolated tenants, executable isolation test; operator planes only | released |
+| `v0.2` | Kubernetes tenant with Cluster API, self-managed, with its node image | released |
 | `v0.3` | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; the integration point for metrics (push contract, the receiver is yours); identity and access; automation; VM and Kubernetes tenants | released |
 | `v0.4` | Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)); a Kubernetes cluster for shared services ([ADR-0010](docs/adr/0010-kubernetes-shared-services.md)); the Kubernetes lifecycle the landing zone requires ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)); direct exposure of both tenant types, without the entry point | released |
 | **`v0.5`** | Availability zones: placement over the zones and requirements on the cloud; recovery of the architecture ([ADR-0012](docs/adr/0012-resilience-scope.md)); environments ([ADR-0011](docs/adr/0011-environments.md)); plane routes on a transit router, so that an exposure change or a plane joined later reaches the existing load balancers ([ADR-0013](docs/adr/0013-plane-routes-on-a-transit-router.md)) | released |
-| `v0.6` | Network services: resolvers, time, package mirrors, egress; IPv6; routed operator planes (address scopes, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline)) | |
+| `v0.6` | Network services: resolvers (which also serve the internal zone, Designate becomes optional), time, package mirrors, egress only where declared, and a test that tenants have no routed IPv6 ([ADR-0015](docs/adr/0015-ipv6.md)); routed operator planes (address scopes, with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline)) | |
 | `v0.7` | Integration points, contracts only (the tools are yours): logs and audit; backups of tenant data; secrets; a GitOps pipeline, with continuous verification (the isolation test and a drift plan, run on a schedule) | |
 | `v0.8` | Several regions: a site per region, hubs joined by an encrypted overlay; ready for a failover of the entry point by DNS, which you run and rehearse | |
-| `v1.0` | The whole design, tested on a private and on a public OpenStack cloud; stable interfaces | |
-| after `v1.0` | Integrations of platform tools (level 3) in a separate repository, when users ask for them | |
+| `v1.0` | The whole design, tested on a private OpenStack cloud (all of it) and on a public one (what differs between them, [profiles](#getting-started)); stable interfaces | |
+| after `v1.0` | IPv6, as one address family per deployment ([ADR-0015](docs/adr/0015-ipv6.md)); integrations of platform tools (level 3) in a separate repository, when users ask for them | |
 
 The current state is tested on a private OpenStack 2025.1 cloud (OpenStack-Ansible, OVN, Octavia amphora, Designate) with OpenTofu 1.13.2 and provider 3.4.0, each stack in its own project, from empty projects, with both kinds of planes: apply, empty plan after apply, HTTPS end to end, a domain published under load without a lost request, certificates from an internal ACME authority on both tenant types, the shared cluster with its consumers, credential rotation and Kubernetes upgrade with volumes kept, direct exposure of both tenant types and back behind the entry point, isolation test (45/45 with the shared cluster, 47/47 with the published cluster, on both kinds of planes), destroy without leftover. The test cloud has one availability zone. Let's Encrypt takes the same path with another directory; it is not tested by the maintainers. CI validates every configuration on OpenTofu and Terraform, lowest supported and latest.
 

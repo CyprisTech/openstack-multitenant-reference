@@ -1,6 +1,6 @@
 # ADR-0012: Resilience, what the reference places and what it tests
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-13
 - **Deciders:** maintainers
 - **Refines:** [ADR-0003](0003-scope-and-boundary.md) D4 (in scope: high availability, availability zones, sites and the recovery of the architecture); [ADR-0001](0001-reference-architecture.md) D9 consequences (failover runbook and drill); [ADR-0004](0004-planes-and-isolation.md) D5 (several regions)

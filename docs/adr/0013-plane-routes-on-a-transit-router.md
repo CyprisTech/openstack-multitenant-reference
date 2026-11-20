@@ -1,6 +1,6 @@
 # ADR-0013: Plane routes on a transit router
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-18
 - **Deciders:** maintainers
 - **Refines:** [ADR-0001](0001-reference-architecture.md) D2 (the routes to each plane are advertised by DHCP); [ADR-0004](0004-planes-and-isolation.md) D1 (how a tenant router joins a plane)

@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- IPv6 ([ADR-0015](docs/adr/0015-ipv6.md)): IPv4 until `v1.0`, then one address family per deployment; dual stack only once the OpenStack provider and the cloud controller support it. The Status lists IPv6 after `v1.0`; `v1.0` is tested on a private cloud (all of it) and on a public one (what differs).
+- ADR-0011 to ADR-0014 accepted.
+- Planes contract: two planes must not route the same destination; security group quotas; DNS is optional. Isolation matrix: what the isolated tenant reaches is what its plane routes.
 - The `subnet` of an external network (`egress_network`, `public_network`, `bastion.external_network`, `admin_network`) is optional: without it, Neutron chooses. A public network with several subnets of the same name (OVHcloud's `Ext-Net`) could not be looked up by name.
 
 ## [0.5.0] - 2026-11-18

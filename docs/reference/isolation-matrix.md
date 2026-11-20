@@ -31,7 +31,7 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | a tenant, with its TSIG key | the `_acme-challenge` records of its own names | 53 | allowed | DNS server ACL: key, record type TXT, owner names, sources |
 | a tenant, with its TSIG key | the `_acme-challenge` records of another tenant's names | 53 | denied | DNS server ACL: each key covers its tenant's names only |
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
-| `isolated` | the Internet | any | denied | no egress router: its only router joins the observability plane |
+| `isolated` | the Internet | any | denied | no egress router: its default route goes to the transit router and the observability plane, so it reaches what that plane routes and nothing more; denied as long as the observability plane does not lead to the Internet, as in the scenario |
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/architecture.md#lateral-movement)).
 

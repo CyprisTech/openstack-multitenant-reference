@@ -1,6 +1,6 @@
 # ADR-0011: Environments — development, qualification, production
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-13
 - **Deciders:** maintainers
 - **Refines:** [ADR-0003](0003-scope-and-boundary.md) (one project per tenant), [ADR-0005](0005-stacks-contracts-and-access.md) (stacks, contracts, credentials). Related: [open a service after qualification](../guides/open-a-service.md).

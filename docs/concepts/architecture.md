@@ -202,7 +202,7 @@ What every tenant needs from the network, offered the same way as any shared ser
 | Time | NTP servers as a shared service on the same plane |
 | Packages and images | Mirrors and a registry as shared services, so that tenants without Internet access, such as `isolated`, can still be built and updated |
 | Egress to the Internet | Only through a declared path: a router to an egress network in the tenant's own project, or a shared egress on a plane; never by default |
-| IPv6 | Dual stack on the planes and the tenant networks; the same roles and admission rules for both families |
+| IPv6 | IPv4 until `v1.0`: the reference creates no IPv6 subnet, and the isolation test checks that tenants have no routed IPv6. Afterwards, one family per deployment, IPv4 or IPv6 ([ADR-0015](../adr/0015-ipv6.md)) |
 
 ## Resilience and continuity
 
