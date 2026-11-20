@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Campaign: the wait for a bootstrap instance tried SSH once, and stopped the campaign when the instance was still booting; it now retries until SSH answers, then waits for cloud-init.
+### Fixed
+
+- Campaign: the recordings showed the commands and the summary lines only (the Python tooling kept the output of the tools in `logs/`); a recorded step now shows each apply and destroy as it runs and the output of every command it prints.
 
 ### Changed
 

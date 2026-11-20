@@ -117,7 +117,8 @@ def main(argv=None):
         output = open(work / INNER_OUTPUT, "w", buffering=1)
         sys.stdout, sys.stderr = Tee(sys.stdout, output), Tee(sys.stderr, output)
 
-    runner = Runner(dry_run=args.dry_run)
+    # A recorded step prints the full output of the tools: the recording is the story of the run.
+    runner = Runner(dry_run=args.dry_run, verbose=bool(os.environ.get(INNER)))
     ctx = Context(scenario, mode, config, runner, ROOT, Path(args.work) / f"{scenario.name}-{mode}")
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
     steps = load()

@@ -116,10 +116,11 @@ class Context:
     def _apply(self, key, extra=()):
         """One apply; its full output in the log, the summary lines printed."""
         cmd = [self.tool, f"-chdir={self.stack(key)}", "apply", "-auto-approve", "-input=false", "-no-color", *extra]
-        result = self.runner.run(cmd, cwd=self.root, check=False)
+        # A recorded step shows the apply as it runs; otherwise its summary lines only.
+        result = self.runner.run(cmd, cwd=self.root, check=False, stream=self.runner.verbose)
         if not self.runner.dry_run:
             self._log(key).write_text(result.stdout + result.stderr)
-            for line in (result.stdout + result.stderr).splitlines():
+            for line in [] if self.runner.verbose else (result.stdout + result.stderr).splitlines():
                 if re.search(r"^Apply complete|Error|error", line):
                     self.runner.echo(line)
         return result.returncode
@@ -159,10 +160,10 @@ class Context:
         """Destroys a stack; its full output in the log."""
         started = time.monotonic()
         cmd = [self.tool, f"-chdir={self.stack(key)}", "destroy", "-auto-approve", "-no-color"]
-        result = self.runner.run(cmd, cwd=self.root, check=False)
+        result = self.runner.run(cmd, cwd=self.root, check=False, stream=self.runner.verbose)
         if not self.runner.dry_run:
             self._log(key).write_text(result.stdout + result.stderr)
-            for line in (result.stdout + result.stderr).splitlines():
+            for line in [] if self.runner.verbose else (result.stdout + result.stderr).splitlines():
                 if re.search(r"Destroy complete|Error", line):
                     self.runner.echo(line)
         seconds = round(time.monotonic() - started)

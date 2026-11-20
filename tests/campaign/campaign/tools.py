@@ -26,11 +26,13 @@ class Runner:
     """Runs commands, or records them in a dry run.
 
     In a dry run nothing is executed: every command is appended to `commands` and gets the result
-    `fake(cmd)` returns, by default an empty success.
+    `fake(cmd)` returns, by default an empty success. With `verbose` (a recorded step), the output of
+    every command that is not quiet is printed too, so that the recording shows what the tools said.
     """
 
-    def __init__(self, dry_run=False, echo=print, fake=None):
+    def __init__(self, dry_run=False, echo=print, fake=None, verbose=False):
         self.dry_run = dry_run
+        self.verbose = verbose
         self.echo = echo
         self.fake = fake or (lambda cmd: Result(0, ""))
         self.commands = []
@@ -52,6 +54,10 @@ class Runner:
                 result = Result(done.returncode, done.stdout, done.stderr)
             except subprocess.TimeoutExpired:
                 result = Result(124, "", f"timed out after {timeout} s")
+            if self.verbose and not quiet:
+                for text in (result.stdout, result.stderr):
+                    if text.strip():
+                        self.echo(text.rstrip("\n"))
         if check and result.returncode != 0:
             raise CommandError(cmd, result)
         return result

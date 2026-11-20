@@ -57,7 +57,7 @@ The inputs a stack receives from the others are written to its `mode.auto.tfvars
 
 ## Recordings
 
-With `--record`, each step is recorded with [asciinema](https://asciinema.org) in `casts/`, with the full output of the tools. The same output is printed by the campaign itself, step after step, so that its log is readable without the recordings. Recordings show real addresses: before publishing one, run
+With `--record`, each step is recorded with [asciinema](https://asciinema.org) in `casts/`, with the full output of the tools: each apply and destroy as it runs, and the output of every command the step shows. The same output is printed by the campaign itself, step after step, so that its log is readable without the recordings. Recordings show real addresses: before publishing one, run
 
 ```bash
 tests/campaign/sanitize-cast.py input.cast output.cast --replace internal.name=example.org --forbid internal
