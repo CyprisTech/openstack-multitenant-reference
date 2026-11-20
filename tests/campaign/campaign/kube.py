@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from .context import StepFailed
+from .retry import retry
 
 # The demonstration manifests name example.org: the names of the test instead.
 EXAMPLE_ZONE = "example.org"
@@ -82,11 +83,20 @@ def bootstrap_address(ctx, key):
 
 
 def wait_for_bootstrap(ctx, key):
+    """Waits until the bootstrap instance answers SSH, then until cloud-init is done."""
     host = ctx.value(key, "bootstrap")
-    status = remote(
-        ctx, host, "cloud-init status --wait >/dev/null; s=$?; cloud-init status | tail -1; [ \"$s\" != 1 ]",
-        check=False, quiet=True,
-    )  # fmt: skip
+
+    def answered():
+        status = remote(
+            ctx, host, "cloud-init status --wait >/dev/null; s=$?; cloud-init status | tail -1; [ \"$s\" != 1 ]",
+            check=False, quiet=True,
+        )  # fmt: skip
+        if status.returncode == 255:  # ssh itself failed: the instance is still booting
+            ctx.runner.echo(f"  {host} does not answer SSH yet")
+            return None
+        return status
+
+    status = retry("ssh", answered, sleep=ctx.sleep)
     if not ctx.runner.dry_run:
         ctx.runner.echo(status.stdout.strip())
     if status.returncode != 0:

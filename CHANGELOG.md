@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Campaign: a preflight checks every credential the run will use, and the next credential of the shared cluster for the rotation, before the first step (`--no-preflight` to skip).
 - Isolation test: no routed IPv6 ([ADR-0015](docs/adr/0015-ipv6.md), D2): no global IPv6 address and no IPv6 default route on the instances of the entry point, the tenants and the receiver (4 rows: 51 with the published cluster, 49 with the shared cluster).
+### Fixed
+
+- Campaign: the wait for a bootstrap instance tried SSH once, and stopped the campaign when the instance was still booting; it now retries until SSH answers, then waits for cloud-init.
 
 ### Changed
 
