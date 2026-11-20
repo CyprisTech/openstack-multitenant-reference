@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Campaign tooling in Python (`tests/campaign/run.py`, standard library only), replacing the Bash `run.sh`: a scenario per profile (`private-cloud`, `public-cloud`) that also sets the inputs of the profile, a dry run, a JSON report with the duration of every step, apply and destroy, the time until the entry point answers steadily, one asciinema recording per step (`--record`), the output of the cluster scripts streamed as they run, unit tests run by CI. Validated by full campaigns in both plane modes (2026-11-19).
 - Profiles in the README ([ADR-0014](docs/adr/0014-profiles.md)): the inputs that differ between `private-cloud` and `public-cloud`; each campaign scenario sets them.
 - Bastion placement ([ADR-0014](docs/adr/0014-profiles.md), D2): `bastion_placement = "stack-network"` puts the bastion on the stack's network, its floating IP on the egress router (the public router for the entry point), when the administration network is the stack's egress network. It saves a network and a router per project: the stacks of the public cloud profile fit in 4 routers. The default stays `"own-network"`; the isolated tenant, with no egress, has no such input. A variable of its own, not an attribute of `bastion`: the profile's choice can be set without repeating the cloud's values of `bastion`. Mocked tests in `stacks/tenants/vm`.
 
@@ -17,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - ADR-0011 to ADR-0014 accepted.
 - Planes contract: two planes must not route the same destination; security group quotas; DNS is optional. Isolation matrix: what the isolated tenant reaches is what its plane routes.
 - The `subnet` of an external network (`egress_network`, `public_network`, `bastion.external_network`, `admin_network`) is optional: without it, Neutron chooses. A public network with several subnets of the same name (OVHcloud's `Ext-Net`) could not be looked up by name.
+
+### Fixed
+
+- Kubernetes, repair of the duplicated CAAPH release proxies after `clusterctl move` (shipped in v0.5.0, run on a cloud for the first time on 2026-11-19): the repair ran after the bootstrap instance's address had left the API sources and could wait for hours; it now runs first, with a request timeout. Each repaired chart is installed once more from its single proxy, after the Services of its release are deleted: the uninstall of the deleted proxies removed the Service of the new release (an ingress without its load balancer). Duplicates occur at the creation of a cluster, not at its upgrades.
+
+### Known issues
+
+- No in-place upgrade from v0.4: the apply fails on every tenant with an egress, the gateway address staying on the egress router's port (tested on 2026-11-20; the v0.5.0 note above that the apply replaces that port is wrong). Redeploy the tenant stacks: destroy with v0.4, apply with v0.5. The planes stack upgrades in place.
 
 ## [0.5.0] - 2026-11-18
 
