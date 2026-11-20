@@ -13,6 +13,7 @@ hostile_next_hop = "172.31.1.1"  # the transit router on the observability plane
 # capture_replace = ["real.example=example.org"] # replacements of the tour captures
 # clouds_yaml = "~/.config/openstack/clouds.yaml"
 # notify_hook = "/path/to/notify"   # tells the operator: revocation awaited, campaign stopped
+# notify_steps = true               # also the start and the end of each step, with its measures
 # repair_hook = "/path/to/repair"   # repairs a known failure of your cloud, prints extra apply arguments
 # repairs     = 1
 

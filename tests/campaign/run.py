@@ -130,8 +130,16 @@ def main(argv=None):
             ctx.notify(f"campaign {scenario.name} {mode} not started: {error}")
             return 1
 
+    outer = not os.environ.get(INNER)  # a recorded step: the outer run tells the operator
+    steps_notified = outer and config.get("notify_steps", True) and not args.dry_run
+    campaign_started = time.monotonic()
+    if steps_notified:
+        ctx.notify(f"campaign {scenario.name} {mode} started: {len(names)} steps")
+
     for name in names:
         entry = report.step(name)
+        if steps_notified:
+            ctx.notify(f"{mode}: step {name} started")
         print(f"\n== [{time.strftime('%H:%M:%S', time.gmtime())} {mode}] {name}", flush=True)
         function = steps.get(name)
         if function is None:
@@ -153,11 +161,18 @@ def main(argv=None):
             entry.seconds = round(time.monotonic() - started, 1)
             report.durations = ctx.durations
             report.write(ctx.work / (INNER_REPORT if os.environ.get(INNER) else "report.json"))
+        if entry.status == "ok" and steps_notified:
+            measures = ", ".join(f"{k} {v}" for k, v in entry.measures.items() if k != "cast")
+            ctx.notify(f"{mode}: step {name} ok in {entry.seconds / 60:.0f} min" + (f" ({measures})" if measures else ""))
         if entry.status == "failed":
-            if not os.environ.get(INNER):  # a recorded step: the outer run tells the operator
-                ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min")
+            if outer:
+                error = (entry.error or "").strip().splitlines()
+                ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min"
+                           + (f": {error[0][:200]}" if error else ""))
             break
 
+    if steps_notified and report.ok:
+        ctx.notify(f"campaign {scenario.name} {mode} finished in {(time.monotonic() - campaign_started) / 60:.0f} min: every step passed")
     if not os.environ.get(INNER):  # a recorded step: the outer run prints the summary
         print("\n" + report.summary())
     return 0 if report.ok else 1
