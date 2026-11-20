@@ -35,6 +35,26 @@ from campaign.tools import Runner  # noqa: E402
 # A recorded step runs in its own process under asciinema; its result comes back in a file.
 INNER = "CAMPAIGN_INNER"
 INNER_REPORT = "step-report.json"
+# What a recorded step prints, kept beside its cast: the outer run prints it in its own output.
+INNER_OUTPUT = "step-output.txt"
+
+
+class Tee:
+    """A stream that writes to the terminal (the recording) and to a file."""
+
+    def __init__(self, stream, file):
+        self.stream, self.file = stream, file
+
+    def write(self, text):
+        self.file.write(text)
+        return self.stream.write(text)
+
+    def flush(self):
+        self.file.flush()
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
 
 
 def record_step(args, scenario, mode, name, ctx, entry):
@@ -45,8 +65,12 @@ def record_step(args, scenario, mode, name, ctx, entry):
     inner = [sys.executable, str(Path(__file__).resolve()), scenario.name, name, "--mode", mode,
              "--config", args.config, "--work", args.work]  # fmt: skip
     (ctx.work / INNER_REPORT).unlink(missing_ok=True)
+    (ctx.work / INNER_OUTPUT).unlink(missing_ok=True)
     subprocess.run(["asciinema", "rec", "-q", "--overwrite", "--cols", "130", "--rows", "40", "--title", name,
                     "-c", shlex.join(inner), str(cast)], env=dict(os.environ, **{INNER: "1"}), check=False)  # fmt: skip
+    output = ctx.work / INNER_OUTPUT
+    if output.exists():
+        print(output.read_text(errors="replace"), end="", flush=True)
     try:
         inner_entry = json.loads((ctx.work / INNER_REPORT).read_text())["steps"][-1]
     except (OSError, ValueError, IndexError, KeyError) as error:
@@ -86,6 +110,12 @@ def main(argv=None):
     for variable in [v for v in os.environ if v.startswith("OS_")]:
         del os.environ[variable]
     os.environ["TF_IN_AUTOMATION"] = "1"
+
+    if os.environ.get(INNER):
+        work = Path(args.work) / f"{scenario.name}-{mode}"
+        work.mkdir(parents=True, exist_ok=True)
+        output = open(work / INNER_OUTPUT, "w", buffering=1)
+        sys.stdout, sys.stderr = Tee(sys.stdout, output), Tee(sys.stderr, output)
 
     runner = Runner(dry_run=args.dry_run)
     ctx = Context(scenario, mode, config, runner, ROOT, Path(args.work) / f"{scenario.name}-{mode}")
@@ -127,7 +157,8 @@ def main(argv=None):
                 ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min")
             break
 
-    print("\n" + report.summary())
+    if not os.environ.get(INNER):  # a recorded step: the outer run prints the summary
+        print("\n" + report.summary())
     return 0 if report.ok else 1
 
 
