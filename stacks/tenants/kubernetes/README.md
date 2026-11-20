@@ -71,6 +71,8 @@ The settings of the cluster:
 | Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
 | Add-ons after the move | one Helm release proxy per chart: CAAPH v0.6.6 no longer duplicates them after `clusterctl move` (kubernetes-sigs/cluster-api-addon-provider-helm#606); `create-cluster.sh` stops if a duplicate appears |
 
+`create-cluster.sh`, `delete-cluster.sh` and the manifests reach the bootstrap instance through cloud-init, when the instance is created. An apply that changes them does not update an existing bootstrap instance: replace it (`bootstrap = false`, then `true`, and copy the cluster credential again) to run the new version. The scripts can be run again after a failure; a run after `clusterctl move` continues on the cluster itself.
+
 ## Prerequisites
 
 - With `exposure = "entry-point"`: the shared entry point (`stacks/shared/entry-point`) applied for the same site; the ingress admits its `publication_sources` only, given as `edge_sources`.

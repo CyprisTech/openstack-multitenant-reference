@@ -15,5 +15,6 @@
 - [ ] Tested on an OpenStack cloud (apply, empty plan after apply, destroy), or not applicable
 - [ ] The isolation matrix (`docs/reference/isolation-matrix.md` and `tests/isolation/check.py`) is updated if a flow changed
 - [ ] `terraform.tfvars.example` updated and the inputs and outputs tables regenerated (`terraform-docs -c .terraform-docs.yml <dir>`) if inputs or outputs changed
+- [ ] The pages that describe the changed behaviour are updated (architecture, guides, stack READMEs, test results): a fact is written in one place, the others link to it
 - [ ] `CHANGELOG.md` updated under *Unreleased*
 - [ ] No state, plan, `*.tfvars`, `*_override.tf`, credentials or real infrastructure details (domains, addresses, network names) in the diff
