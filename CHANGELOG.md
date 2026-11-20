@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Kubernetes: CAAPH v0.6.6, which no longer duplicates the Helm release proxies after `clusterctl move` ([kubernetes-sigs/cluster-api-addon-provider-helm#606](https://github.com/kubernetes-sigs/cluster-api-addon-provider-helm/pull/606)). The repair in `create-cluster.sh` is removed; the script stops if a duplicate still appears.
+- Kubernetes: `create-cluster.sh` without inline programs (296 lines before v0.6.6, 147 now): the cloud configuration and the bootstrap address are small Python files, shared with `delete-cluster.sh`; the node deletion right and the default storage class are manifests; namespaces are created by one function.
 
 ## [0.5.1] - 2026-11-20
 

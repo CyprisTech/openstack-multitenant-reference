@@ -1,0 +1,23 @@
+# The chart of the cloud controller does not let it delete nodes: the Node of a machine whose
+# server is gone (Cluster API gives up deleting it after nodeDeletionTimeout) would stay, NotReady.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloud-controller-manager-node-deletion
+rules:
+- apiGroups: [""]
+  resources: [nodes]
+  verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-controller-manager-node-deletion
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-controller-manager-node-deletion
+subjects:
+- kind: ServiceAccount
+  name: cloud-controller-manager
+  namespace: kube-system

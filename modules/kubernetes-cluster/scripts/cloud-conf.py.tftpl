@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Prints the cloud.conf of the OpenStack cloud controller manager and Cinder CSI, from the
+cluster credential (/opt/platform/clouds.yaml, entry "openstack")."""
+
+import os
+
+import yaml
+
+cloud = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+auth = cloud["auth"]
+print("[Global]")
+print(f"auth-url={auth['auth_url']}")
+if "application_credential_id" in auth:
+    print(f"application-credential-id={auth['application_credential_id']}")
+    print(f"application-credential-secret={auth['application_credential_secret']}")
+print(f"region={cloud.get('region_name', 'RegionOne')}")
+if os.path.exists("/opt/platform/cacert.pem"):
+    print("ca-file=/etc/config/ca.crt")
+print("[LoadBalancer]")
+print("create-monitor=true")
+# No internal-lb = true: with it, the cloud controller ignores the annotation
+# openstack-internal-load-balancer: "false" and puts the requested floating IP (loadBalancerIP)
+# in the cluster network as the VIP address. Every Service of type LoadBalancer says what it
+# wants with its annotations instead, as the entries of this module do.
+%{ if storage_zone != null ~}
+# Shared storage: volumes are not tied to the zone of the node that asked for them.
+print("[BlockStorage]")
+print("ignore-volume-az=true")
+%{ endif ~}

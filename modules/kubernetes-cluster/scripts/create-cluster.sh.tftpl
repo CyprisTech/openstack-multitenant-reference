@@ -17,31 +17,14 @@ wait_webhooks() {
   kubectl apply --dry-run=server "$@"
 }
 
-# Address under which this bootstrap instance reaches the API floating IP: its own floating IP
-# (read from Neutron with the cluster credential). Admitted on the API load balancer only while
-# the bootstrap instance manages the cluster.
-bootstrap_source() {
-  python3 - <<'PY'
-import json, os, socket, ssl, urllib.parse, urllib.request, yaml
-c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
-a = c["auth"]
-ctx = ssl.create_default_context(cafile="/opt/platform/cacert.pem" if os.path.exists("/opt/platform/cacert.pem") else None)
-body = {"auth": {"identity": {"methods": ["application_credential"], "application_credential": {
-    "id": a["application_credential_id"], "secret": a["application_credential_secret"]}}}}
-def fqdn(url):  # Python checks certificates against the name without the root dot
-    u = urllib.parse.urlsplit(url)
-    return u._replace(netloc=u.netloc.replace(u.hostname, u.hostname.rstrip("."), 1)).geturl().rstrip("/")
-req = urllib.request.Request(fqdn(a["auth_url"]) + "/auth/tokens", json.dumps(body).encode(), {"Content-Type": "application/json"})
-with urllib.request.urlopen(req, context=ctx) as r:
-    token, catalog = r.headers["X-Subject-Token"], json.load(r)["token"]["catalog"]
-neutron = next(e["url"] for s in catalog if s["type"] == "network" for e in s["endpoints"]
-               if e["interface"] == c.get("interface", "public") and e.get("region_id", e.get("region")) == c.get("region_name", "RegionOne"))
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("192.0.2.1", 9)); ip = s.getsockname()[0]
-req = urllib.request.Request(fqdn(neutron) + "/v2.0/floatingips?fixed_ip_address=" + ip, headers={"X-Auth-Token": token})
-with urllib.request.urlopen(req, context=ctx) as r:
-    print(json.load(r)["floatingips"][0]["floating_ip_address"] + "/32")
-PY
+# namespace [kubectl options] NAME: creates the namespace unless it exists. CAAPH may create the
+# namespace of a chart at the same moment: a create that finds it already there is not an error.
+namespace() {
+  local name="$${@: -1}" options=("$${@:1:$#-1}")
+  kubectl "$${options[@]}" get namespace "$name" >/dev/null 2>&1 && return 0
+  kubectl "$${options[@]}" create namespace "$name" 2>/dev/null || kubectl "$${options[@]}" get namespace "$name" >/dev/null
 }
+
 [[ -f clouds.yaml ]] || { echo "copy clouds.yaml (entry \"openstack\") to /opt/platform first" >&2; exit 1; }
 
 # A run after clusterctl move (an earlier run stopped later): the cluster manages itself, the kind
@@ -69,14 +52,15 @@ if ! $moved; then
 fi
 
 # 2. Credentials, cluster class, add-ons and cluster.
-kubectl create namespace platform --dry-run=client -o yaml | kubectl apply -f -
+namespace platform
 ca_args=()
 [[ -f cacert.pem ]] && ca_args=(--from-file=cacert=cacert.pem)
 kubectl -n platform create secret generic ${prefix}-cloud-config --from-file=clouds.yaml "$${ca_args[@]}" \
   --dry-run=client -o yaml | kubectl label --local -f - clusterctl.cluster.x-k8s.io/move= -o yaml | kubectl apply -f -
 wait_webhooks -f manifests/cluster-class.yaml -f manifests/addons.yaml
 kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
-source=$(bootstrap_source)
+# The address of this bootstrap instance, admitted on the API while it manages the cluster.
+source=$(./bootstrap-source)
 sed "s|BOOTSTRAP_SOURCE|$source|" manifests/cluster.yaml | kubectl apply -f -
 # By its value: once true, Cluster API no longer updates the observedGeneration of this condition,
 # and kubectl wait --for=condition would never return on a cluster changed since (a script run again).
@@ -84,90 +68,16 @@ kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.condit
 $moved || clusterctl -n platform get kubeconfig ${cluster.name} > "$workload"
 
 # 3. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
-#    cloud controller manager and Cinder CSI, the Gateway API CRDs, and, in demonstration mode
-#    (without certificates), a self-signed certificate.
-cloud_conf=$(python3 - <<'EOF'
-import yaml
-c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
-a = c["auth"]
-print("[Global]")
-print(f"auth-url={a['auth_url']}")
-if "application_credential_id" in a:
-    print(f"application-credential-id={a['application_credential_id']}")
-    print(f"application-credential-secret={a['application_credential_secret']}")
-print(f"region={c.get('region_name', 'RegionOne')}")
-import os
-if os.path.exists("/opt/platform/cacert.pem"):
-    print("ca-file=/etc/config/ca.crt")
-print("[LoadBalancer]")
-print("create-monitor=true")
-%{ if storage_zone != null ~}
-# Shared storage: volumes are not tied to the zone of the node that asked for them.
-print("[BlockStorage]")
-print("ignore-volume-az=true")
-%{ endif ~}
-# No internal-lb = true: with it, the cloud controller ignores the annotation
-# openstack-internal-load-balancer: "false" and puts the requested floating IP (loadBalancerIP)
-# in the cluster network as the VIP address. Every Service of type LoadBalancer says what it
-# wants with its annotations instead, as the entries of this module do.
-EOF
-)
+#    cloud controller manager and Cinder CSI, the right of the cloud controller to delete nodes,
+#    the default storage class, the Gateway API CRDs, and, in demonstration mode (without
+#    certificates), a self-signed certificate.
+cloud_conf=$(./cloud-conf)
 kubectl --kubeconfig "$workload" -n kube-system create secret generic cloud-config \
   --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
-# The chart of the cloud controller does not let it delete nodes: the Node of a machine whose
-# server is gone (Cluster API gives up deleting it after nodeDeletionTimeout) would stay, NotReady.
-kubectl --kubeconfig "$workload" apply -f - <<'RBAC'
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: cloud-controller-manager-node-deletion
-rules:
-- apiGroups: [""]
-  resources: [nodes]
-  verbs: [delete]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cloud-controller-manager-node-deletion
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cloud-controller-manager-node-deletion
-subjects:
-- kind: ServiceAccount
-  name: cloud-controller-manager
-  namespace: kube-system
-RBAC
-# The default storage class: a volume is created once its pod is placed.
-%{ if storage_zone == null ~}
-# Storage per zone: in the pod's zone (Cinder CSI takes the node's zone, which Cinder must have).
-%{ else ~}
-# Shared storage: in the storage zone ${storage_zone}, usable from every zone.
-%{ endif ~}
-kubectl --kubeconfig "$workload" apply -f - <<'STORAGE'
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: csi-cinder
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: cinder.csi.openstack.org
-reclaimPolicy: Delete
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer
-%{ if storage_zone != null ~}
-parameters:
-  availability: ${storage_zone}
-%{ endif ~}
-STORAGE
+kubectl --kubeconfig "$workload" apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 %{ for name, i in ingresses ~}
-# CAAPH may create the namespace of the ingress chart at the same moment: a create that finds it
-# already there is not an error.
-kubectl --kubeconfig "$workload" get namespace ${i.namespace} >/dev/null 2>&1 \
-  || kubectl --kubeconfig "$workload" create namespace ${i.namespace} \
-  || kubectl --kubeconfig "$workload" get namespace ${i.namespace} >/dev/null
+namespace --kubeconfig "$workload" ${i.namespace}
 %{ if certificates == null ~}
 if ! kubectl --kubeconfig "$workload" -n ${i.namespace} get secret ${i.tls_secret} >/dev/null 2>&1; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${i.domains[0]}" \
@@ -195,7 +105,7 @@ kubectl --kubeconfig "$workload" get namespace capo-system >/dev/null 2>&1 || cl
   --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
 kubectl --kubeconfig "$workload" apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
 # The manifests are validated in the namespace they are moved to.
-kubectl --kubeconfig "$workload" create namespace platform --dry-run=client -o yaml | kubectl --kubeconfig "$workload" apply -f -
+namespace --kubeconfig "$workload" platform
 wait_webhooks --kubeconfig "$workload" -f manifests/cluster-class.yaml -f manifests/addons.yaml
 $moved || clusterctl move -n platform --to-kubeconfig "$workload"
 # clusterctl move does not carry the ORC Image: declare it again in the workload cluster.

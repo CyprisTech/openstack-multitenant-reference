@@ -90,6 +90,8 @@ locals {
     "cluster-class.yaml" = templatefile("${path.module}/manifests/cluster-class.yaml.tftpl", local.manifest_vars)
     "cluster.yaml"       = templatefile("${path.module}/manifests/cluster.yaml.tftpl", local.manifest_vars)
     "addons.yaml"        = templatefile("${path.module}/manifests/addons.yaml.tftpl", local.manifest_vars)
+    "storage-class.yaml" = templatefile("${path.module}/manifests/storage-class.yaml.tftpl", local.manifest_vars)
+    "node-deletion.yaml" = file("${path.module}/manifests/node-deletion.yaml")
     }, length(var.services) == 0 ? {} : {
     "services.yaml" = templatefile("${path.module}/manifests/services.yaml.tftpl", local.manifest_vars)
     }, var.certificates == null ? {} : {
@@ -99,6 +101,8 @@ locals {
   scripts = {
     "create-cluster.sh" = templatefile("${path.module}/scripts/create-cluster.sh.tftpl", local.manifest_vars)
     "delete-cluster.sh" = templatefile("${path.module}/scripts/delete-cluster.sh.tftpl", local.manifest_vars)
+    "bootstrap-source"  = file("${path.module}/scripts/bootstrap-source.py")
+    "cloud-conf"        = templatefile("${path.module}/scripts/cloud-conf.py.tftpl", local.manifest_vars)
   }
 }
 

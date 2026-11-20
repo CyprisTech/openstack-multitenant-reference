@@ -8,32 +8,6 @@ cd /opt/platform
 export KUBECONFIG=/opt/platform/bootstrap.kubeconfig
 workload=/opt/platform/${cluster.name}.kubeconfig
 
-# Address under which this bootstrap instance reaches the API floating IP: its own floating IP
-# (read from Neutron with the cluster credential). Admitted on the API load balancer only while
-# the bootstrap instance manages the cluster.
-bootstrap_source() {
-  python3 - <<'PY'
-import json, os, socket, ssl, urllib.parse, urllib.request, yaml
-c = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
-a = c["auth"]
-ctx = ssl.create_default_context(cafile="/opt/platform/cacert.pem" if os.path.exists("/opt/platform/cacert.pem") else None)
-body = {"auth": {"identity": {"methods": ["application_credential"], "application_credential": {
-    "id": a["application_credential_id"], "secret": a["application_credential_secret"]}}}}
-def fqdn(url):  # Python checks certificates against the name without the root dot
-    u = urllib.parse.urlsplit(url)
-    return u._replace(netloc=u.netloc.replace(u.hostname, u.hostname.rstrip("."), 1)).geturl().rstrip("/")
-req = urllib.request.Request(fqdn(a["auth_url"]) + "/auth/tokens", json.dumps(body).encode(), {"Content-Type": "application/json"})
-with urllib.request.urlopen(req, context=ctx) as r:
-    token, catalog = r.headers["X-Subject-Token"], json.load(r)["token"]["catalog"]
-neutron = next(e["url"] for s in catalog if s["type"] == "network" for e in s["endpoints"]
-               if e["interface"] == c.get("interface", "public") and e.get("region_id", e.get("region")) == c.get("region_name", "RegionOne"))
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("192.0.2.1", 9)); ip = s.getsockname()[0]
-req = urllib.request.Request(fqdn(neutron) + "/v2.0/floatingips?fixed_ip_address=" + ip, headers={"X-Auth-Token": token})
-with urllib.request.urlopen(req, context=ctx) as r:
-    print(json.load(r)["floatingips"][0]["floating_ip_address"] + "/32")
-PY
-}
-
 # A creation that stopped before clusterctl move leaves Cluster API on the kind cluster of this
 # instance: the cluster is then deleted from here, without moving anything.
 not_moved=""
@@ -51,7 +25,7 @@ fi
 if [[ -z "$not_moved" ]] && ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
   echo "The Kubernetes API does not admit this instance. From an administration source, run:" >&2
   echo "  kubectl --kubeconfig <cluster kubeconfig> -n platform patch cluster ${cluster.name} --type=json \\" >&2
-  echo "    -p '[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"$(bootstrap_source)\"}]'" >&2
+  echo "    -p '[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"$(./bootstrap-source)\"}]'" >&2
   echo "wait about a minute, then run this script again." >&2
   exit 1
 fi

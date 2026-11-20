@@ -93,7 +93,7 @@ run "shared_storage" {
   }
 
   assert {
-    condition     = strcontains(output.scripts["create-cluster.sh"], "ignore-volume-az=true") && strcontains(output.scripts["create-cluster.sh"], "availability: nova")
+    condition     = strcontains(output.scripts["cloud-conf"], "ignore-volume-az=true") && strcontains(output.manifests["storage-class.yaml"], "availability: nova")
     error_message = "One storage zone for every zone is shared storage: ignore-volume-az and the storage zone in the class."
   }
 }
@@ -107,7 +107,7 @@ run "storage_per_zone" {
   }
 
   assert {
-    condition     = !strcontains(output.scripts["create-cluster.sh"], "ignore-volume-az") && !strcontains(output.scripts["create-cluster.sh"], "availability:")
+    condition     = !strcontains(output.scripts["cloud-conf"], "ignore-volume-az") && !strcontains(output.manifests["storage-class.yaml"], "availability:")
     error_message = "Storage zones of the same names: volumes in the zone of their node."
   }
 }
