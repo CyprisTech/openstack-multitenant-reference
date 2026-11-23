@@ -16,7 +16,7 @@ The entry point routes each domain by SNI to the tenant that serves it, without 
    OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
    ```
 
-   The script plans the entry point and, when the plan is not empty, applies it: the routes are metadata items of its instances, updated in place, which a timer on each instance renders into Traefik's configuration within seconds. No instance is replaced, no request is lost. It reads no state of the tenants, and refuses to remove every published domain at once (`--allow-empty` to force).
+   The script plans the entry point, prints the domains the plan adds, changes or withdraws, and, when the plan is not empty, applies it: the routes are metadata items of its instances, updated in place, which a timer on each instance renders into Traefik's configuration within seconds. No instance is replaced, no request is lost. It reads no state of the tenants, and refuses to remove every published domain at once (`--allow-empty` to force).
 
    ```mermaid
    flowchart LR

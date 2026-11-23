@@ -58,10 +58,19 @@ if [[ "${status}" != 2 ]]; then
   echo "plan of the entry point failed: run ${tool} -chdir=stacks/shared/entry-point plan" >&2
   exit 1
 fi
-added=$(jq -r --argjson p "${published}" '. - $p | join(", ")' <<<"${wanted}")
-withdrawn=$(jq -r --argjson w "${wanted}" '. - $w | join(", ")' <<<"${published}")
-[[ -n "${added}" ]] && echo "domains added: ${added}"
-[[ -n "${withdrawn}" ]] && echo "domains withdrawn: ${withdrawn}"
+# What the plan changes in the routes: the route-<domain> metadata items of the instances
+# (informative only: the apply goes on if the plan cannot be read).
+changes=$("${tool}" -chdir="${edge}" show -json "${plan}" | jq -c '
+  [.resource_changes[] | select(.change.actions | index("update"))
+   | (.change.before.metadata // {}) as $b | (.change.after.metadata // {}) as $a
+   | ($b + $a | keys[] | select(startswith("route-"))) as $k
+   | select($b[$k] != $a[$k])
+   | {d: ($k | ltrimstr("route-")), s: (if $b[$k] == null then "added" elif $a[$k] == null then "withdrawn" else "changed" end)}]
+  | unique | group_by(.s) | map({key: .[0].s, value: (map(.d) | join(", "))}) | from_entries') || changes='{}'
+for kind in added changed withdrawn; do
+  list=$(jq -r --arg k "${kind}" '.[$k] // empty' <<<"${changes}")
+  [[ -z "${list}" ]] || echo "domains ${kind}: ${list}"
+done
 
 "${tool}" -chdir="${edge}" apply -input=false "${plan}"
 rm -f "${edge}/${plan}"

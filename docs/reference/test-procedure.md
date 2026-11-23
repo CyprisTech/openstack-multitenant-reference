@@ -238,8 +238,8 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 
 ```console
 $ scripts/request-domains.sh stacks/tenants/vm
-site-a.example.org: added -> ["10.21.0.5:443"]
-site-b.example.org: added -> ["10.21.0.5:443"]
+site-a.example.org: added -> ["172.31.0.28:443"]
+site-b.example.org: added -> ["172.31.0.28:443"]
 written to stacks/shared/entry-point/domains.auto.tfvars.json: commit it and open a merge request
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
 domains added: site-a.example.org, site-b.example.org
@@ -339,7 +339,7 @@ Section 5 again: the routes of the published cluster on the transit routers, the
 
 ```console
 $ scripts/request-domains.sh stacks/tenants/kubernetes
-apps.published.example.org: added -> ["10.24.0.7:443"]
+apps.published.example.org: added -> ["172.31.0.185:443"]
 written to stacks/shared/entry-point/domains.auto.tfvars.json: commit it and open a merge request
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
 domains added: apps.published.example.org
@@ -348,7 +348,7 @@ Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
 domains published: apps.published.example.org, site-a.example.org, site-b.example.org
 ```
 
-Measured (2026-11-21): the apply takes 8 s, the domains answer steadily within 10 s, and none of the 38 requests sent meanwhile fails.
+Measured (2026-11-23, operator planes): the two instances are updated in place in 1 to 5 s, and none of the 147 requests sent to the published domains meanwhile fails.
 
 ## 9. Acceptance
 

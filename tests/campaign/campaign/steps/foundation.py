@@ -191,7 +191,7 @@ def request_domains(ctx):
         if ctx.has(key) and ctx.tofu.deployed(ctx.stack(key)):
             cmd = ["scripts/request-domains.sh", ctx.stack(key), "--tool", ctx.tool]
             result = ctx.runner.run(cmd, cwd=ctx.root, check=False)
-            if result.stdout.strip():
+            if result.stdout.strip() and not ctx.runner.verbose:  # a recorded step showed it already
                 ctx.runner.echo(result.stdout.strip())
             if result.returncode != 0:
                 raise StepFailed(f"request-domains.sh failed for {key}:\n{result.stderr.strip()}")
@@ -213,7 +213,7 @@ def publish(ctx, report, load=None):
     env = dict(os.environ, OS_CLOUD=ctx.cloud("entry-point"))
     try:
         result = ctx.runner.run(["scripts/publish-domains.sh", "--tool", ctx.tool], cwd=ctx.root, env=env, check=False)
-        if result.stdout.strip():
+        if result.stdout.strip() and not ctx.runner.verbose:  # a recorded step showed it already
             ctx.runner.echo(result.stdout.strip())
     finally:
         if loader:
