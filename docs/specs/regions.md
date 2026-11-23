@@ -1,6 +1,6 @@
 # Spec: several regions
 
-- **Status:** Proposed — its release is given in the README's [status](../../README.md#status) (`v0.8`)
+- **Status:** Proposed — its release is given in the README's [status](../../README.md#status) (`v0.9`)
 - **Related:** [ADR-0012](../adr/0012-resilience-scope.md) (resilience scope), [ADR-0004](../adr/0004-planes-and-isolation.md) (planes), [ADR-0006](../adr/0006-exposure.md) (exposure), [trade-offs](../concepts/trade-offs.md#6-regions-and-sites) (regions and sites)
 
 ## Problem

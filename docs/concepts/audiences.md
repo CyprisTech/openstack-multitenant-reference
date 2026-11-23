@@ -88,7 +88,7 @@ The [Scope](../../README.md#scope) section of the README shows these levels and 
 | a central firewall inspecting traffic between tenants | In the path, by routing: on a hub plane, the attachments' routes point to the firewall instead of the transit router (the stacks route through the transit router today); on operator planes, in the operator's network. Isolation stays enforced at every target (security groups) and tested. |
 | a WAF or DDoS protection | Upstream of the entry point (a provider service or an appliance), or in front of a tenant exposed directly: the entry point passes TLS through by design ([trade-offs](trade-offs.md#1-tls-passthrough-at-the-public-entry-point)). |
 | OpenStack together with other clouds | Each cloud keeps its landing zone; the reference covers the OpenStack side and states its integration points. |
-| active-active across regions | The reference is ready for an active/passive failover between regions by DNS (`v0.8`), which you run; active-active is a property of your applications and data. |
+| active-active across regions | The reference is ready for an active/passive failover between regions by DNS (`v0.9`), which you run; active-active is a property of your applications and data. |
 | a certification (SecNumCloud, C5) | The reference gives tested isolation and integration points for logs, audit and secrets; the rest of the evidence comes from the provider and your organisation. |
 
 ## Coverage by need

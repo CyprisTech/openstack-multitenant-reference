@@ -44,6 +44,8 @@ Every choice of this architecture has a cost. This document states each one: wha
 
 **A WAF without changing the reference:** in the tenant, as the reverse-proxy tier in front of its application instances ([certificates](architecture.md#certificates)); or a tenant exposed directly (`exposure = "public"`) behind the provider's WAF service. In front of the shared entry point, a WAF needs the traffic in clear: that is the alternative above, not an addition.
 
+**The boundary.** The entry point is level 2: one public address for the domains of many tenants, one place where incoming traffic is restricted and logged, at layer 4. What needs decryption (TLS termination, routing by host or path, a WAF) is level 3: the tenant's, or a platform team's. A shared Gateway API on a Kubernetes cluster, where each tenant declares its routes in its namespace, is the way to give the tenants self-service at layer 7; the reference does not run it ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)).
+
 ## 2. Health monitors
 
 **Choice.** TCP checks on port 443 of each Traefik instance.
@@ -249,7 +251,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** The projects share a layer 2 segment, and port security does not apply to router ports: a project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address. They are blind (the answer goes to the real owner), the isolation test and the test procedure check it, and every service of the scenario listens on TCP; UDP services allow reflection.
 
-**Close it when** the tenants do not trust each other: a policy of the operator that forbids disabling port security, or routed operator planes (`v0.6`, with cloud-baseline), where the cloud routes each project's range and no segment is shared.
+**Close it when** the tenants do not trust each other: a policy of the operator that forbids disabling port security, or routed operator planes (`v0.7`, with cloud-baseline), where the cloud routes each project's range and no segment is shared.
 
 ## 20. A bastion per stack
 

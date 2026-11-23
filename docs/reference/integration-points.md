@@ -100,10 +100,10 @@ The tools of the reference read their secrets from one place per platform, whate
 
 | | |
 |---|---|
-| Plane | `internal`, or a plane of their own |
-| Direction | Tenants query the resolvers, time servers and mirrors; the tenants' subnets point to them |
-| Provided by | The architecture, as level 2 network services ([ADR-0003](../adr/0003-scope-and-boundary.md), D4), or the cloud operator ([network services](../concepts/architecture.md#network-services)) |
-| Reflection | Name resolution and time answer on UDP: a project able to send spoofed sources can use them for reflection ([lateral movement](../concepts/security.md#lateral-movement)) |
+| Plane | `internal`, or a plane of their own, for the mirrors and registry caches |
+| Direction | Tenants query the mirrors and caches; name resolution and time come from the cloud ([network services](../concepts/architecture.md#network-services)) |
+| Provided by | The platform teams for mirrors and caches (level 3); the cloud operator for resolvers and time ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D3 and D4) |
+| You provide | A package mirror URL and registry mirrors for `containerd`, as inputs of the tenant stacks |
 
 ## Automation: a GitOps pipeline
 

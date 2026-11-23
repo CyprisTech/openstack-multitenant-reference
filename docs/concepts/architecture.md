@@ -89,9 +89,9 @@ Four rules follow from this design, each learned from a test failure ([test resu
 
 ## Public entry point
 
-**Status:** delivered in `v0.1`; routes through instance metadata in `v0.3`.
+**Status:** delivered in `v0.1`; routes through instance metadata in `v0.3`; routes as a reviewed input of the stack, planned in `v0.6`.
 
-One public address for every domain published through it: an Octavia load balancer in TCP with the PROXY protocol, and two Traefik instances in anti-affinity that route by SNI with TLS passthrough. The routes are instance metadata, one item per domain, updated in place ([ADR-0006](../adr/0006-exposure.md), D3). It does not terminate TLS, route at layer 7 or filter requests: each tenant owns its certificates. Its settings are in the [stack's README](../../stacks/shared/entry-point/README.md#settings); publishing a domain is a [guide](../guides/publish-a-domain.md).
+One public address for every domain published through it: an Octavia load balancer in TCP with the PROXY protocol, and two Traefik instances in anti-affinity that route by SNI with TLS passthrough. The routes are an input of the stack, kept in the deployment repository: a tenant asks for a route with a change that is reviewed and merged ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D5). They reach the instances as metadata, one item per domain, updated in place, so that a change of routes replaces no instance ([ADR-0006](../adr/0006-exposure.md), D3). It does not terminate TLS, route at layer 7 or filter requests: each tenant owns its certificates, and what needs decryption is level 3 ([trade-offs](trade-offs.md#1-tls-passthrough-at-the-public-entry-point)). Its settings are in the [stack's README](../../stacks/shared/entry-point/README.md#settings); publishing a domain is a [guide](../guides/publish-a-domain.md).
 
 ## Ingress data path
 
@@ -154,7 +154,7 @@ TLS ends in the tenant ([ADR-0006](../adr/0006-exposure.md)); each tenant obtain
 
 ## Observability data path
 
-**Status:** metrics delivered in `v0.3`; logs and audit events planned in `v0.7` (integration points).
+**Status:** metrics delivered in `v0.3`; logs and audit events planned in `v0.8` (integration points).
 
 Observability is an integration point ([ADR-0007](../adr/0007-monitoring.md)): the reference states the contract, the receivers are yours. Metrics, logs and audit events follow the same pattern: an agent next to the source pushes through the observability plane; nothing connects into a project.
 
@@ -180,19 +180,20 @@ The contract between the sources and the receivers:
 
 **Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered.
 
-What every tenant needs from the network, offered the same way as any shared service ([ADR-0003](../adr/0003-scope-and-boundary.md), D4):
+What every tenant needs from the network, split by level ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)):
 
 | Service | Design |
 |---|---|
-| Name resolution | Resolvers as a shared service on a plane, reachable by every tenant; the tenants' subnets point to them |
-| Time | NTP servers as a shared service on the same plane |
-| Packages and images | Mirrors and a registry as shared services, so that tenants without Internet access, such as `isolated`, can still be built and updated |
-| Egress to the Internet | Only through a declared path: a router to an egress network in the tenant's own project, or a shared egress on a plane; never by default. **Today**, a tenant with an egress router reaches the Internet without filtering beyond the egress rules of its security groups; the shared egress, a single place to filter and log, comes with `v0.6` |
+| Name resolution | Not run by the reference. The resolvers come from Neutron's DHCP (the operator's), through the tenant's egress, or from a resolver behind a plane the tenant joins (the operator's, the organisation's DNS, a platform team's), given as `dns_nameservers` ([planes contract](../reference/planes-contract.md)) |
+| Internal names | Each stack writes its records in Designate, and gives them as an output (`dns_records`) to publish in another DNS, on a cloud without Designate |
+| Time | From the cloud: instances on KVM follow the hypervisor's clock (kvm-clock). A workload that needs NTP-grade accuracy brings its own time servers |
+| Packages and images | An [integration point](../reference/integration-points.md#name-resolution-time-and-package-mirrors): mirrors and registry caches of the platform teams, reachable on a plane by tenants without Internet access, such as `isolated` |
+| Egress to the Internet | Declared per tenant: `none`, `router` (a router to an egress network in the tenant's own project) or `shared` (a shared egress of the landing zone that restricts and logs); never by default |
 | IPv6 | IPv4 until `v1.0`: the reference creates no IPv6 subnet, and the isolation test checks that tenants have no routed IPv6. Afterwards, one family per deployment, IPv4 or IPv6 ([ADR-0015](../adr/0015-ipv6.md)) |
 
 ## Resilience and continuity
 
-**Status:** placement over hosts and zones delivered in `v0.5`, with the rebuild guide; several regions planned in `v0.8`.
+**Status:** placement over hosts and zones delivered in `v0.5`, with the rebuild guide; several regions planned in `v0.9`.
 
 The reference places what it deploys; the cloud and the workloads provide the behaviour on a failure, as in the landing zones of the large providers ([ADR-0012](../adr/0012-resilience-scope.md)).
 
@@ -200,7 +201,7 @@ The reference places what it deploys; the cloud and the workloads provide the be
 |---|---|---|
 | A host | Instances of a role in anti-affinity (hard for the entry point, soft or hard per tenant); load balancers in active/standby where the cloud offers it | the placement |
 | An availability zone | Instances, Kubernetes nodes and volumes spread over the zones given to each stack; planes and routers are regional in Neutron | the placement, with mocked providers |
-| A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([spec](../specs/regions.md)) | planned with `v0.8`: two sites deployed side by side; not the failover |
+| A region | A site per region with its own entry point, active/passive, ready for a failover by DNS ([spec](../specs/regions.md)) | planned with `v0.9`: two sites deployed side by side; not the failover |
 | A stack or its state | The architecture is rebuilt from code in a documented order ([rebuild](../guides/rebuild.md)); the states are kept in a backend that is itself backed up | every campaign rebuilds it from empty projects |
 | Tenant data | Backed up by the tenants through the backup integration point; restored the same way | no: yours |
 
@@ -249,7 +250,7 @@ With one network for the administration and internal services roles, administrat
 
 ## Lifecycle
 
-**Status:** delivered.
+**Status:** delivered; the routes of the entry point as a reviewed input, planned in `v0.6`.
 
 ```mermaid
 flowchart TB
@@ -259,7 +260,7 @@ flowchart TB
     T["tenants<br/>vm · isolated · kubernetes"]
     S2["shared services that admit named consumers<br/>internal services"]
     P2["shared/planes again<br/>(hub planes: routes to the tenants)"]
-    D["publish-domains.sh<br/>routes of the entry point"]
+    D["publish-domains.sh<br/>routes of the entry point, a reviewed input"]
     P --> S --> E --> T --> S2 --> P2 --> D
 ```
 
@@ -268,7 +269,7 @@ The operations and their order:
 | Operation | Order |
 |---|---|
 | Deploy | planes → shared services the tenants push to → entry point → tenants (Kubernetes: node image first) → shared services that admit named consumers (they need the tenants' sources) → planes again on hub planes → publish the domains |
-| Publish or withdraw a domain | `scripts/publish-domains.sh`: the entry point's metadata is updated in place |
+| Publish or withdraw a domain | a reviewed change of the entry point's routes in the deployment repository, applied by `scripts/publish-domains.sh`: the metadata is updated in place |
 | Add a tenant | [add a tenant](../guides/add-a-tenant.md) |
 | Upgrade Kubernetes | new node image, then `spec.topology.version` of the Cluster |
 | Rebuild after a loss | [rebuild](../guides/rebuild.md): the same order, from the first lost step |
@@ -292,7 +293,7 @@ What the stacks expect from planes provided by the cloud operator (names, ranges
 
 ## Regions and sites
 
-**Status:** the site as an input of every stack, delivered; several regions joined by an overlay, planned in `v0.8`.
+**Status:** the site as an input of every stack, delivered; several regions joined by an overlay, planned in `v0.9`.
 
 A project is not tied to a region, but its resources and the planes are: each region has its own planes, its own hub and its own entry point. The site is the name of a region in a deployment, an input of every stack and part of every name, so that the same stacks deploy in several regions without collision. The regions are joined by an encrypted overlay between their hubs, and the published domains fail over between their entry points by DNS: the design is the [spec](../specs/regions.md).
 
