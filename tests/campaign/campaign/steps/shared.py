@@ -299,7 +299,8 @@ def rotate(ctx, report):
     ctx.runner.echo("# Cloud controller manager and Cinder CSI: their configuration, then a restart")
     if not ctx.runner.dry_run:
         credential_id, secret = credential_of(ctx, following)
-        conf = base64.b64decode(k.out("-n", "kube-system", "get", "secret", "cloud-config", "-o", r"jsonpath={.data.cloud\.conf}")).decode()
+        encoded = k.out("-n", "kube-system", "get", "secret", "cloud-config", "-o", r"jsonpath={.data.cloud\.conf}")
+        conf = base64.b64decode(encoded).decode()
         conf = re.sub(r"(?m)^application-credential-id=.*$", f"application-credential-id={credential_id}", conf)
         conf = re.sub(r"(?m)^application-credential-secret=.*$", f"application-credential-secret={secret}", conf)
         replace_secret_key(k, "kube-system", "cloud-config", "cloud.conf", conf)
@@ -352,7 +353,8 @@ def wait_for_revocation(ctx, cloud, attempts=90, delay=20):
     if ctx.runner.dry_run:
         return
     for attempt in range(attempts):
-        token = ctx.runner.run(["openstack", "--os-cloud", cloud, "token", "issue", "-f", "value", "-c", "id"], check=False, quiet=True)
+        token = ctx.runner.run(["openstack", "--os-cloud", cloud, "token", "issue", "-f", "value", "-c", "id"],
+                               check=False, quiet=True)
         if token.returncode != 0:
             ctx.runner.echo("the old credential no longer authenticates")
             return
@@ -436,7 +438,8 @@ def upgrade(ctx, report):
                 nodes = [line.split() for line in listing.stdout.splitlines() if line.strip()]
                 ready = [n for n in nodes if n[1] == "Ready" and n[-1] == version]
                 expected = len([line for line in machines.stdout.splitlines() if line.strip()])
-                ctx.runner.echo(f"{time.strftime('%H:%M:%S', time.gmtime())} nodes {len(nodes)}, ready at {version}: {len(ready)}")
+                now = time.strftime("%H:%M:%S", time.gmtime())
+                ctx.runner.echo(f"{now} nodes {len(nodes)}, ready at {version}: {len(ready)}")
                 if len(ready) == expected == len(nodes):
                     done = True
                     break

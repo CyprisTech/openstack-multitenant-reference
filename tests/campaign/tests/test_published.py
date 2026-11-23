@@ -1,17 +1,14 @@
 """The published cluster family, the scenes and the teardown, against a fake cloud."""
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from campaign.context import INPUTS, StepFailed
+from campaign.report import StepReport
+from campaign.steps import load
+from campaign.tools import Result
 
-from campaign.context import INPUTS, StepFailed  # noqa: E402
-from campaign.report import StepReport  # noqa: E402
-from campaign.steps import load  # noqa: E402
-from campaign.tools import Result  # noqa: E402
-from tests.test_foundation import context  # noqa: E402
+from tests.test_foundation import context
 
 STACKS = {
     "planes": "stacks/shared/planes",

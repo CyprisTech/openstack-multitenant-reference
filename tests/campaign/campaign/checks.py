@@ -17,7 +17,8 @@ def kubeconfig(ctx, cluster):
 def isolation_test(ctx, report, cluster=None):
     """The executable matrix, with the cluster that is deployed. Its output is kept for the results."""
     cmd = ["python3", "tests/isolation/check.py", "--receiver", ctx.stack("receiver"),
-           "--user", ctx.setting("ssh_user"), "--key", os.path.expanduser(ctx.setting("ssh_key")), "--tool", ctx.tool]  # fmt: skip
+           "--user", ctx.setting("ssh_user"), "--key", os.path.expanduser(ctx.setting("ssh_key")),
+           "--tool", ctx.tool]  # fmt: skip
     if ctx.has("acme"):
         cmd += ["--acme", ctx.stack("acme")]
     if cluster == "shared":

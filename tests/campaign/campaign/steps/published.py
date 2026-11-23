@@ -55,7 +55,8 @@ def deploy_demo(ctx):
 
 def ingress_address(ctx):
     # The Service may not exist yet: an empty address, waited for by the caller.
-    return kubectl(ctx).out("-n", "traefik", "get", "svc", "traefik", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False)
+    return kubectl(ctx).out("-n", "traefik", "get", "svc", "traefik",
+                            "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False)
 
 
 # --- steps -----------------------------------------------------------------------------------------
@@ -104,7 +105,8 @@ def tour(ctx, report):
     result = ctx.runner.run(cmd, cwd=ctx.root, quiet=True)
     if not ctx.runner.dry_run:
         (ctx.work / "kubernetes-tour.md").write_text(result.stdout)
-    described = ctx.runner.run(["clusterctl", "describe", "cluster", name, "-n", "platform", "--kubeconfig", k.kubeconfig], check=False)
+    described = ctx.runner.run(["clusterctl", "describe", "cluster", name, "-n", "platform", "--kubeconfig", k.kubeconfig],
+                               check=False)
     if described.stdout.strip():
         ctx.runner.echo(described.stdout.rstrip())
     k.show("get", "machines", "-n", "platform")
@@ -248,7 +250,8 @@ def hostile(ctx, report):
         ctx.wait_for_instances(bastion, [instance])
         # The route is on the tenant's transit router (ADR-0013): it applies at once.
         opened = [port for port in (443, 22, 9100) if reachable(ctx, bastion, instance, target, port)]
-        record(ctx, [f"hostile route {instance} -> {target}:{port} {'OPEN' if port in opened else 'closed'}" for port in (443, 22, 9100)])
+        record(ctx, [f"hostile route {instance} -> {target}:{port} {'OPEN' if port in opened else 'closed'}"
+                     for port in (443, 22, 9100)])
     ctx.apply("isolated", empty_plan=False)
     ctx.scene_done("isolated")
     report.measures["hostile"] = "closed" if not opened else f"open: {opened}"

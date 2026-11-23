@@ -207,7 +207,8 @@ def main():
         ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
         svc_ingress = kget(kubectl, "get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
-        api = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").split("//")[1].split(":")[0]
+        server = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
+        api = server.split("//")[1].split(":")[0]
         internal = outputs(args.tool, args.internal_service)["address"]
         probe_pod = start_probe(args.published_kubeconfig)
 

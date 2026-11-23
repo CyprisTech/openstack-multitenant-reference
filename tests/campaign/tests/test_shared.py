@@ -2,19 +2,16 @@
 
 import base64
 import json
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from campaign.context import StepFailed
+from campaign.kube import delete_cluster
+from campaign.report import StepReport
+from campaign.steps import load
+from campaign.steps.shared import wait_for_revocation
+from campaign.tools import Result
 
-from campaign.context import StepFailed  # noqa: E402
-from campaign.kube import delete_cluster  # noqa: E402
-from campaign.report import StepReport  # noqa: E402
-from campaign.steps import load  # noqa: E402
-from campaign.steps.shared import wait_for_revocation  # noqa: E402
-from campaign.tools import Result  # noqa: E402
-from tests.test_foundation import context  # noqa: E402
+from tests.test_foundation import context
 
 SECRET = "s3cr3t-never-printed"
 STACKS = {"shared": "stacks/shared/kubernetes", "vm": "stacks/tenants/vm"}
@@ -133,7 +130,8 @@ class UpgradeTest(unittest.TestCase):
             return Result(0)
 
         ctx = context(answer, stacks=dict(STACKS, receiver="tests/fixtures/receiver"))
-        ctx.config.update(upgrade={"version": "v1.36.5", "image": "ubuntu-2404-kube-v1.36.5"}, name_server="192.0.2.53", ssh_key="k")
+        ctx.config.update(upgrade={"version": "v1.36.5", "image": "ubuntu-2404-kube-v1.36.5"},
+                          name_server="192.0.2.53", ssh_key="k")
         (ctx.work / "volume.sha256").write_text("abc\n")
         entry = StepReport("upgrade")
         load()["upgrade"](ctx, entry)

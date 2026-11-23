@@ -1,13 +1,10 @@
 """Scenarios: loading, checks and the expansion of sequences."""
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from campaign import scenario  # noqa: E402
+from campaign import scenario
 
 SCENARIOS = Path(__file__).resolve().parents[1] / "scenarios"
 

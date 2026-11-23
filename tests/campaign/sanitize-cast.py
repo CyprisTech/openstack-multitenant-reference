@@ -43,7 +43,8 @@ def leaks(text, forbidden):
             ip = ipaddress.ip_address(match)
         except ValueError:
             continue
-        if not (ip in ipaddress.ip_network("10.0.0.0/8") or ip.is_loopback or ip.is_unspecified or any(ip in n for n in DOC_RANGES)):
+        kept = ip in ipaddress.ip_network("10.0.0.0/8") or ip.is_loopback or ip.is_unspecified
+        if not (kept or any(ip in n for n in DOC_RANGES)):
             found.add(match)
     return found
 

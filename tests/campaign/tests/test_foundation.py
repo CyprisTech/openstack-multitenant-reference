@@ -1,19 +1,16 @@
 """The foundation steps and the helpers they use, against a fake cloud."""
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from campaign import retry  # noqa: E402
-from campaign.context import INPUTS, Context, StepFailed  # noqa: E402
-from campaign.report import StepReport  # noqa: E402
-from campaign.scenario import Scenario  # noqa: E402
-from campaign.steps import load  # noqa: E402
-from campaign.tools import Result, Runner  # noqa: E402
+from campaign import retry
+from campaign.context import INPUTS, Context, StepFailed
+from campaign.report import StepReport
+from campaign.scenario import Scenario
+from campaign.steps import load
+from campaign.tools import Result, Runner
 
 STACKS = {
     "planes": "stacks/shared/planes",

@@ -1,15 +1,12 @@
 """The preflight: which credentials it checks, and what stops a run, without a cloud."""
 
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from campaign import preflight
+from campaign.context import StepFailed
+from campaign.tools import Result
 
-from campaign import preflight  # noqa: E402
-from campaign.context import StepFailed  # noqa: E402
-from campaign.tools import Result  # noqa: E402
-from tests.test_core import context  # noqa: E402
+from tests.test_core import context
 
 STACKS = {"planes": "stacks/shared/planes", "shared": "stacks/shared/kubernetes"}
 CONFIG = {

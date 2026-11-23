@@ -1,12 +1,8 @@
 """What a recorded step shows: the output of the tools, not only the commands."""
 
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from campaign.tools import Runner  # noqa: E402
+from campaign.tools import Runner
 
 
 class VerboseTest(unittest.TestCase):

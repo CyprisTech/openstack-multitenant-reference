@@ -20,17 +20,15 @@ import time
 import tomllib
 from pathlib import Path
 
+from campaign import preflight
+from campaign import scenario as scenarios
+from campaign.context import Context
+from campaign.report import Report
+from campaign.steps import load
+from campaign.tools import Runner
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-sys.path.insert(0, str(HERE))
-
-from campaign import preflight  # noqa: E402
-from campaign import scenario as scenarios  # noqa: E402
-from campaign.context import Context  # noqa: E402
-from campaign.report import Report  # noqa: E402
-from campaign.steps import load  # noqa: E402
-from campaign.tools import Runner  # noqa: E402
-
 
 # A recorded step runs in its own process under asciinema; its result comes back in a file.
 INNER = "CAMPAIGN_INNER"
@@ -172,7 +170,8 @@ def main(argv=None):
             break
 
     if steps_notified and report.ok:
-        ctx.notify(f"campaign {scenario.name} {mode} finished in {(time.monotonic() - campaign_started) / 60:.0f} min: every step passed")
+        minutes = (time.monotonic() - campaign_started) / 60
+        ctx.notify(f"campaign {scenario.name} {mode} finished in {minutes:.0f} min: every step passed")
     if not os.environ.get(INNER):  # a recorded step: the outer run prints the summary
         print("\n" + report.summary())
     return 0 if report.ok else 1

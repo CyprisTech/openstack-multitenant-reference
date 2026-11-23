@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-import json, os, sys, tempfile, urllib.request
+import json
+import os
+import sys
+import tempfile
+import urllib.request
 
 URL = "http://169.254.169.254/openstack/latest/meta_data.json"
 TARGET = "/etc/traefik/dynamic/routes.yml"
