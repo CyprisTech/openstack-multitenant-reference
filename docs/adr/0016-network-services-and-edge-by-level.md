@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-11-23
 - **Deciders:** maintainers
-- **Refines:** [ADR-0003](0003-scope-and-boundary.md) D4 (network services in scope: egress, DNS resolution, time, package mirrors), [ADR-0004](0004-planes-and-isolation.md) (planes), [ADR-0006](0006-exposure.md) (exposure)
+- **Refines:** [ADR-0003](0003-scope-and-boundary.md) D3 (the tenant types: `isolated` becomes a configuration of `vm`, D1) and D4 (network services in scope: egress, DNS resolution, time, package mirrors), [ADR-0004](0004-planes-and-isolation.md) (planes), [ADR-0006](0006-exposure.md) (exposure)
 - **Supersedes, once accepted:** [ADR-0006](0006-exposure.md) D3 for the source of the routes of the entry point (D5 below); their delivery as instance metadata is kept
 
 ## Context
@@ -20,7 +20,8 @@ ADR-0003 puts the network services the tenants need in level 2: egress, DNS reso
 
 Three facts of the reference itself:
 
-- Every stack writes resolvers in its subnet, given as inputs; the examples use public resolvers, which `isolated`, without egress, cannot reach.
+- Every stack writes resolvers in its subnet, given as inputs; the examples use public resolvers, which the `isolated` tenant, without egress, cannot reach.
+- Two stacks run virtual machines: `vm`, exposed and with an egress, and `isolated`, with neither; they differ only by these two properties.
 - Each stack writes its own DNS records, in Designate only (the `dns` module of terraform-openstack-tenant): on a cloud without Designate, the stacks cannot be applied with their names.
 - The routes of the entry point are gathered by a script that reads the outputs of every tenant's state, then delivered as instance metadata. The script couples the entry point to every tenant's state, and nothing reviews a new route.
 
@@ -40,9 +41,11 @@ For the routes of the entry point:
 
 ## Decision
 
-### D1 — Egress is level 2
+### D1 — Egress and exposure are declared per tenant
 
 Each tenant declares its egress: `none`, `router` (its own router to an external network, as today) or `shared` (a shared egress of the landing zone that restricts and logs). With `none`, the tenant has no default route. Egress is the central concern of every landing zone; it stays in the reference.
+
+Each tenant also declares its exposure: `none`, `entry-point` or `public` ([ADR-0006](0006-exposure.md)). A tenant with neither exposure nor egress is a private tenant, as the landing zones of the large providers separate the workloads connected to the hub only from those exposed to the Internet, by policy rather than by kind of workload. The `isolated` tenant type of ADR-0003 D3 therefore becomes a configuration of the `vm` stack (`exposure = "none"`, `egress = "none"`), and its stack is removed. A tenant without egress gets its software from its image or from a package mirror (D4).
 
 ### D2 — Each stack writes its records in Designate, and gives them as an output
 
@@ -62,7 +65,8 @@ The routes of the entry point (each domain and the service address it goes to) a
 
 ## Consequences
 
-- The isolation test checks that every tenant resolves a name and has a synchronised clock, and that `isolated` does without any path to the Internet.
+- The isolation test checks that every tenant resolves a name of the landing zone's zone and a public name through the expected resolver, and that a tenant without egress has no path to the Internet. Time is a requirement on the cloud, not a row: a wrong clock would also fail the HTTPS checks, which verify certificates.
+- The `isolated` stack is removed: the private tenant of the test scenario is a `vm` stack with `exposure = "none"` and `egress = "none"`. A deployment of `isolated` is redeployed with `vm`.
 - The planes contract states what the cloud must provide (D3).
 - The stacks take the choice of `designate` or not as an input, and give `dns_records` (D2); the `dns` module of terraform-openstack-tenant is unchanged.
 - `scripts/publish-domains.sh` no longer reads the tenants' states: it applies the routes of the entry point's input (D5). Each tenant stack keeps its `published_domains` output, to fill in the change that asks for a route.
