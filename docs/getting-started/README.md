@@ -11,6 +11,15 @@ flowchart LR
     T --> R["5. Planes again<br/>(hub only)"]
     R --> PB["6. Publish domains"]
     PB --> C["7. Check"]
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class P,C outside
+    class H,R plane
+    class S,E,PB shared
+    class T tenant
 ```
 
 > [!WARNING]

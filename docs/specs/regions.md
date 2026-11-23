@@ -38,6 +38,17 @@ flowchart LR
     DNS --> EPA
     DNS -.->|"failover"| EPB
     HA <-->|"encrypted overlay"| HB
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class DNS outside
+    class EPA,EPB shared
+    class HA,HB plane
+    class TA,TB tenant
+    class RA,RB other
 ```
 
 The rules, and why:

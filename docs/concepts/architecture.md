@@ -4,6 +4,8 @@ The living specification of the reference architecture, for the `v1.0` design: t
 
 All names are fictional: the organisation is `example.org`, and address ranges are documentation ranges or examples.
 
+In the diagrams, blue: shared services; orange: tenants; the planes in their colour (publication blue, internal services dark yellow, observability green); rose: administration; dashed: provided by another stack or outside the landing zone ([palette](../../CONTRIBUTING.md#diagrams)).
+
 Each section starts with its status: **delivered** (the release that brought it, tested by the maintainers) or **planned** (the release that will bring it, from the [status](../../README.md#status) of the README). The design of a planned part is the target; nothing of it exists in the code yet.
 
 **Contents**
@@ -50,20 +52,33 @@ With hub planes, every attached router routes through the transit router: tenant
 Each tenant network has **one router per network it joins**, and a **transit router** with no external gateway, which holds the subnet's gateway address ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). The instances have one route, the default route to the transit router; the transit router routes each plane's range to that plane's router, and the default route to the egress router. The subnet pushes no host routes: Octavia load balancers copy them once, when their VIP is plugged, and would miss any later change, while a route of the transit router applies at once. The example below is a `vm` tenant, whose egress router reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; a private tenant (`egress = "none"`) has no egress router, and its transit router has no default route: unknown destinations are dropped.
 
 ```mermaid
+---
+config:
+  themeVariables:
+    fontSize: 14px
+  flowchart:
+    nodeSpacing: 30
+    rankSpacing: 40
+---
 flowchart LR
-    subgraph T["Tenant network, e.g. 10.21.0.0/24 (MTU 1362)"]
-        VM["instances<br/>default route only"]
-        LB["load balancer VIP<br/>(the service address)"]
+    subgraph T["tenant network 10.21.0.0/24, MTU 1362"]
+        VM["instances"]
+        LB["load balancer<br/>service address"]
     end
-    RT["router transit<br/>default gateway, no external gateway<br/>routes: one per plane, default to egress"]
-    RE["router egress"]
-    RS["router publication"]
-    RM["router observability"]
-    VM --> RT
-    LB --> RT
-    RT --> RE --> PUB["egress network<br/>(input egress_network, Internet)"]
-    RT --> RS --> SVC["publication plane"]
-    RT --> RM --> MON["observability plane"]
+    VM & LB --> RT["transit router<br/>gateway of the subnet"]
+    RT -->|"default route"| RE["egress router"] --> PUB["egress network"]
+    RT -->|"plane range"| RS["publication router"] --> SVC["publication plane"]
+    RT -->|"plane range"| RM["observability router"] --> MON["observability plane"]
+
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef pub fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef obs fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class VM,LB,RT,RE,RS,RM tenant
+    class PUB outside
+    class SVC pub
+    class MON obs
+    class T tenant
 ```
 
 How the router joins a plane, and how the tenant is seen there, depends on the kind of plane: [How a tenant joins a plane](plane-attachment.md#which-mode-where) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1).
@@ -105,11 +120,17 @@ Many domains of many tenants share one public address. The entry point does not 
 
 ```mermaid
 sequenceDiagram
+    box rgb(255,255,255) Internet
     participant C as Client
+    end
+    box rgb(219,234,254) Entry point, a shared service
     participant E as Octavia (entry point)<br/>TCP, PROXY pool
     participant T as Traefik (entry point)
+    end
+    box rgb(255,237,213) Tenant
     participant L as Tenant load balancer<br/>TCP listener, sources = entry point
     participant B as Tenant instance or ingress<br/>terminates TLS
+    end
     C->>E: TLS ClientHello (SNI site-a.example.org)
     E->>T: PROXY (client) + TLS
     Note over T: reads PROXY and SNI, does not decrypt
@@ -133,13 +154,28 @@ On the published cluster the same path ends at the ingress: no `proxy-protocol` 
 The tenant owns one public address and one load balancer for its domains alone; the shared entry point is not involved. A `vm` tenant's load balancer has its own public floating IP and adds the PROXY header itself (pool `PROXYV2`):
 
 ```mermaid
+---
+config:
+  sequence:
+    useMaxWidth: false
+    actorFontSize: 13
+    messageFontSize: 13
+    noteFontSize: 12
+    actorMargin: 30
+    width: 130
+    boxMargin: 6
+---
 sequenceDiagram
+    box rgb(255,255,255) Internet
     participant C as Client
-    participant L as Tenant load balancer<br/>public floating IP, pool PROXYV2
-    participant B as Tenant instance<br/>terminates TLS
-    C->>L: TLS ClientHello (SNI site-a.example.org)
-    L->>B: PROXY v2 (client address) + TLS
-    Note over B: reads PROXY v2 from the load balancer's addresses<br/>terminates TLS with its own certificate
+    end
+    box rgb(255,237,213) Tenant
+    participant L as Load balancer<br/>public floating IP
+    participant B as Instance<br/>terminates TLS
+    end
+    C->>L: TLS ClientHello (SNI)
+    L->>B: PROXY v2 + TLS
+    Note over B: client address from PROXY v2,<br/>its own certificate
 ```
 
 On [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes/README.md), the ingress of the published cluster gets a floating IP of `egress_network`, open to any source; the cluster does not join the publication plane. No PROXY protocol on this path: Traefik trusts no PROXY sender and the load balancer adds no header; `externalTrafficPolicy: Local` keeps the client address.
@@ -165,6 +201,13 @@ flowchart LR
     end
     A -->|"push, through the observability plane"| R["Receivers<br/>(Prometheus, Mimir, VictoriaMetrics, a log store…)"]
     I["private tenant workload"] -->|"OTLP"| R
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class X,A,I tenant
+    class R shared
+    class T group
 ```
 
 The contract between the sources and the receivers:
@@ -221,21 +264,37 @@ What each shared component takes down when it fails is listed with the [single p
 **Status:** delivered.
 
 ```mermaid
+---
+config:
+  themeVariables:
+    fontSize: 14px
+  flowchart:
+    useMaxWidth: false
+    nodeSpacing: 30
+    rankSpacing: 40
+---
 flowchart LR
-    OPS(["Administrators<br/>specific addresses"])
+    OPS(["Administrators<br/>named addresses"])
     subgraph ADM["Administration network"]
-        B1["bastion entry point"]
-        B2["bastion vm"]
-        B3["bastion private tenant"]
-        API["Kubernetes API<br/>floating IP"]
-        BS["bootstrap instance<br/>(temporary)"]
+        B1["bastion<br/>entry point"]
+        B2["bastion<br/>of each tenant"]
+        API["Kubernetes API"]
+        BS["bootstrap instance<br/>temporary"]
     end
-    OPS -->|"SSH 22"| B1 & B2 & B3 & BS
+    OPS -->|"SSH"| B1 & B2 & BS
     OPS -->|"6443"| API
     B1 -->|"second port"| E["entry point instances"]
-    B2 -->|"second port"| W["vm instances"]
-    B3 -->|"second port"| I["private tenant instance"]
-    BS -->|"6443, until clusterctl move"| API
+    B2 -->|"second port"| W["tenant instances"]
+    BS -->|"until clusterctl move"| API
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef adm fill:#fff1f2,stroke:#9f1239,color:#881337
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class OPS outside
+    class ADM adm
+    class B1,E shared
+    class B2,API,BS,W tenant
 ```
 
 Who is admitted on each endpoint:
@@ -253,15 +312,25 @@ With one network for the administration and internal services roles, administrat
 **Status:** delivered; the routes of the entry point as a reviewed input, planned in `v0.6`.
 
 ```mermaid
-flowchart TB
-    P["shared/planes<br/>planes, RBAC, routes of the attachments"]
-    S["shared services the tenants push to<br/>receivers"]
-    E["shared/entry-point"]
-    T["tenants<br/>vm (web, private) · kubernetes"]
-    S2["shared services that admit named consumers<br/>internal services"]
-    P2["shared/planes again<br/>(hub planes: routes to the tenants)"]
-    D["publish-domains.sh<br/>routes of the entry point, a reviewed input"]
-    P --> S --> E --> T --> S2 --> P2 --> D
+---
+config:
+  themeVariables:
+    fontSize: 14px
+  flowchart:
+    nodeSpacing: 25
+    rankSpacing: 30
+---
+flowchart LR
+    P["1. planes"] --> S["2. receivers"] --> E["3. entry point"] --> T["4. tenants"] --> S2["5. internal services"] --> P2["6. planes again<br/>(hub)"] --> D["7. domains"]
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class P,P2 plane
+    class S,E,S2 shared
+    class T tenant
+    class D outside
 ```
 
 The operations and their order:

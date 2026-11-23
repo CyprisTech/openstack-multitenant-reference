@@ -22,17 +22,19 @@ flowchart LR
     BA --> TF
 
     classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef pub fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef obs fill:#ecfdf5,stroke:#059669,color:#064e3b
     classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
     classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
     classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
     class LB,TF,BA,MD shared
-    class PUB,MON plane
+    class PUB pub
+    class MON obs
     class SA,RCV other
     class U,ADM outside
 ```
 
-Arrows show who opens the connection. TLS ends in the tenants: Traefik routes by name and holds no key. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+Arrows show who opens the connection. TLS ends in the tenants: Traefik routes by name and holds no key. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; the planes in their colour (publication blue, internal services amber, observability green).
 
 ## Settings
 

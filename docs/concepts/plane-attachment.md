@@ -23,6 +23,13 @@ flowchart LR
     VM["VM 10.21.0.15"] --> R["tenant router<br/>gateway on the plane: 192.0.2.7<br/>source NAT"]
     R -->|"source becomes 192.0.2.7"| P["plane"]
     FIP["floating IP 192.0.2.40<br/>(1:1 NAT)"] -.->|"in and out as 192.0.2.40"| VM
+
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class VM,R tenant
+    class P plane
+    class FIP other
 ```
 
 - **Leaving the tenant**, traffic is translated to the address of the router's gateway (`enable_snat` is true by default, and only an admin can turn it off). A target on the plane sees the router, shared by the whole tenant.
@@ -40,6 +47,13 @@ flowchart LR
     RE --> TR["transit router of the hub<br/>192.0.2.1 (fixed)<br/>10.20.0.0/24 via 192.0.2.181<br/>10.21.0.0/24 via 192.0.2.82"]
     TR --> RW["vm tenant router<br/>interface 192.0.2.82 (from Neutron)<br/>route 10.20.0.0/24 via 192.0.2.1"]
     RW --> V["VM 10.21.0.15"]
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    class T,RE shared
+    class TR plane
+    class RW,V tenant
 ```
 
 - **No translation**: the target sees the real address of the instance, in its tenant network. Admission rules name the entry point's range, or the tenant ranges routed to the receiver.

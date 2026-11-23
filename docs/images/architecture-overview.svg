@@ -2,7 +2,7 @@
 <defs>
 <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
 <marker id="mpub" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
-<marker id="mint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="mint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ca8a04"/></marker>
 <marker id="mobs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
 <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker>
 </defs>
@@ -14,34 +14,34 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <text x="60" y="52" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" >openstack-multitenant-reference</text>
 <text x="60" y="80" font-size="15" fill="#4b5563" font-weight="normal" text-anchor="start" >A landing zone for OpenStack: one project per role, shared networks (planes), isolation enforced at every target</text>
 <line x1="390" y1="300" x2="390" y2="370" stroke="#2563eb" stroke-width="2.4" marker-end="url(#mpub)"/>
-<line x1="800" y1="450" x2="800" y2="302" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#mint)"/>
+<line x1="800" y1="450" x2="800" y2="302" stroke="#ca8a04" stroke-width="2.4" marker-end="url(#mint)"/>
 <line x1="1215" y1="524" x2="1215" y2="302" stroke="#059669" stroke-width="2.4" marker-end="url(#mobs)"/>
 <line x1="250" y1="416" x2="250" y2="608" stroke="#2563eb" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mpub)"/>
-<line x1="330" y1="610" x2="330" y2="492" stroke="#7c3aed" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mint)"/>
+<line x1="330" y1="610" x2="330" y2="492" stroke="#ca8a04" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mint)"/>
 <line x1="410" y1="610" x2="410" y2="566" stroke="#059669" stroke-width="2.4" marker-end="url(#mobs)"/>
-<line x1="690" y1="416" x2="690" y2="608" stroke="#2563eb" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mpub)"/>
-<line x1="780" y1="610" x2="780" y2="492" stroke="#7c3aed" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mint)"/>
+<line x1="780" y1="610" x2="780" y2="492" stroke="#ca8a04" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mint)"/>
 <line x1="870" y1="610" x2="870" y2="566" stroke="#059669" stroke-width="2.4" marker-end="url(#mobs)"/>
-<line x1="1230" y1="610" x2="1230" y2="566" stroke="#059669" stroke-width="2.4" marker-end="url(#mobs)"/>
+<line x1="1300" y1="610" x2="1300" y2="566" stroke="#059669" stroke-width="2.4" marker-end="url(#mobs)"/>
+<line x1="1160" y1="610" x2="1160" y2="492" stroke="#ca8a04" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#mint)"/>
 <rect x="110" y="376" width="1280" height="40" rx="17" fill="#f3f4f6" stroke="#2563eb" stroke-width="2"/>
 <text x="132" y="402" font-size="15" fill="#2563eb" font-weight="bold" text-anchor="start" >Publication plane</text>
 <text x="345" y="402" font-size="13.5" fill="#4b5563" font-weight="normal" text-anchor="start" >The entry point reaches the tenants’ service addresses</text>
-<rect x="110" y="450" width="1280" height="40" rx="17" fill="#f3f4f6" stroke="#7c3aed" stroke-width="2"/>
-<text x="132" y="476" font-size="15" fill="#7c3aed" font-weight="bold" text-anchor="start" >Internal services plane</text>
+<rect x="110" y="450" width="1280" height="40" rx="17" fill="#f3f4f6" stroke="#ca8a04" stroke-width="2"/>
+<text x="132" y="476" font-size="15" fill="#ca8a04" font-weight="bold" text-anchor="start" >Internal services plane</text>
 <text x="345" y="476" font-size="13.5" fill="#4b5563" font-weight="normal" text-anchor="start" >Tenants call the internal services</text>
 <rect x="110" y="524" width="1280" height="40" rx="17" fill="#f3f4f6" stroke="#059669" stroke-width="2"/>
 <text x="132" y="550" font-size="15" fill="#059669" font-weight="bold" text-anchor="start" >Observability plane</text>
 <text x="345" y="550" font-size="13.5" fill="#4b5563" font-weight="normal" text-anchor="start" >Every project pushes metrics, logs and audit events</text>
 <circle cx="390" cy="376" r="5" fill="#2563eb"/>
-<circle cx="800" cy="450" r="5" fill="#7c3aed"/>
+<circle cx="800" cy="450" r="5" fill="#ca8a04"/>
 <circle cx="1215" cy="524" r="5" fill="#059669"/>
 <circle cx="250" cy="416" r="5" fill="#2563eb"/>
-<circle cx="330" cy="490" r="5" fill="#7c3aed"/>
+<circle cx="330" cy="490" r="5" fill="#ca8a04"/>
 <circle cx="410" cy="564" r="5" fill="#059669"/>
-<circle cx="690" cy="416" r="5" fill="#2563eb"/>
-<circle cx="780" cy="490" r="5" fill="#7c3aed"/>
+<circle cx="780" cy="490" r="5" fill="#ca8a04"/>
 <circle cx="870" cy="564" r="5" fill="#059669"/>
-<circle cx="1230" cy="564" r="5" fill="#059669"/>
+<circle cx="1300" cy="564" r="5" fill="#059669"/>
+<circle cx="1160" cy="490" r="5" fill="#ca8a04"/>
 <rect x="1410" y="368" width="175" height="204" rx="10" fill="#f9fafb" stroke="#6b7280" stroke-width="1.6" stroke-dasharray="6 5"/>
 <text x="1497" y="394" font-size="14" fill="#374151" font-weight="bold" text-anchor="middle" >Hub project</text>
 <text x="1497" y="416" font-size="12.5" fill="#4b5563" font-weight="normal" text-anchor="middle" >owns the planes,</text>
@@ -56,31 +56,34 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <line x1="390" y1="150" x2="390" y2="168" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
 <rect x="230" y="170" width="320" height="130" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2" stroke-dasharray="7 5"/>
 <text x="246" y="196" font-size="16" fill="#1e3a8a" font-weight="bold" text-anchor="start" >Entry point</text>
-<text x="536" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">optional</text>
+<text x="536" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">vm tenant</text>
 <text x="246" y="232" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >one public address, many domains</text>
 <text x="246" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >routing by TLS server name</text>
 <text x="246" y="276" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >no decryption: TLS ends in the tenant</text>
 <rect x="640" y="170" width="340" height="130" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
 <text x="656" y="196" font-size="16" fill="#1e3a8a" font-weight="bold" text-anchor="start" >Internal services</text>
-<text x="966" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic"></text>
-<text x="656" y="232" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >your services, the shared egress proxy</text>
-<text x="656" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >on VMs or a shared Kubernetes cluster</text>
+<text x="966" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">vm or kubernetes tenant</text>
+<text x="656" y="232" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >egress proxy, package mirrors, registry caches</text>
+<text x="656" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >internal DNS, certificate authority</text>
 <text x="656" y="276" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >admit declared consumers only</text>
 <rect x="1060" y="170" width="310" height="130" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
 <text x="1076" y="196" font-size="16" fill="#1e3a8a" font-weight="bold" text-anchor="start" >Receivers</text>
-<text x="1356" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic"></text>
+<text x="1356" y="196" font-size="12" fill="#1d4ed8" font-weight="normal" text-anchor="end" font-style="italic">vm or kubernetes tenant</text>
 <text x="1076" y="232" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >metrics, logs, audit events</text>
-<text x="1076" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >tools of your choice</text>
+<text x="1076" y="254" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >pushed by every project</text>
 <rect x="130" y="610" width="400" height="130" rx="10" fill="#ffedd5" stroke="#c2410c" stroke-width="2"/>
-<text x="146" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >vm tenant · exposed</text>
-<text x="146" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >instances behind a load balancer</text>
-<text x="146" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >through the entry point, or exposed directly</text>
+<text x="146" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >Public tenant · entry point</text>
+<text x="516" y="638" font-size="12" fill="#c2410c" font-weight="normal" text-anchor="end" font-style="italic">vm or kubernetes</text>
+<text x="146" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >reached through the entry point only</text>
+<text x="146" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >instances or a cluster ingress, one address</text>
 <rect x="580" y="610" width="440" height="130" rx="10" fill="#ffedd5" stroke="#c2410c" stroke-width="2"/>
-<text x="596" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >kubernetes tenant · exposed</text>
-<text x="596" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >a cluster created with Cluster API, its ingress</text>
-<text x="596" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >through the entry point, or exposed directly</text>
+<text x="596" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >Public tenant · direct</text>
+<text x="1006" y="638" font-size="12" fill="#c2410c" font-weight="normal" text-anchor="end" font-style="italic">vm or kubernetes</text>
+<text x="596" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >its own public address, no entry point</text>
+<text x="596" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >instances or a cluster ingress, one address</text>
 <rect x="1070" y="610" width="320" height="130" rx="10" fill="#ffedd5" stroke="#c2410c" stroke-width="2"/>
-<text x="1086" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >vm tenant · private</text>
+<text x="1086" y="638" font-size="16" fill="#7c2d12" font-weight="bold" text-anchor="start" >Private tenant</text>
+<text x="1376" y="638" font-size="12" fill="#c2410c" font-weight="normal" text-anchor="end" font-style="italic">vm</text>
 <text x="1086" y="672" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >a workload from its image</text>
 <text x="1086" y="694" font-size="13.5" fill="#1f2937" font-weight="normal" text-anchor="start" >no exposure, no egress</text>
 <line x1="540" y1="675" x2="570" y2="675" stroke="#dc2626" stroke-width="2.2" stroke-dasharray="4 3"/>
@@ -89,9 +92,8 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <ellipse cx="575" cy="826" rx="80" ry="22" fill="#ffffff" stroke="#6b7280" stroke-width="2"/>
 <text x="575" y="831" font-size="15" fill="#111827" font-weight="bold" text-anchor="middle" >Internet</text>
 <line x1="462" y1="742" x2="528" y2="802" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
-<line x1="548" y1="802" x2="482" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
 <line x1="688" y1="742" x2="622" y2="802" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
-<line x1="602" y1="802" x2="668" y2="742" stroke="#6b7280" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arg)"/>
-<text x="675" y="832" font-size="12.5" fill="#4b5563" font-weight="normal" text-anchor="start" >egress; dashed: direct exposure</text>
+<line x1="602" y1="802" x2="668" y2="742" stroke="#6b7280" stroke-width="2.2" marker-end="url(#arg)"/>
+<text x="675" y="832" font-size="12.5" fill="#4b5563" font-weight="normal" text-anchor="start" >egress of the public tenants; direct exposure</text>
 <text x="60" y="884" font-size="12.5" fill="#374151" font-weight="normal" text-anchor="start" >Arrows show who opens the connection; dashed: optional. ✕: no route between two tenants. Administration (bastions, Kubernetes API) on its own network. Routers, resources and security groups: docs/concepts/architecture.md</text>
 </svg>

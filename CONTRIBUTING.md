@@ -88,6 +88,38 @@ These rules come from [ADR-0005](docs/adr/0005-stacks-contracts-and-access.md):
 - **Documented code.** Every variable and output of a stack has a `description` (TFLint enforces it). Comments explain **why**, only where the code would surprise a reader.
 - **Formatting.** `tofu fmt`; two-space indentation.
 
+### Diagrams
+
+Mermaid in the pages, SVG rendered to PNG for the [overview pictures](docs/images); both use one palette, by role:
+
+| Role | Colour | Class |
+|---|---|---|
+| shared services (entry point, internal services, receivers, shared cluster) | light blue, blue border | `shared` |
+| tenants | orange | `tenant` |
+| publication plane · internal services plane · observability plane | blue · dark yellow · green border | `pub` · `int` · `obs` |
+| a plane in general (the planes stack, a hub) | grey | `plane` |
+| administration network | rose | `adm` |
+| provided by another stack, or outside the landing zone (the cloud) | white, dashed border | `other` |
+| actors and tools outside (administrators, clients, the Internet, your tools) | white | `outside` |
+| a group that is not a project (steps, a cluster) | white, light border | `group` |
+
+Copy the definitions a diagram uses:
+
+```text
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef pub fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef int fill:#fefce8,stroke:#ca8a04,color:#713f12
+    classDef obs fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef adm fill:#fff1f2,stroke:#9f1239,color:#881337
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+```
+
+In a sequence diagram, group the participants with `box` in the same colours (`rgb(219,234,254)` shared, `rgb(255,237,213)` tenant, `rgb(255,255,255)` outside). GitHub stretches a diagram narrower than the page to its width, with its text: give such a diagram `useMaxWidth: false` in its front matter (`config: flowchart: useMaxWidth: false`).
+
 ## Commits
 
 - One logical change per commit; a pull request is merged as one commit, by fast-forward.

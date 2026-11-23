@@ -26,20 +26,21 @@ flowchart TB
     IB -->|"node image"| CLOUD
     RUN -->|"run on"| CLOUD
 
-    classDef tool fill:#e5e7eb,stroke:#4b5563,color:#111827
-    classDef infra fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-    classDef vm fill:#ffedd5,stroke:#c2410c,color:#7c2d12
-    classDef k8s fill:#dcfce7,stroke:#15803d,color:#14532d
-    classDef test fill:#cffafe,stroke:#0e7490,color:#164e63
-    class TF,IB,CAPI tool
-    class CLOUD infra
-    class PL,EDGE,VMT vm
-    class SHS tool
-    class K8S k8s
-    class TEST test
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class TF,IB,CAPI,TEST outside
+    class CLOUD other
+    class PL plane
+    class EDGE,SHS shared
+    class VMT,K8S tenant
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class TOOLS,RUN group
 ```
 
-Who builds what: OpenTofu or Terraform deploys the planes, the infrastructure of every project and the VM workloads, Cluster API creates and maintains the Kubernetes cluster, image-builder provides its node image, and the tests probe every flow. The shared services (metrics receiver, internal services) are yours ([ADR-0003](../adr/0003-scope-and-boundary.md), D4). Grey: tools and your services; orange: VM workloads; green: Kubernetes; blue: the cloud; cyan: tests.
+Who builds what: OpenTofu or Terraform deploys the planes, the infrastructure of every project and the VM workloads, Cluster API creates and maintains the Kubernetes cluster, image-builder provides its node image, and the tests probe every flow. The shared services (metrics receiver, internal services) are yours ([ADR-0003](../adr/0003-scope-and-boundary.md), D4). Blue: shared services; orange: tenants; grey: planes; white: your tools and tests; dashed: the cloud, below the landing zone.
 
 One row per concern of the design: what is used, what was considered instead, and why. The reasoning is in the ADRs and in the [trade-offs](trade-offs.md); this page is the map.
 

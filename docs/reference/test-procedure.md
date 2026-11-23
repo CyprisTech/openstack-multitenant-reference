@@ -30,6 +30,17 @@ flowchart LR
         E1["plans"] --> E2["10. Teardown"] --> E3["leftover check"]
     end
     F --> S --> K --> E
+
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+    class P0,E1,E2,E3 outside
+    class F1,F5 plane
+    class F2,F3,S1,S2,S3,S4 shared
+    class F4,K7,K8,K9 tenant
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class F,S,K,E group
 ```
 
 | Project | Stacks | Role on the planes |

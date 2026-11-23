@@ -18,6 +18,11 @@ flowchart LR
     RA --- T["transit network<br/>192.0.2.0/29<br/>owned by A, shared with B"]
     T --- RB["router of B<br/>transit: 192.0.2.2<br/>route 10.21.0.0/24 via 192.0.2.1"]
     RB --> VB["VM of B<br/>10.24.0.8"]
+
+    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    class VA,RA,RB,VB tenant
+    class T other
 ```
 
 1. **A creates a small network** (a `/29`, no gateway, no DHCP) and shares it with B's project by RBAC (`access_as_shared`, target: B's project ID).

@@ -29,17 +29,21 @@ flowchart LR
     ADM(["Administrators"]) -->|"administration network"| API
     BS["bootstrap instance<br/>kind, Cluster API, CAPO"] -->|"creates"| CL
 
-    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
-    classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef int fill:#fffbeb,stroke:#d97706,color:#78350f
+    classDef obs fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
     classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
     classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
-    class IE,L4,WK,API,CP,BS tenant
-    class INI,MON,INT plane
+    class IE,L4,WK,API,CP,BS shared
+    class INI,INT int
+    class MON obs
     class CT,RCV,SVC other
     class ADM outside
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class CL group
 ```
 
-Arrows show who opens the connection. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Solid boxes: created by this stack; dashed boxes: provided by other stacks; grey: planes.
+Arrows show who opens the connection. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Solid boxes: created by this stack; dashed boxes: provided by other stacks; the planes in their colour (publication blue, internal services amber, observability green).
 
 ## Prerequisites
 

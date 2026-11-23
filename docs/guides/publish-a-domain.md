@@ -27,6 +27,15 @@ The entry point routes each domain by SNI to the tenant that serves it, without 
        TF --> M["Nova metadata<br/>one route item per domain"]
        M -->|"every 10 s"| R["traefik-routes timer<br/>on each instance"]
        R --> D["/etc/traefik/dynamic/routes.yml<br/>reloaded by Traefik"]
+
+       classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+       classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+       classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+       classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
+       class O tenant
+       class Q,S outside
+       class F other
+       class TF,M,R,D shared
    ```
 
    The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route.

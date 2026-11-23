@@ -26,27 +26,38 @@ flowchart LR
     BS["bootstrap instance<br/>kind, Cluster API, CAPO"] -->|"creates"| CL
     BS --> OS(["OpenStack APIs"])
 
+
     classDef shared fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-    classDef plane fill:#f3f4f6,stroke:#4b5563,color:#111827
+    classDef pub fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef int fill:#fffbeb,stroke:#d97706,color:#78350f
+    classDef obs fill:#ecfdf5,stroke:#059669,color:#064e3b
     classDef tenant fill:#ffedd5,stroke:#c2410c,color:#7c2d12
     classDef outside fill:#ffffff,stroke:#6b7280,color:#111827
     classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
     class IN,WK,API,CP,BS tenant
-    class PUB,MON,INT plane
+    class PUB pub
+    class INT int
+    class MON obs
     class EP,RCV,SVC other
     class ADM,OS outside
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class CL group
 ```
 
-Arrows show who opens the connection. The cluster is published through the entry point; with `exposure = "public"`, the ingress gets a public floating IP of the egress network instead, and the cluster does not join the publication plane. The internal services plane is optional: without it, the cluster gets no certificates from an internal authority and `admin_network` is required. On the internal services plane it is only a client; a cluster that offers services to the tenants is [another cluster](../../shared/kubernetes/README.md), not this one with a second ingress. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Terraform creates the network, its routers, the bootstrap instance and the addresses of the entries; the bootstrap instance creates the cluster, which then manages itself. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
+Arrows show who opens the connection. The cluster is published through the entry point; with `exposure = "public"`, the ingress gets a public floating IP of the egress network instead, and the cluster does not join the publication plane. The internal services plane is optional: without it, the cluster gets no certificates from an internal authority and `admin_network` is required. On the internal services plane it is only a client; a cluster that offers services to the tenants is [another cluster](../../shared/kubernetes/README.md), not this one with a second ingress. The internal services plane appears twice: on the left what comes in, on the right what the cluster calls. Terraform creates the network, its routers, the bootstrap instance and the addresses of the entries; the bootstrap instance creates the cluster, which then manages itself. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; the planes in their colour (publication blue, internal services amber, observability green).
 
 ## How the cluster is created
 
 ```mermaid
 sequenceDiagram
+    box rgb(255,255,255) Operator and cloud
     participant TF as OpenTofu (stack tenants/kubernetes)
     participant OS as OpenStack APIs
+    end
+    box rgb(255,237,213) Tenant project
     participant B as Bootstrap instance<br/>kind + Cluster API + CAPO + CAAPH
     participant W as Workload cluster
+    end
     TF->>OS: network, routers to the planes, server groups, ingress address, bootstrap instance
     Note over B: an administrator copies the cluster credential (clouds.yaml)
     B->>OS: CAPO: API load balancer (floating IP on the administration network)

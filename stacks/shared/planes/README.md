@@ -37,6 +37,8 @@ flowchart LR
     classDef other fill:#ffffff,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
     class P1,P2,P3 plane
     class R1,R2,R3 other
+    classDef group fill:#ffffff,stroke:#d1d5db,color:#374151
+    class NAT,RT,HUB group
 ```
 
 - **Operator plane, with NAT.** The stack adopts the operator's external network by name and creates nothing. An attached router joins with its gateway port: source NAT, floating IPs.
@@ -50,6 +52,11 @@ Lines show attachments, not connections. Dashed boxes: the routers of the stacks
 On a hub plane, attached routers never route to each other directly: every route goes through the transit router, the hub-and-spoke a transit gateway provides on other clouds.
 
 ```mermaid
+---
+config:
+  flowchart:
+    useMaxWidth: false
+---
 flowchart LR
     TR(("transit router<br/>hub project, first<br/>address of the plane"))
     S1["entry point router<br/>role shared"] --- TR
