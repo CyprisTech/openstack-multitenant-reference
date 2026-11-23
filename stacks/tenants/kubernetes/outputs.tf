@@ -31,6 +31,6 @@ output "scripts" {
 }
 
 output "published_domains" {
-  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh). Empty with exposure = \"public\"."
+  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = \"public\"."
   value       = local.public ? {} : { for d in var.cluster.domains : d => { backends = ["${module.cluster.entries.public}:443"] } }
 }

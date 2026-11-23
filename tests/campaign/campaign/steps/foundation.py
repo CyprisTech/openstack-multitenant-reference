@@ -180,10 +180,28 @@ def transit(ctx, report):
     ctx.runner.echo(f"transit: {ctx.value('planes', 'transit')}")
 
 
+# The tenant stacks with a published_domains output, in the order of their requests.
+PUBLISHING = ("vm", "published")
+
+
+def request_domains(ctx):
+    """The merge request of each deployed tenant: its domains written into the reviewed input of
+    the entry point (ADR-0016, D5); the campaign plays the reviewer."""
+    for key in PUBLISHING:
+        if ctx.has(key) and ctx.tofu.deployed(ctx.stack(key)):
+            cmd = ["scripts/request-domains.sh", ctx.stack(key), "--tool", ctx.tool]
+            result = ctx.runner.run(cmd, cwd=ctx.root, check=False)
+            if result.stdout.strip():
+                ctx.runner.echo(result.stdout.strip())
+            if result.returncode != 0:
+                raise StepFailed(f"request-domains.sh failed for {key}:\n{result.stderr.strip()}")
+
+
 @step("publish")
 def publish(ctx, report, load=None):
-    """The domains of the tenants on the entry point. After the first publication, new domains
-    are published under load: no request may fail."""
+    """The domains of the tenants on the entry point: each tenant's request, then the publication.
+    After the first publication, new domains are published under load: no request may fail."""
+    request_domains(ctx)
     marker = ctx.work / "published-once"
     if load is None:
         load = marker.exists() and ctx.options.get("publish", {}).get("load", True)

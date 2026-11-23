@@ -3,17 +3,26 @@
 The entry point routes each domain by SNI to the tenant that serves it, without decrypting the traffic: the tenant keeps its certificates, and the client address reaches it in a PROXY protocol v2 header.
 
 1. **Declare the domain in the tenant**: `domains` of a [`vm`](../../stacks/tenants/vm/README.md) tenant, `cluster.domains` of a [`kubernetes`](../../stacks/tenants/kubernetes/README.md) tenant. Apply the tenant: its `published_domains` output now lists the domain and the tenant's service address ([ADR-0006](../adr/0006-exposure.md)).
-2. **Publish**:
+2. **Ask for the route**: the domains of the entry point are a reviewed input of its stack, the file `stacks/shared/entry-point/domains.auto.tfvars.json` of your deployment repository ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D5). Write the tenant's domains into it, then commit it and open a merge request:
+
+   ```bash
+   scripts/request-domains.sh stacks/tenants/<tenant>
+   ```
+
+   The script reads the `published_domains` output of that tenant only and merges it into the file: a new domain is added, a domain already there takes the tenant's new service address. The reviewer sees which domain goes to which address; the plan of the entry point shows the same change. To withdraw a domain, remove its entry from the file, in a merge request too.
+3. **Publish**, once the merge request is merged:
 
    ```bash
    OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
    ```
 
-   The script gathers the `published_domains` output of every tenant and applies the entry point: the routes are metadata items of its instances, updated in place, which a timer on each instance renders into Traefik's configuration within seconds. No instance is replaced, no request is lost. It stops if a deployed tenant's state lacks the output (apply the tenant first) and refuses to remove every published domain (`--allow-empty` to force).
+   The script plans the entry point and, when the plan is not empty, applies it: the routes are metadata items of its instances, updated in place, which a timer on each instance renders into Traefik's configuration within seconds. No instance is replaced, no request is lost. It reads no state of the tenants, and refuses to remove every published domain at once (`--allow-empty` to force).
 
    ```mermaid
    flowchart LR
-       O["published_domains<br/>of each tenant"] --> S["scripts/publish-domains.sh"]
+       O["published_domains<br/>of a tenant"] --> Q["scripts/request-domains.sh"]
+       Q --> F["domains.auto.tfvars.json<br/>merge request, reviewed"]
+       F --> S["scripts/publish-domains.sh"]
        S --> TF["apply shared/entry-point<br/>metadata updated in place"]
        TF --> M["Nova metadata<br/>one route item per domain"]
        M -->|"every 10 s"| R["traefik-routes timer<br/>on each instance"]
@@ -21,8 +30,8 @@ The entry point routes each domain by SNI to the tenant that serves it, without 
    ```
 
    The timer leaves the routes untouched when the metadata service does not answer, or answers fewer routes than announced: an outage never removes a route.
-3. **Point the domain to the entry point**: an A record on its public address (`tofu output load_balancer` in `stacks/shared/entry-point`), with a short TTL.
-4. **Check**: `curl --resolve <domain>:443:<public IP> https://<domain>/` reaches the tenant, and the [isolation test](check-isolation.md) still passes.
+4. **Point the domain to the entry point**: an A record on its public address (`tofu output load_balancer` in `stacks/shared/entry-point`), with a short TTL.
+5. **Check**: `curl --resolve <domain>:443:<public IP> https://<domain>/` reaches the tenant, and the [isolation test](check-isolation.md) still passes.
 
 The tenant obtains the domain's certificate itself, with an ACME DNS-01 challenge on its zone ([ADR-0006](../adr/0006-exposure.md), D5).
 

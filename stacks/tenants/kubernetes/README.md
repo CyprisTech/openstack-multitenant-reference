@@ -110,7 +110,7 @@ The script can be run again after a failure: each step skips what already exists
 
 ### Publish the domains
 
-Publish the ingress through the entry point with [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh): the `published_domains` output of this stack sends the domains of `cluster.domains` to the ingress address, known before the cluster exists.
+Publish the ingress through the entry point ([publish a domain](../../../docs/guides/publish-a-domain.md)): [`scripts/request-domains.sh`](../../../scripts/request-domains.sh) writes the `published_domains` output of this stack into the entry point's domains file, then [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh) applies it. The output sends the domains of `cluster.domains` to the ingress address, known before the cluster exists.
 
 The ingress Service requests this address (`loadBalancerIP`) and keeps it when it is deleted (`keep-floatingip`): recreating the Service or the whole cluster does not change the published route. If the requested address is not available, the cloud controller manager silently allocates another one; `kubectl -n traefik get svc traefik` must show the address of `tofu output service_address`.
 
@@ -239,7 +239,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | edge\_sources | Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = "public". |
 | internal\_sources | Addresses the cluster reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. Empty when the cluster does not join the plane. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
-| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/publish-domains.sh). Empty with exposure = "public". |
+| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = "public". |
 | scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
 | service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = "public". |
 <!-- END_TF_DOCS -->

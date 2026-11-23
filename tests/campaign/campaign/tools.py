@@ -92,6 +92,11 @@ class Tofu:
         cmd = self._cmd(stack, "plan", "-detailed-exitcode", "-input=false", "-no-color")
         return self.runner.run(cmd, cwd=self.root, check=False).returncode
 
+    def deployed(self, stack):
+        """Whether the stack's state holds resources (a dry run lists the commands of every stack)."""
+        result = self.runner.run(self._cmd(stack, "state", "list"), cwd=self.root, check=False, quiet=True)
+        return self.runner.dry_run or (result.returncode == 0 and bool(result.stdout.strip()))
+
     def output(self, stack, name):
         result = self.runner.run(self._cmd(stack, "output", "-json", name), cwd=self.root, quiet=True)
         return json.loads(result.stdout) if result.stdout.strip() else None

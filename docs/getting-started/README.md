@@ -101,6 +101,7 @@ The hub discovers the address of each attached router and routes to it. Until th
 ## 6. Publish the domains
 
 ```bash
+scripts/request-domains.sh stacks/tenants/vm    # writes the entry point's domains file: review and commit it
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 

@@ -11,9 +11,10 @@ How a tested release reaches its users without being rebuilt, and how opening it
 ## A public service
 
 1. **Deploy the release** in the production tenant, with the promoted digest. Nothing points to it yet.
-2. **Check it in place, before any DNS record.** Add its domain to the tenant (`domains` of a `vm` tenant, `cluster.domains` of a `kubernetes` tenant), apply the tenant, then publish:
+2. **Check it in place, before any DNS record.** Add its domain to the tenant (`domains` of a `vm` tenant, `cluster.domains` of a `kubernetes` tenant), apply the tenant, ask for the route ([publish a domain](publish-a-domain.md)), then, once that change is merged, publish:
 
    ```bash
+   scripts/request-domains.sh stacks/tenants/<tenant>   # the change to review
    OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
    curl --resolve <domain>:443:<entry point address> https://<domain>/
    ```
@@ -32,7 +33,8 @@ Each step is non-interactive, so a pipeline can run it after review:
 | Change, reviewed in a merge request | Job, after the merge |
 |---|---|
 | the digest of the release in the tenant's deployment | your deployment tool (CI job, Flux, Argo CD) |
-| the domain in the tenant's inputs | `tofu apply` of the tenant, then `scripts/publish-domains.sh` |
+| the domain in the tenant's inputs | `tofu apply` of the tenant |
+| the route, in the entry point's domains file (`scripts/request-domains.sh`) | `scripts/publish-domains.sh` |
 | the DNS record, or the consumers | your DNS provider; `tofu apply` of the shared cluster and its manifests |
 
-Show the plan in the merge request (`tofu plan` of the tenant and of the entry point): the reviewer sees exactly which routes appear. The pipeline's credentials are those of each project, kept in its secret store, never in the repository. `publish-domains.sh` refuses to withdraw every domain at once (`--allow-empty` forces it), which protects production from an empty output after a failed apply.
+Show the plan in the merge request (`tofu plan` of the tenant and of the entry point): the reviewer sees exactly which routes appear. The pipeline's credentials are those of each project, kept in its secret store, never in the repository. `publish-domains.sh` refuses to withdraw every domain at once (`--allow-empty` forces it), which protects production from an emptied file.

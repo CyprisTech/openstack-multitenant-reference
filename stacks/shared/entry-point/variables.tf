@@ -118,8 +118,9 @@ variable "domains" {
     - proxy_protocol: send PROXY protocol v2 to the backends; they must be configured to accept it.
     - max_connections: simultaneous connections allowed per client address.
     Delivered to the Traefik instances through their metadata, updated in place: a change takes
-    effect in seconds, without replacing an instance. scripts/publish-domains.sh fills it from the
-    published_domains outputs of the tenants.
+    effect in seconds, without replacing an instance. A reviewed input (ADR-0016, D5): the file
+    domains.auto.tfvars.json of your deployment repository, written for each tenant from its
+    published_domains output by scripts/request-domains.sh, applied by scripts/publish-domains.sh.
   EOT
   type = map(object({
     backends        = list(string)

@@ -27,7 +27,7 @@ The order of creation, as in the [test procedure](../reference/test-procedure.md
 | 5 | Kubernetes clusters (`create-cluster.sh`), shared cluster | their stacks |
 | 6 | open the internal services to their consumers (`allowed_sources`, `consumers`), in place | the tenants' sources |
 | 7 | `shared/planes` again (hub planes) | the tenants' attachments, for the transit routes |
-| 8 | domain publication (`scripts/publish-domains.sh`) | the tenants' service addresses |
+| 8 | domain publication (`scripts/publish-domains.sh`), from the domains file of your deployment repository | the tenants' service addresses, unchanged when the stacks keep their addresses |
 | 9 | the [isolation test](check-isolation.md) | everything above |
 
 Rebuild only what was lost, from the first lost step: the stacks after it plan no change if their inputs did not change, or update in place when an address did (a new service address, new sources).

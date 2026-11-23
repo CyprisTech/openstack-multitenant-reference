@@ -222,7 +222,10 @@ $ tofu -chdir=stacks/shared/planes output -json transit     # here after section
 
 ### Domain publication
 
+Each tenant asks for its domains, the change a merge request would carry, then the entry point is applied ([publish a domain](../guides/publish-a-domain.md)):
+
 ```bash
+scripts/request-domains.sh stacks/tenants/vm
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 
@@ -230,12 +233,16 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 |---|---|
 | "domains published"; the apply changes the two Traefik instances in place (`0 added, 2 changed, 0 destroyed`) | an instance replaced means its static configuration changed: that is a separate change |
 | the routes on each instance, within seconds | `cat /etc/traefik/dynamic/routes.yml` (through the bastion); `journalctl -u traefik-routes` | the timer leaves the routes untouched when the metadata service does not answer or answers fewer routes than announced |
-| it stops: "deployed but its state has no published_domains output" | apply that tenant, then run it again |
-| it stops: "refusing to remove them all" | a tenant is missing (not deployed, wrong directory); `--allow-empty` only to withdraw every domain on purpose |
+| `request-domains.sh` stops: "has no published_domains output" | apply that tenant, then run it again |
+| it stops: "refusing to remove them all" | the domains file lists no domain; `--allow-empty` only to withdraw every domain on purpose |
 
 ```console
+$ scripts/request-domains.sh stacks/tenants/vm
+site-a.example.org: added -> ["10.21.0.5:443"]
+site-b.example.org: added -> ["10.21.0.5:443"]
+written to stacks/shared/entry-point/domains.auto.tfvars.json: commit it and open a merge request
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
-domains from vm: site-a.example.org, site-b.example.org
+domains added: site-a.example.org, site-b.example.org
 ...
 Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
 domains published: site-a.example.org, site-b.example.org
@@ -331,9 +338,11 @@ tofu -chdir=tests/fixtures/internal-service apply && tofu -chdir=tests/fixtures/
 Section 5 again: the routes of the published cluster on the transit routers, then its domain on the entry point. The campaign measures the publication under load here: a client sends two requests per second to a domain already published while the new one is added.
 
 ```console
+$ scripts/request-domains.sh stacks/tenants/kubernetes
+apps.published.example.org: added -> ["10.24.0.7:443"]
+written to stacks/shared/entry-point/domains.auto.tfvars.json: commit it and open a merge request
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
-domains from kubernetes: apps.published.example.org
-domains from vm: site-a.example.org, site-b.example.org
+domains added: apps.published.example.org
 ...
 Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
 domains published: apps.published.example.org, site-a.example.org, site-b.example.org

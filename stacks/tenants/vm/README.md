@@ -54,7 +54,7 @@ The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. M
 
 ## Publishing the domains on the entry point
 
-The `published_domains` output maps each domain to the service address, in the shape of the `domains` input of the entry point. [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh) gathers it from every tenant and applies the entry point. With `exposure = "public"`, the output is empty: point the domains to the `service_address` output instead.
+The `published_domains` output maps each domain to the service address, in the shape of the `domains` input of the entry point. [`scripts/request-domains.sh`](../../../scripts/request-domains.sh) writes it into the entry point's domains file, the change to review; [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh) applies the entry point once it is merged ([publish a domain](../../../docs/guides/publish-a-domain.md)). With `exposure = "public"`, the output is empty: point the domains to the `service_address` output instead.
 
 ## Requirements
 
@@ -142,6 +142,6 @@ ssh -J ops@<bastion floating IP> ops@<web instance address>
 | edge\_sources | Addresses of the entry point admitted on the service address. |
 | instances | Web instances and their private addresses. |
 | internal\_sources | Addresses the tenant reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on a plane with NAT, the tenant range on a plane without NAT. Empty when the tenant does not join the plane. |
-| published\_domains | Domains to publish through the entry point and their service address, for its domains input (scripts/publish-domains.sh). Empty with exposure = "public". |
+| published\_domains | Domains to publish through the entry point and their service address, for its domains input (scripts/request-domains.sh). Empty with exposure = "public". |
 | service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its load balancer, or its only instance. On publication through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = "public". |
 <!-- END_TF_DOCS -->

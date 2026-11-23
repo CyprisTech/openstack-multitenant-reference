@@ -175,6 +175,31 @@ class PublishTest(unittest.TestCase):
         with self.assertRaisesRegex(StepFailed, "published_domains"):
             load()["publish"](ctx, StepReport("publish"))
 
+    def test_each_deployed_tenant_requests_its_domains_before_the_publication(self):
+        def extra(cmd):
+            return Result(0, "module.web\n") if cmd[2:4] == ["state", "list"] else None
+
+        ctx = context(lambda cmd: answer_outputs(cmd, extra))
+        load()["publish"](ctx, StepReport("publish"))
+        scripts = [c for c, _ in ctx.runner.commands if c[0].startswith("scripts/")]
+        self.assertEqual(scripts, [["scripts/request-domains.sh", "stacks/tenants/vm", "--tool", "tofu"],
+                                   ["scripts/publish-domains.sh", "--tool", "tofu"]])
+
+    def test_a_tenant_not_deployed_asks_for_nothing(self):
+        ctx = context()
+        load()["publish"](ctx, StepReport("publish"))
+        self.assertNotIn("scripts/request-domains.sh", [c[0] for c, _ in ctx.runner.commands])
+
+    def test_a_failed_request_fails_the_step(self):
+        def extra(cmd):
+            if cmd[2:4] == ["state", "list"]:
+                return Result(0, "module.web\n")
+            return Result(1, stderr="vm has no published_domains output") if cmd[0] == "scripts/request-domains.sh" else None
+
+        ctx = context(lambda cmd: answer_outputs(cmd, extra))
+        with self.assertRaisesRegex(StepFailed, "request-domains.sh failed for vm"):
+            load()["publish"](ctx, StepReport("publish"))
+
 
 class PrepTest(unittest.TestCase):
     def test_ssh_configuration_is_private(self):

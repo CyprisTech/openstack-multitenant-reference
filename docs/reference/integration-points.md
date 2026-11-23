@@ -49,7 +49,7 @@ The design is [ADR-0006](../adr/0006-exposure.md).
 |---|---|
 | Plane | `publication` |
 | Direction | The entry point connects to each tenant's service address |
-| Interface | Each tenant stack outputs `published_domains`: `{ "<domain>" = { backends = ["<service address>:443"] } }`; `scripts/publish-domains.sh` gathers them and applies the entry point, whose instances read their routes from their metadata |
+| Interface | Each tenant stack outputs `published_domains`: `{ "<domain>" = { backends = ["<service address>:443"] } }`; `scripts/request-domains.sh` writes them into the entry point's domains file, a reviewed input ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D5); `scripts/publish-domains.sh` applies the entry point, whose instances read their routes from their metadata |
 | What reaches the tenant | The TLS stream untouched (SNI passthrough), preceded by a PROXY protocol v2 header with the client address |
 | Admitted | The service address accepts connections only from the entry point's addresses on the publication plane (output `publication_sources`, input `edge_sources` of the tenants) |
 | Tenant provides | A service address per domain (its load balancer, or its only instance), and backends that terminate TLS with certificates obtained by ACME DNS-01 on its own zone, and accept PROXY protocol v2 |

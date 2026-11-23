@@ -4,7 +4,7 @@ output "service_address" {
 }
 
 output "published_domains" {
-  description = "Domains to publish through the entry point and their service address, for its domains input (scripts/publish-domains.sh). Empty with exposure = \"public\"."
+  description = "Domains to publish through the entry point and their service address, for its domains input (scripts/request-domains.sh). Empty with exposure = \"public\"."
   value       = local.public ? {} : { for d in var.domains : d => { backends = [local.service_address] } }
 }
 

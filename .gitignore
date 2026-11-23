@@ -12,7 +12,8 @@
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
-# Generated inputs: domains (scripts/publish-domains.sh), plane_attachment and others
+# Inputs written by the tools: plane_attachment and others, and the domains of the entry point
+# (scripts/request-domains.sh), which your deployment repository keeps and reviews
 *.auto.tfvars.json
 
 # Local overrides (for example a module source pointing to a local checkout)
@@ -36,8 +37,6 @@ __pycache__/
 # Node image build: local variables and work directory
 images/kubernetes-node/build.json
 images/kubernetes-node/.work/
-# Interrupted domain publication (scripts/publish-domains.sh)
-stacks/shared/entry-point/.domains-publication-pending
 # Test campaign: local configuration, outputs and recordings
 tests/campaign/work/
 tests/campaign/campaign.local.toml

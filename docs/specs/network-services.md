@@ -24,7 +24,7 @@ Out of scope: running a DNS service, time servers, a relay or package repositori
 
 ## Design
 
-1. **Routes of the entry point**: an input `routes` of `stacks/shared/entry-point` (each domain and its service address), kept in the deployment repository. `scripts/publish-domains.sh` applies that input instead of reading the tenants' states; their delivery as instance metadata is unchanged. Each tenant keeps its `published_domains` output, to fill in the change that asks for a route.
+1. **Routes of the entry point**: the `domains` input of `stacks/shared/entry-point` (each domain and its service address), its file `domains.auto.tfvars.json` kept in the deployment repository. `scripts/request-domains.sh` writes the domains of one tenant into it, from that tenant's `published_domains` output: the change of the merge request. `scripts/publish-domains.sh` plans and applies the entry point from that file instead of reading the tenants' states; their delivery as instance metadata is unchanged.
 2. **Resolvers and time**: `dns_nameservers` stays an input of every stack, empty by default. A tenant's resolvers come from one of three sources:
 
    | Source | `dns_nameservers` | For |
