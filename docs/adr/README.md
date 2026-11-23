@@ -14,7 +14,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | [0006](0006-exposure.md) | Exposure of the tenants | Accepted; supersedes 0001 D2 for publication and D8 for the delivery of routes |
 | [0007](0007-monitoring.md) | Observability as a push integration point | Accepted; supersedes 0001 D2 and 0002 D5 for monitoring |
 | [0008](0008-tenant-certificates.md) | Certificates of the tenants | Accepted (implemented in v0.4.0); refines 0006 D5 |
-| [0009](0009-kubernetes-lifecycle.md) | Kubernetes lifecycle, what the landing zone owns | Accepted; refines 0003 D3 and D4 |
+| [0009](0009-kubernetes-lifecycle.md) | Kubernetes lifecycle, what the landing zone owns | Accepted; refines 0003 D3 and D4; D1 superseded in part by 0017 (administration path), once accepted |
 | [0010](0010-kubernetes-shared-services.md) | A Kubernetes cluster for shared services | Accepted; refines 0002, 0006, 0008 |
 | [0011](0011-environments.md) | Environments: development, qualification, production | Accepted; refines 0003 and 0005 |
 | [0012](0012-resilience-scope.md) | Resilience, what the reference places and what it tests | Accepted; refines 0001 D9, 0003 D4, 0004 D5 |
@@ -22,6 +22,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | [0014](0014-profiles.md) | Two profiles, private cloud and public cloud | Accepted; refines 0003, 0004 D1, 0005, 0012 |
 | [0015](0015-ipv6.md) | IPv4 until v1.0, IPv6 as one family per deployment afterwards | Proposed; refines 0003 D4, 0004 |
 | [0016](0016-network-services-and-edge-by-level.md) | Network services and the edge, by level | Proposed; refines 0003 D4, 0004, 0006; supersedes 0006 D3 for the source of the routes, once accepted |
+| [0017](0017-upgrades-between-releases.md) | Upgrades between releases | Proposed; refines 0002, 0009; supersedes 0009 D1 for the administration path, once accepted |
 
 ## Writing an ADR
 
