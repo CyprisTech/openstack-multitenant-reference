@@ -10,4 +10,4 @@ Order matters: what depends on another stack goes first.
 6. **Planes** (hub planes): `tofu destroy` in `stacks/shared/planes`, last — Neutron refuses to remove a plane while a router of another project is still on it.
 7. **Check that nothing is left** in each project: servers, volumes, load balancers, floating IPs, routers, networks, ports, security groups, server groups, DNS records. Delete the Kubernetes node image when you no longer need it.
 
-Measured durations: 4 to 7 minutes for a Kubernetes cluster, about 7 for the stacks ([test procedure](../reference/test-procedure.md#10-teardown)).
+Measured duration: about 9 minutes for the nine stacks of the test scenario, the published cluster included, then 1 min 30 for the leftover check ([test procedure](../reference/test-procedure.md#overview), 2026-11-21).

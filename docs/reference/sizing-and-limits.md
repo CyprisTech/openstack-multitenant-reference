@@ -18,6 +18,7 @@ What the test campaigns of 2026-11-19 ran, project by project, with the flavors 
 | shared services: internal service, ACME authority (tests) | 2 | 2 | 2 GiB | 0 | 1 on the internal services plane with NAT |
 | bastions (one per stack, optional) | 1 each | 1 each | 1 GiB each | 0 | 1 each, administration |
 | **Total, both clusters, without bastions and bootstrap** | **16** | **25** | **41 GiB** | **7** | **up to 10** |
+| **Peak of a test campaign** (2026-11-21, measured on the test cloud during the upgrade of the shared cluster: one cluster at a time, with the bastions, a bootstrap instance and the extra machine of the rolling upgrade) | **20** | **29** | **43 GiB** | | |
 
 **Load balancers cost instances too.** With the `ACTIVE_STANDBY` topology, each load balancer runs two amphorae, in the cloud operator's Octavia project and on the same hypervisors: 14 more instances for the 7 load balancers above, of the operator's amphora flavor. On a small cloud they are what runs out first: they caused some of the "no valid host" failures seen in the tests.
 

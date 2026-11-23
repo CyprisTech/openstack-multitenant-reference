@@ -8,44 +8,69 @@ Run everything from a machine that is an administration source of the stacks (`a
 
 ## Overview
 
+The sections follow the order of the campaign. The test cloud holds one Kubernetes cluster at a time, so the shared cluster (section 6) is created, tested and deleted before the published cluster (section 7); on a cloud large enough for both, section 6 may run after section 9.
+
 ```mermaid
 flowchart LR
-    P["0. Projects<br/>and prerequisites"] --> H["1. Planes"]
-    H --> C["2. Shared services<br/>(internal service closed)"]
-    C --> E["3. Entry point"]
-    E --> T["4. vm · isolated<br/>kubernetes"]
-    T --> K["5. Published cluster"]
-    K --> I["6. Open the<br/>internal service"]
-    I --> R["7. Planes again<br/>(transit routes)"]
-    R --> PB["8. Publish"]
-    PB --> A["9. Acceptance"]
-    A -.-> D["10. Teardown"]
-    A -.-> SC["11. Shared cluster"]
+    P0["0. Projects<br/>and prerequisites"] --> F
+    subgraph F["foundation"]
+        direction TB
+        F1["1. Planes"] --> F2["2. Shared services<br/>(internal service closed)"] --> F3["3. Entry point"] --> F4["4. vm · isolated"] --> F5["5. Planes again,<br/>publication"]
+    end
+    subgraph S["6. shared cluster"]
+        direction TB
+        S1["stack and cluster"] --> S2["acceptance, consumer,<br/>volume"] --> S3["rotation, upgrade"] --> S4["deletion"]
+    end
+    subgraph K["published cluster"]
+        direction TB
+        K7["7. stack and cluster"] --> K8["8. internal service open,<br/>planes, publication<br/>(under load)"] --> K9["9. Acceptance, direct<br/>exposure, hostile route"]
+    end
+    subgraph E["end"]
+        direction TB
+        E1["plans"] --> E2["10. Teardown"] --> E3["leftover check"]
+    end
+    F --> S --> K --> E
 ```
 
 | Project | Stacks | Role on the planes |
 |---|---|---|
 | hub (interface mode) | `shared/planes` | owns the planes and their transit routers; no instance. With operator planes, `shared/planes` runs with the shared services' credentials and only adopts them |
 | shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service`, `tests/fixtures/acme` | `shared` on `observability` (receiver), `shared` on `internal` (internal service, ACME authority). On hub planes, one attachment per project and plane: the internal service and the ACME authority then need a project each |
-| shared cluster | `shared/kubernetes` ([section 11](#11-shared-cluster)) | `shared` on `internal`, `tenant` on `observability` |
+| shared cluster | `shared/kubernetes` ([section 6](#6-shared-cluster)) | `shared` on `internal`, `tenant` on `observability` |
 | entry point | `shared/entry-point` | `shared` on `publication`, `tenant` on `observability` |
 | one per tenant | `tenants/vm`, `tenants/isolated`, `tenants/kubernetes` | `tenant` |
 
-| Step | Measured (2026-11-02, interface mode) |
-|---|---|
-| 1. Planes | 16 s |
-| 2. Receiver and ACME authority | 1 min 15 s each |
-| 3. Entry point | 3 to 10 min (Octavia) |
-| 4. `vm` (with its load balancer), `isolated`, `kubernetes` | 1 to 4 min each |
-| 5. Cluster (`create-cluster.sh`, add-ons included) | 18 min |
-| 6. Opening the internal service | 1 min (creation, then in place) |
-| 7. Planes again | 7 s |
-| 8. Domain publication | 19 s, the routes answering 13 s later |
-| 9. Acceptance | 3 min |
-| **Total, steps 1 to 9** | **about 45 minutes** without incident |
-| 10. Teardown | 4 to 7 min for the cluster, about 7 for the stacks ([test results](../concepts/test-results.md), 2026-11-05 and 2026-11-06) |
+The steps of the campaign, in the order it runs them, with the section of each and its duration measured on 2026-11-21 (interface mode, from the `report.json` of the run):
 
-Expected results are short extracts of the cycle of 2026-11-02 (interface mode); addresses outside the private ranges of the example are documentation addresses.
+| Campaign step | Section | Measured |
+|---|---|---|
+| `prep` | 0, the credentials of the clusters, the SSH configuration | 0 s |
+| `planes` | 1 | 20 s |
+| `receiver`, `acme`, `internal` | 2 | 1 min 20, 1 min, 50 s |
+| `edge` | 3 | 3 min (2 min 30 to 3 min 20 over the five campaigns of 2026-11-20 and 21) |
+| `web`, `isolated` | 4 | 3 min, 1 min 40 |
+| `transit`, `publish` | 5 (first publication) | 8 s, 4 s |
+| `k8s-shared`, `transit` | 6.1, the stack of the shared cluster, then its routes | 1 min, 6 s |
+| `cluster-shared` | 6.1, `create-cluster.sh` | 13 min |
+| `tour-shared`, `accept-shared` | 6.3 | 4 s, 2 min 40 |
+| `consumer`, `volume` | 6.4, 6.5 | 50 s, 25 s |
+| `rotate` | 6.6, the credential | 5 min |
+| `upgrade` | 6.6, the Kubernetes upgrade under load | 18 min |
+| `shared-down` | 6.7 | 6 min |
+| `k8s` | 7, the stack of the published cluster: its network, routers and bootstrap instance | 1 min 15 |
+| `cluster` | 7, `create-cluster.sh`, from the kind cluster to the cluster managing itself, add-ons and certificates included | 9 min |
+| `internal-open`, `transit` | 8 | 20 s, 8 s |
+| `tour`, `publish` | the [Kubernetes tour](../guides/kubernetes-tour.md) regenerated; 8, the publication under load | 1 s, 8 s |
+| `accept` | 9 | 3 min 10 |
+| `direct`, `direct-k8s` | 9, direct exposure | 2 min 40, 1 min 20 |
+| `hostile` | 9, hostile route (interface mode) | 40 s |
+| `plans` | every plan empty | 25 s |
+| `teardown`, `leftovers` | 10 | 8 min 40, 1 min 30 |
+| **Total** | | **about 1 h 30** without incident |
+
+That is per plane mode: about 3 h for a release, which runs both. The spoofed source (section 9) is not run by the campaign: it changes the port of a tenant by hand.
+
+Expected results are extracts of the campaign of 2026-11-21 (interface mode), and of the cycle of 2026-11-02 where it shows more; addresses outside the private ranges of the example are documentation addresses.
 
 ### Inputs between stacks
 
@@ -114,7 +139,7 @@ tofu output -json certificates | jq '{certificates: .published}' > ../../../stac
 tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
 ```
 
-The **internal service** ([`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)) is created at the same step, **closed**: with an empty `allowed_sources` it admits nobody, as a real internal service exists before its consumers. It is opened at step 6.
+The **internal service** ([`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)) is created at the same step, **closed**: with an empty `allowed_sources` it admits nobody, as a real internal service exists before its consumers. It is opened in [section 8](#8-internal-service-open-planes-and-publication).
 
 ```bash
 cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -detailed-exitcode
@@ -143,108 +168,59 @@ $ tofu output -json publication_sources
 
 DNS records are the slowest resources: seconds normally, several minutes when Designate is congested. A record created after an apply timeout must be imported ([pitfalls](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/pitfalls.md#dns)).
 
-## 4. Tenants
+## 4. Tenants `vm` and `isolated`
 
 Independent of each other; run them in parallel.
 
 ```bash
-for s in stacks/tenants/vm stacks/tenants/isolated stacks/tenants/kubernetes; do
-  (cd $s && tofu init && tofu apply -auto-approve && tofu plan -detailed-exitcode) &
+for s in stacks/tenants/vm stacks/tenants/isolated; do
+  (tofu -chdir=$s init && tofu -chdir=$s apply -auto-approve && tofu -chdir=$s plan -detailed-exitcode) &
 done; wait
 ```
 
 | Checkpoint | If it fails |
 |---|---|
-| three empty plans | report |
-| cloud-init `done` on the instances (through their bastions) and on the Kubernetes bootstrap instance | as in step 3 |
+| two empty plans | report |
+| cloud-init `done` on the instances (through their bastions) | as in section 3 |
 | `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the internal services plane |
 
-## 5. Published cluster
+## 5. Planes again and domain publication
+
+The routes to the tenants, then their domains on the entry point. Sections 6 and 8 run this section again, after each cluster's stack.
+
+### Planes again
 
 ```bash
-B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
-scp cluster-clouds.yaml ops@$B:/tmp/clouds.yaml; scp cacert.pem ops@$B:/tmp/cacert.pem   # private CA only
-ssh ops@$B 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem'
-ssh -t ops@$B 'sudo /opt/platform/create-cluster.sh'
-ssh ops@$B 'sudo cat /opt/platform/published.kubeconfig' > published.kubeconfig
+tofu -chdir=stacks/shared/planes apply && tofu -chdir=stacks/shared/planes output -json transit
 ```
 
-`cluster-clouds.yaml` is the cluster credential's `clouds.yaml` entry, renamed `openstack`; it never goes through Terraform.
-
-| Checkpoint | How | If it fails |
-|---|---|---|
-| script ends with "manages itself" | output | run it again: each step skips what exists |
-| 5 nodes `Ready` | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
-| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | CAAPH v0.6.6 creates one per chart; `create-cluster.sh` stops if a duplicate appears. To repair one by hand, delete both proxies of the chart, never one only: CAAPH installs it again ([test results](../concepts/test-results.md#detailed-results-campaigns-of-2026-11-18)) |
-| ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of the publication plane; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
+On hub planes, `shared/planes` discovers the address Neutron gave each attached router and adds one route per attachment on each transit router. Checkpoint: every attachment appears in `transit.<plane>.routes`; plan afterwards empty. Until then, the shared services cannot answer the tenants: the agents' pushes time out, and they retry. On operator planes, nothing changes.
 
 ```console
-$ kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[-1].type,VERSION:.status.nodeInfo.kubeletVersion
-NAME                              STATUS   VERSION
-published-md-0-9xfjf-pcbmb-gzwj4  Ready    v1.36.5
-published-md-0-9xfjf-pcbmb-mwxj4  Ready    v1.36.5
-published-tsk82-5l6t4             Ready    v1.36.5
-published-tsk82-pcqrh             Ready    v1.36.5
-published-tsk82-ws9mp             Ready    v1.36.5
-$ kubectl -n platform get helmreleaseproxy     # one per chart
-NAME                                               CLUSTER   READY  STATUS
-cilium-published-75wl7                             published True   deployed
-kubelet-csr-approver-published-4dvwn               published True   deployed
-metrics-server-published-tkrvw                     published True   deployed
-openstack-cinder-csi-published-77nmh               published True   deployed
-openstack-cloud-controller-manager-published-nzwqf published True   deployed
-prometheus-published-hpz6g                         published True   deployed
-traefik-published-vsj99                            published True   deployed
-$ kubectl get svc -A --field-selector spec.type=LoadBalancer
-NAMESPACE   NAME      TYPE           EXTERNAL-IP   PORT(S)
-traefik     traefik   LoadBalancer   10.24.0.10    80:32745/TCP,443:31426/TCP
-```
-
-Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` removes the bootstrap instance; set it back to `true` before teardown.
-
-## 6. Open the internal service
-
-Give the internal service its consumers: `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, known after step 4. The change is in place: the service is not replaced.
-
-```bash
-cd tests/fixtures/internal-service
-tofu -chdir=../../../stacks/tenants/kubernetes output -json internal_sources | jq '{allowed_sources: .}' > consumers.auto.tfvars.json
-tofu apply && tofu plan -detailed-exitcode
-```
-
-## 7. Planes again
-
-```bash
-cd stacks/shared/planes && tofu apply && tofu output -json transit
-```
-
-On hub planes, `shared/planes` discovers the address Neutron gave each attached router and adds one route per attachment on each transit router. Checkpoint: every attachment appears in `transit.<plane>.routes`; plan afterwards empty. Until this step, the shared services cannot answer the tenants: the agents' pushes time out, and they retry. On operator planes, nothing changes.
-
-```console
-$ tofu output -json transit
+$ tofu -chdir=stacks/shared/planes output -json transit     # here after section 8: with the published cluster
 {
   "observability": {
     "address": "172.31.1.1",
     "routes": {
-      "edge": "10.20.0.0/24 via 172.31.1.254",
-      "isolated": "10.22.0.0/24 via 172.31.1.252",
-      "published": "10.24.0.0/24 via 172.31.1.162",
-      "receiver": "10.34.0.0/28 via 172.31.1.197",
-      "web": "10.21.0.0/24 via 172.31.1.52"
+      "edge": "10.20.0.0/24 via 172.31.1.90",
+      "isolated": "10.22.0.0/24 via 172.31.1.33",
+      "published": "10.24.0.0/24 via 172.31.1.89",
+      "receiver": "10.34.0.0/28 via 172.31.1.170",
+      "web": "10.21.0.0/24 via 172.31.1.253"
     }
   },
   "publication": {
     "address": "172.31.0.1",
     "routes": {
-      "edge": "10.20.0.0/24 via 172.31.0.9",
-      "published": "10.24.0.0/24 via 172.31.0.246",
-      "web": "10.21.0.0/24 via 172.31.0.190"
+      "edge": "10.20.0.0/24 via 172.31.0.92",
+      "published": "10.24.0.0/24 via 172.31.0.250",
+      "web": "10.21.0.0/24 via 172.31.0.30"
     }
   }
 }
 ```
 
-## 8. Domain publication
+### Domain publication
 
 ```bash
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
@@ -259,13 +235,111 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 
 ```console
 $ OS_CLOUD=entry-point scripts/publish-domains.sh
+domains from vm: site-a.example.org, site-b.example.org
+...
+Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
+domains published: site-a.example.org, site-b.example.org
+```
+
+Run again with nothing to change, it says `domains unchanged: nothing to do`.
+
+## 6. Shared cluster
+
+The test cloud holds one Kubernetes cluster at a time: this cluster is created, tested and deleted here, before the published cluster (section 7). Deploy it with the previous minor Kubernetes version, its node image shared with the project: the **Lifecycle** step below upgrades it.
+
+1. **Stack and cluster**: `consumers` = `tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then section 5 again for its routes, then `create-cluster.sh` as in [section 7](#7-published-cluster), and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
+2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
+3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
+4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
+5. **A volume**: a StatefulSet of one replica writes 1 MiB of random data on a claim of the default storage class; its checksum is kept.
+6. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer and a volume created with the new one, the pod of the volume moved (detached, attached again) with its data intact, the old credential revoked; then the minor upgrade, while a consumer sends requests, and the volume checked again once its node was replaced.
+7. **Teardown** of the volumes (the namespace of the check, while Cinder CSI runs), then of the cluster and the stack, as in [section 10](#10-teardown), with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
+
+| Checkpoint | How | If it fails |
+|---|---|---|
+| the name resolves to the service address | `dig +short @<zone server> <name>` from a consumer | the record, and the zone server's admission of the consumer |
+| HTTPS from a consumer, certificate verified | `curl --cacert /etc/lego/ca.pem https://<name>/` | the certificate in `traefik-internal` (`kubectl get certificate -A`) |
+| closed to an undeclared consumer, open once added | `curl` before and after | the manifests applied again after the apply |
+| after the rotation: a new load balancer | a Service of type `LoadBalancer` gets an address | the logs of the cloud controller manager |
+| after the rotation and after the upgrade: the volume moved intact; a new volume after the rotation | `sha256sum` in the pod, compared with the one written; a claim bound and mounted | `kubectl -n volume-check describe pvc,pod`, the logs of Cinder CSI (`kube-system`) |
+| after the upgrade: every node at the new version, the API and service addresses unchanged | `kubectl get nodes`, kubeconfig, `services` output | `kubectl -n platform get machines`, the capacity of the project |
+
+Durations: in the [overview](#overview) (`k8s-shared` to `shared-down`).
+
+## 7. Published cluster
+
+Its stack first: the network, the routers and the bootstrap instance; then the cluster, created from the bootstrap instance.
+
+```bash
+tofu -chdir=stacks/tenants/kubernetes init && tofu -chdir=stacks/tenants/kubernetes apply && tofu -chdir=stacks/tenants/kubernetes plan -detailed-exitcode
+```
+
+Checkpoint: plan empty, cloud-init `done` on the bootstrap instance (`ssh ops@<bootstrap> cloud-init status --wait`; it may not answer SSH for a minute after its creation).
+
+```bash
+B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)
+scp cluster-clouds.yaml ops@$B:/tmp/clouds.yaml; scp cacert.pem ops@$B:/tmp/cacert.pem   # private CA only
+ssh ops@$B 'sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml && sudo install -m 644 /tmp/cacert.pem /opt/platform/cacert.pem; rm -f /tmp/clouds.yaml /tmp/cacert.pem'
+ssh -t ops@$B 'sudo /opt/platform/create-cluster.sh'
+ssh ops@$B 'sudo cat /opt/platform/published.kubeconfig' > published.kubeconfig
+```
+
+`cluster-clouds.yaml` is the cluster credential's `clouds.yaml` entry, renamed `openstack`; it never goes through Terraform.
+
+| Checkpoint | How | If it fails |
+|---|---|---|
+| script ends with "manages itself" | output | run it again: each step skips what exists |
+| every node `Ready`: 5 by default (3 control plane nodes, 2 workers), 3 in the campaign (`control_plane_count = 1`) | `kubectl get nodes` | `kubectl -n platform get machines,openstackmachines` |
+| 7 chart proxies `Ready`, **one release proxy per chart** | `kubectl -n platform get helmchartproxy,helmreleaseproxy` | CAAPH v0.6.6 creates one per chart; `create-cluster.sh` stops if a duplicate appears. To repair one by hand, delete both proxies of the chart, never one only: CAAPH installs it again ([test results](../concepts/test-results.md#detailed-results-campaigns-of-2026-11-18)) |
+| ingress Service on the stack's address | `kubectl get svc -A --field-selector spec.type=LoadBalancer` against `tofu output published_domains` | with NAT: a floating IP of the publication plane; interface: a fixed address of the cluster network (internal load balancer). Another address means the requested one was not available |
+
+```console
+$ kubectl get nodes        # the campaign: 1 control plane node, 2 workers
+NAME                               STATUS   ROLES           VERSION   INTERNAL-IP
+published-chq69-cqhf7              Ready    control-plane   v1.36.5   10.24.0.44
+published-md-0-2j5vw-v9g2p-qb2j6   Ready    <none>          v1.36.5   10.24.0.82
+published-md-0-2j5vw-v9g2p-rwnz2   Ready    <none>          v1.36.5   10.24.0.94
+$ kubectl -n platform get helmreleaseproxy     # one per chart
+NAME                                               CLUSTER   READY  STATUS
+cilium-published-75wl7                             published True   deployed
+kubelet-csr-approver-published-4dvwn               published True   deployed
+metrics-server-published-tkrvw                     published True   deployed
+openstack-cinder-csi-published-77nmh               published True   deployed
+openstack-cloud-controller-manager-published-nzwqf published True   deployed
+prometheus-published-hpz6g                         published True   deployed
+traefik-published-vsj99                            published True   deployed
+$ kubectl get svc -A --field-selector spec.type=LoadBalancer
+NAMESPACE   NAME      TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)
+traefik     traefik   LoadBalancer   10.101.124.161   10.24.0.10    80:31415/TCP,443:30594/TCP
+```
+
+Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` removes the bootstrap instance; set it back to `true` before teardown.
+
+## 8. Internal service open, planes and publication
+
+### Open the internal service
+
+Give the internal service its consumers: `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, known once its stack is applied (section 7). The change is in place: the service is not replaced.
+
+```bash
+tofu -chdir=stacks/tenants/kubernetes output -json internal_sources | jq '{allowed_sources: .}' > tests/fixtures/internal-service/consumers.auto.tfvars.json
+tofu -chdir=tests/fixtures/internal-service apply && tofu -chdir=tests/fixtures/internal-service plan -detailed-exitcode
+```
+
+### Planes and publication
+
+Section 5 again: the routes of the published cluster on the transit routers, then its domain on the entry point. The campaign measures the publication under load here: a client sends two requests per second to a domain already published while the new one is added.
+
+```console
+$ OS_CLOUD=entry-point scripts/publish-domains.sh
 domains from kubernetes: apps.published.example.org
 domains from vm: site-a.example.org, site-b.example.org
 ...
+Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
 domains published: apps.published.example.org, site-a.example.org, site-b.example.org
 ```
 
-Publication under load, measured: a new domain added while a client sends two requests per second to another — the apply takes 19 s, the new domain answers 13 s later, and none of the 290 requests sent meanwhile fails.
+Measured (2026-11-21): the apply takes 8 s, the domains answer steadily within 10 s, and none of the 38 requests sent meanwhile fails.
 
 ## 9. Acceptance
 
@@ -283,37 +357,40 @@ Wait until the ingress Service has its address and the agents have pushed once (
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
-| HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members (step 8), published domains (`stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (step 5); interface mode: transit routes (step 7) |
-| isolation test | every row as expected (51 with the published cluster and the internal service; 49 with the shared cluster, [section 11](#11-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members and published domains (section 5, `stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (section 7); interface mode: transit routes (section 5) |
+| isolation test | every row as expected (51 with the published cluster and the internal service; 49 with the shared cluster, [section 6](#6-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
      12 host=site-a.example.org  client=198.51.100.100
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
-$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig
+$ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig \
+    --internal-service tests/fixtures/internal-service --acme tests/fixtures/acme
 from                   to                                                    port  expected actual
-edge t1-edge-1         web service address 10.21.0.90                         443  open     open     ok
-edge t1-edge-1         web t1-web-1 (private 10.21.0.144)                     443  closed   closed   ok
+test runner            entry point (public IP)                                443  open     open     ✅
+test runner            web service address 10.21.0.227                        443  closed   closed   ✅
+edge t1-edge-1         web service address 10.21.0.227                        443  open     open     ✅
 ...
-receiver               t1-web-1 metrics (private 10.21.0.144)                9100  closed   closed   ok
-receiver               series pushed by web                                     -  yes      yes      ok
+receiver               series pushed by web                                     -  yes      yes      ✅
 ...
-47/47 rows as expected
+edge t1-edge-1         routed IPv6 (global address, default route)              -  none     none     ✅
+...
+51/51 rows as expected
 ```
 
 ### Direct exposure
 
 Each tenant type that can leave the entry point is switched to `exposure = "public"`, checked, then put back.
 
-1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`: apply, planes again (step 7), domain publication (step 8), HTTPS through the entry point once it answers steadily.
-2. **`kubernetes`**: apply with `exposure = "public"`, then apply the add-ons again in the cluster (`tofu output -json manifests | jq -r '."addons.yaml"' | kubectl apply -f -`); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, add-ons, planes again (step 7), domain publication (step 8), HTTPS through the entry point.
+1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`: apply, then section 5 (planes, domain publication), HTTPS through the entry point once it answers steadily.
+2. **`kubernetes`**: apply with `exposure = "public"`, then apply the add-ons again in the cluster (`tofu output -json manifests | jq -r '."addons.yaml"' | kubectl apply -f -`); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, add-ons, section 5 (planes, domain publication), HTTPS through the entry point.
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS on the public address | 12 answers, certificate verified | the Service keeps its former address: the add-ons were not applied, or the cloud controller manager did not move the load balancer (`kubectl -n traefik describe svc traefik`) |
 | entry point to the former address | closed | the publication router is still there: plan of the tenant |
-| back to the entry point | HTTPS through the entry point again, answered by the load balancer that existed before the change | domains not republished (step 8); interface mode: transit routes (step 7); the load balancer answers no SYN while the tenant's routes are host routes of its subnet: it keeps the next hop it found when its VIP was plugged ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)) |
+| back to the entry point | HTTPS through the entry point again, answered by the load balancer that existed before the change | domains not republished, or, interface mode, transit routes (section 5); the load balancer answers no SYN while the tenant's routes are host routes of its subnet: it keeps the next hop it found when its VIP was plugged ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)) |
 
 ### Hostile route (interface mode)
 
@@ -384,32 +461,3 @@ done
 | Checkpoint | How |
 |---|---|
 | no leftover, in every project | servers, volumes, load balancers, floating IPs, routers, networks, ports, security groups, server groups, and the records of the DNS zones: all empty, except the node image if you keep it. `openstack loadbalancer list` needs the Octavia client plugin: an error is not an empty list |
-
-## 11. Shared cluster
-
-The test cloud holds one Kubernetes cluster at a time, so this cluster is tested on its own, in the middle of the cycle:
-
-1. Steps 1 to 4 without the Kubernetes tenant, then step 8 for the domains of the `vm` tenant.
-2. This section: the shared cluster (a Kubernetes cluster for shared services), with the `vm` tenant as its consumer, then its teardown.
-3. The Kubernetes tenant: its stack (step 4), then steps 5 to 10.
-
-The campaign script follows this order (sequence `full`). Deploy this cluster with the previous minor Kubernetes version, its node image shared with the project: the **Lifecycle** step below upgrades it.
-
-1. **Stack and cluster**: `consumers` = `tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then `create-cluster.sh` as in step 5, and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
-2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
-3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
-4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
-5. **A volume**: a StatefulSet of one replica writes 1 MiB of random data on a claim of the default storage class; its checksum is kept.
-6. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer and a volume created with the new one, the pod of the volume moved (detached, attached again) with its data intact, the old credential revoked; then the minor upgrade, while a consumer sends requests, and the volume checked again once its node was replaced.
-7. **Teardown** of the volumes (the namespace of the check, while Cinder CSI runs), then of the cluster and the stack, as in step 10, with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
-
-| Checkpoint | How | If it fails |
-|---|---|---|
-| the name resolves to the service address | `dig +short @<zone server> <name>` from a consumer | the record, and the zone server's admission of the consumer |
-| HTTPS from a consumer, certificate verified | `curl --cacert /etc/lego/ca.pem https://<name>/` | the certificate in `traefik-internal` (`kubectl get certificate -A`) |
-| closed to an undeclared consumer, open once added | `curl` before and after | the manifests applied again after the apply |
-| after the rotation: a new load balancer | a Service of type `LoadBalancer` gets an address | the logs of the cloud controller manager |
-| after the rotation and after the upgrade: the volume moved intact; a new volume after the rotation | `sha256sum` in the pod, compared with the one written; a claim bound and mounted | `kubectl -n volume-check describe pvc,pod`, the logs of Cinder CSI (`kube-system`) |
-| after the upgrade: every node at the new version, the API and service addresses unchanged | `kubectl get nodes`, kubeconfig, `services` output | `kubectl -n platform get machines`, the capacity of the project |
-
-Durations: measured in the next campaign.
