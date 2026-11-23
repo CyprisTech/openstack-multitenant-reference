@@ -8,7 +8,7 @@ Create the project (provider's console or API, or [`cloud-baseline`](https://git
 
 ## 2. Type and address range
 
-Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances behind one service address, published through the entry point or with their own address), [`isolated`](../../stacks/tenants/isolated/README.md) (no public exposure) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md) (a cluster with its ingress, published through the entry point or with its own address).
+Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances, published through the entry point, with their own address, or private: `exposure = "none"`, `egress = "none"`, [ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md) (a cluster with its ingress, published through the entry point or with its own address).
 
 Choose its address range outside the planes' ranges. On hub planes (interface mode) it must also differ from every other attachment of the plane — and fall inside the plane's `tenant_ranges` aggregates, so that no shared service needs a new route. On operator planes (gateway mode), tenants may share ranges.
 
@@ -27,13 +27,13 @@ Apply `shared/planes`: on hub planes, the plane networks are shared with the new
 
 ## 4. Configure the stack
 
-Each tenant has its own working directory or state key. Set:
+Each tenant has its own state, under its own key, with its own access rights when the backend is shared: for several tenants of one stack, a backend key per tenant given at init (`-backend-config`), or locally a workspace each; its values in its own file (`-var-file`), and `name` to tell their resources apart ([several tenants of a stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)). Set:
 
 | Input | Value |
 |---|---|
 | `cloud` | the tenant's `clouds.yaml` entry |
 | `site` | the same as the other stacks |
-| the tenant range (`web_cidr`, `isolated_cidr`, `cluster_cidr`) | step 2 |
+| the tenant range (`web_cidr`, `cluster_cidr`) | step 2 |
 | `plane_attachment` | the tenant's entry of the `attachments` output of `shared/planes` (step 3) |
 | `edge_sources` (`vm`, `kubernetes`) | output `publication_sources` of the entry point |
 | `monitoring.receiver` | the URL of your metrics receiver (output `receiver_url` of the test receiver) |

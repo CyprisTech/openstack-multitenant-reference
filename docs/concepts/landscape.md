@@ -13,7 +13,7 @@ flowchart TB
         direction LR
         PL["Planes<br/>operator networks, or a hub project<br/>with its transit router"]
         EDGE["Public entry point<br/>Octavia + Traefik VMs"]
-        VMT["VM tenants<br/>vm · isolated · bastions"]
+        VMT["VM tenants<br/>vm, exposed or private · bastions"]
         K8S["Kubernetes cluster<br/>Cilium · OCCM · Cinder CSI · Traefik Gateway API<br/>Prometheus · metrics-server (CAAPH)"]
         SHS["Shared services<br/>yours: metrics receiver, internal services"]
     end

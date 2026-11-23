@@ -20,7 +20,7 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | the receiver | a tenant's service address | 443 | denied | load balancer sources = entry point only |
 | the receiver | the entry point's instances | 443 | denied | NAT plane: no route; routed plane: security group of the proxies (source = their load balancer) |
 | the Kubernetes tenant | an internal service | its port | allowed | router to the internal services plane; the service admits the tenant's `internal_sources` |
-| `vm`, `isolated` | an internal service | its port | denied | `isolated` has no router to the internal services plane; a `vm` tenant joins it only when it consumes internal services, and the service admits only its consumers |
+| the `vm` tenants, web and private | an internal service | its port | denied | a `vm` tenant joins the internal services plane only when it consumes internal services, and the service admits only its consumers |
 | the entry point, the receiver | an internal service | its port | denied | the service admits only its consumers |
 | the receiver | the published cluster's ingress | 443 | denied | sources of the ingress = entry point only |
 | the Kubernetes tenant | the bastions of the other stacks | 22 | denied | bastions admit the administrator addresses only |
@@ -32,7 +32,7 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | a tenant, with its TSIG key | the `_acme-challenge` records of its own names | 53 | allowed | DNS server ACL: key, record type TXT, owner names, sources |
 | a tenant, with its TSIG key | the `_acme-challenge` records of another tenant's names | 53 | denied | DNS server ACL: each key covers its tenant's names only |
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
-| `isolated` | the Internet | any | denied | no egress router: its default route goes to the transit router and the observability plane, so it reaches what that plane routes and nothing more; denied as long as the observability plane does not lead to the Internet, as in the scenario |
+| the private tenant (`egress = "none"`) | the Internet | any | denied | no egress router and no default route on its transit router ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1): it reaches the destinations of its planes and nothing more |
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/security.md#lateral-movement)).
 

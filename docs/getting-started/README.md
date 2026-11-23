@@ -26,7 +26,7 @@ The stacks with their example values, and the test fixtures, deploy one instance
 |---|---|---|
 | Planes | the cloud operator's external networks, or shared networks built in a hub project with transit routers; addresses translated or not | step 1, [`examples/planes`](../../examples/planes/README.md) |
 | Exposure | a `vm` and a `kubernetes` tenant behind the shared entry point; each may instead have its own public address (`exposure = "public"`) | steps 3 and 4 |
-| Isolation | no route between two tenants; an `isolated` tenant with no exposure and no way out but the observability plane | step 4, [isolation matrix](../reference/isolation-matrix.md) |
+| Isolation | no route between two tenants; a private tenant, a `vm` with neither exposure nor egress | step 4, [isolation matrix](../reference/isolation-matrix.md) |
 | Internal services | a service open to declared consumers only ([fixture](../../tests/fixtures/internal-service/README.md)), and the [shared cluster](../../stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services) | after step 4 |
 | Observability | every project pushes its metrics to one receiver ([fixture](../../tests/fixtures/receiver/README.md)) | step 2 |
 | Certificates | ACME DNS-01 from an internal authority ([fixture](../../tests/fixtures/acme/README.md)); without it, a self-signed demonstration mode | `certificates` of each tenant |
@@ -81,11 +81,15 @@ tofu -chdir=stacks/shared/entry-point output -json publication_sources   # edge_
 
 Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` or `kubernetes` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
 
+The web and private tenants are two tenants of the [`vm`](../../stacks/tenants/vm/README.md) stack: a workspace each (its state), the common values in `terraform.tfvars`, the values of each tenant in its own file.
+
 ```bash
-for t in vm isolated; do
-  cp stacks/tenants/$t/terraform.tfvars.example stacks/tenants/$t/terraform.tfvars   # adapt
-  tofu -chdir=stacks/tenants/$t init && tofu -chdir=stacks/tenants/$t apply
-done
+s=stacks/tenants/vm
+cp $s/terraform.tfvars.example $s/terraform.tfvars   # common values and the web tenant: adapt
+cp $s/private.tfvars.example $s/private.tfvars       # the private tenant: adapt
+tofu -chdir=$s init
+tofu -chdir=$s workspace select -or-create=true web && tofu -chdir=$s apply
+tofu -chdir=$s workspace select -or-create=true private && tofu -chdir=$s apply -var-file=private.tfvars
 ```
 
 Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On hub planes the published cluster's ingress gets an internal load balancer at a fixed address; the Kubernetes API and the bootstrap instance need floating IPs on an external network (`admin_network`).
@@ -101,7 +105,7 @@ The hub discovers the address of each attached router and routes to it. Until th
 ## 6. Publish the domains
 
 ```bash
-scripts/request-domains.sh stacks/tenants/vm    # writes the entry point's domains file: review and commit it
+TF_WORKSPACE=web scripts/request-domains.sh stacks/tenants/vm   # writes the entry point's domains file: review and commit it
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 

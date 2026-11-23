@@ -87,7 +87,7 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 |---|---|---|
 | Decisions | [ADRs](docs/adr/README.md), [trade-offs](docs/concepts/trade-offs.md), [who it is for](docs/concepts/audiences.md) | read, challenge, adapt |
 | Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent, ACME client, [Kubernetes cluster](modules/kubernetes-cluster/README.md)) | use as they are |
-| Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; the [shared cluster](stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), whose services are demonstrated, not operated; three tenant types ([`vm`](stacks/tenants/vm/README.md), [`isolated`](stacks/tenants/isolated/README.md), [`kubernetes`](stacks/tenants/kubernetes/README.md)); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
+| Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; the [shared cluster](stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), whose services are demonstrated, not operated; two tenant types: [`vm`](stacks/tenants/vm/README.md), as a web tenant behind the entry point and a private tenant with neither exposure nor egress, and [`kubernetes`](stacks/tenants/kubernetes/README.md); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
 
 The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
 
@@ -104,8 +104,7 @@ Another plane or shared service is declared in `shared/planes`; the stacks that 
 | [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the cloud operator's external networks, or builds shared networks in the hub project with a transit router; derives the routes of every project |
 | [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | A load balancer and two proxies routing by TLS server name to the tenants' service addresses, without decrypting |
 | [`stacks/shared/kubernetes`](stacks/shared/kubernetes/README.md) | The shared cluster, not published: an internal ingress and layer 4 services, admitted to their consumers only |
-| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Virtual machines behind a load balancer, published through the entry point or with their own address |
-| [`stacks/tenants/isolated`](stacks/tenants/isolated/README.md) | A workload with no exposure and no way out but the observability plane |
+| [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Virtual machines, their exposure and egress declared: behind a load balancer, published through the entry point or with their own address; or private, with neither exposure nor egress |
 | [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | The published cluster, a Kubernetes cluster created with Cluster API ([node image](images/kubernetes-node/README.md)) |
 
 ## Built on terraform-openstack-tenant
@@ -163,39 +162,39 @@ test runner                  entry point (public IP)                            
 test runner                  web service address 10.21.0.233                          443  closed    closed    ✅
 edge t1-edge-1               web service address 10.21.0.233                          443  open      open      ✅
 edge t1-edge-1               web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
-isolated t1-isolated-1       web service address 10.21.0.233                          443  closed    closed    ✅
+private t1-private-1         web service address 10.21.0.233                          443  closed    closed    ✅
 web t1-web-1                 edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
 edge t1-edge-1               receiver 10.34.0.9                                      9090  open      open      ✅
 web t1-web-1                 receiver 10.34.0.9                                      9090  open      open      ✅
-isolated t1-isolated-1       receiver 10.34.0.9                                      9090  open      open      ✅
+private t1-private-1         receiver 10.34.0.9                                      9090  open      open      ✅
 receiver                     t1-edge-1 metrics (private 10.20.0.64)                  9100  closed    closed    ✅
 receiver                     t1-web-1 metrics (private 10.21.0.74)                   9100  closed    closed    ✅
-receiver                     t1-isolated-1 metrics (private 10.22.0.68)              9100  closed    closed    ✅
+receiver                     t1-private-1 metrics (private 10.22.0.68)              9100  closed    closed    ✅
 edge t1-edge-1               receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
 web t1-web-1                 receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
-isolated t1-isolated-1       receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
+private t1-private-1         receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
 receiver                     web service address 10.21.0.233                          443  closed    closed    ✅
 receiver                     edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
 receiver                     series pushed by edge                                      -  yes       yes       ✅
 receiver                     series pushed by web                                       -  yes       yes       ✅
-receiver                     series pushed by isolated                                  -  yes       yes       ✅
-web t1-web-1                 isolated t1-isolated-1 (private 10.22.0.68)               22  closed    closed    ✅
-isolated t1-isolated-1       web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
-isolated t1-isolated-1       Internet (192.0.2.1)                                     443  closed    closed    ✅
+receiver                     series pushed by private                                   -  yes       yes       ✅
+web t1-web-1                 private t1-private-1 (private 10.22.0.68)                22  closed    closed    ✅
+private t1-private-1         web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
+private t1-private-1         Internet (192.0.2.1)                                     443  closed    closed    ✅
 published Service            ingress on the stack address                               -  yes       yes       ✅
 edge t1-edge-1               published ingress 10.24.0.10                             443  open      open      ✅
 test runner                  published ingress 10.24.0.10                             443  closed    closed    ✅
 web t1-web-1                 published ingress 10.24.0.10                             443  closed    closed    ✅
-isolated t1-isolated-1       published ingress 10.24.0.10                             443  closed    closed    ✅
+private t1-private-1         published ingress 10.24.0.10                             443  closed    closed    ✅
 published pod                receiver 10.34.0.9                                      9090  open      open      ✅
 receiver                     series pushed by published                                 -  yes       yes       ✅
 test runner (administrator)  published Kubernetes API 198.51.100.1                   6443  open      open      ✅
 published pod                edge bastion 198.51.100.2 (SSH)                           22  closed    closed    ✅
 published pod                web bastion 192.0.2.100 (SSH)                             22  closed    closed    ✅
-published pod                isolated bastion 192.0.2.101 (SSH)                        22  closed    closed    ✅
+published pod                private bastion 192.0.2.101 (SSH)                         22  closed    closed    ✅
 published pod                internal service 198.51.100.3                           8080  open      open      ✅
 web t1-web-1                 internal service 198.51.100.3                           8080  closed    closed    ✅
-isolated t1-isolated-1       internal service 198.51.100.3                           8080  closed    closed    ✅
+private t1-private-1         internal service 198.51.100.3                           8080  closed    closed    ✅
 edge t1-edge-1               internal service 198.51.100.3                           8080  closed    closed    ✅
 receiver                     internal service 198.51.100.3                           8080  closed    closed    ✅
 receiver                     published ingress 10.24.0.10                             443  closed    closed    ✅

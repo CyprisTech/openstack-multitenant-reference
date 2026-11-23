@@ -34,7 +34,7 @@ The source of this picture is the SVG next to the PNG in [`docs/images`](../imag
 | entry point | publication (shared), observability | Octavia load balancer with a public floating IP, two Traefik instances in anti-affinity |
 | `vm` tenant | publication, observability, internal services (optional) | instances behind a load balancer, the tenant's service address |
 | `kubernetes` tenant | publication, observability, internal services | a cluster created with Cluster API; its ingress load balancer is the service address |
-| `isolated` tenant | observability | one workload, no public address, no other way out |
+| `vm` tenant, private | observability; internal services when it consumes them | one workload from its image, no exposure, no egress ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) |
 | shared services | the planes they serve (`shared`) | the receiver, internal services; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) |
 
 The planes are provided by the cloud operator (external networks) or built in the hub project (shared networks and a transit router): the stacks are the same in both cases, only [`stacks/shared/planes`](../../stacks/shared/planes/README.md) changes ([How a tenant joins a plane](plane-attachment.md)).
@@ -47,7 +47,7 @@ With hub planes, every attached router routes through the transit router: tenant
 
 **Status:** delivered; the transit router in `v0.5`.
 
-Each tenant network has **one router per network it joins**, and a **transit router** with no external gateway, which holds the subnet's gateway address ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). The instances have one route, the default route to the transit router; the transit router routes each plane's range to that plane's router, and the default route to the egress router. The subnet pushes no host routes: Octavia load balancers copy them once, when their VIP is plugged, and would miss any later change, while a route of the transit router applies at once. The example below is a `vm` tenant, whose egress router reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; the `isolated` tenant has no egress router, and its transit router sends the default route to the observability plane's router.
+Each tenant network has **one router per network it joins**, and a **transit router** with no external gateway, which holds the subnet's gateway address ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). The instances have one route, the default route to the transit router; the transit router routes each plane's range to that plane's router, and the default route to the egress router. The subnet pushes no host routes: Octavia load balancers copy them once, when their VIP is plugged, and would miss any later change, while a route of the transit router applies at once. The example below is a `vm` tenant, whose egress router reaches the Internet through a declared egress network: an external network named in the stack's `egress_network` input, not a plane; a private tenant (`egress = "none"`) has no egress router, and its transit router has no default route: unknown destinations are dropped.
 
 ```mermaid
 flowchart LR
@@ -75,7 +75,7 @@ For each stack of the scenario:
 | entry point | public router | publication, observability | public floating IP of its load balancer |
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
 | `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
-| `isolated` | observability router | — | nothing |
+| `vm`, private (`exposure = "none"`, `egress = "none"`) | none: unknown destinations are dropped | observability, internal services (optional) | nothing |
 | bastions | on its own network: its router on the administration network, which is the gateway; on the stack's network (`bastion_placement = "stack-network"`, [ADR-0014](../adr/0014-profiles.md), D2, when the administration network is the egress): the stack's transit router | — (second port on the tenant network), or none | floating IP of the administration network |
 
 No instance carries floating IPs of several networks ([ADR-0006](../adr/0006-exposure.md), D4): every flow on a plane is initiated from the side that holds the route back.
@@ -164,7 +164,7 @@ flowchart LR
         X["exporters, logs, audit events"] --> A["agent<br/>(Prometheus agent, the cluster's Prometheus…)"]
     end
     A -->|"push, through the observability plane"| R["Receivers<br/>(Prometheus, Mimir, VictoriaMetrics, a log store…)"]
-    I["isolated workload"] -->|"OTLP"| R
+    I["private tenant workload"] -->|"OTLP"| R
 ```
 
 The contract between the sources and the receivers:
@@ -187,7 +187,7 @@ What every tenant needs from the network, split by level ([ADR-0016](../adr/0016
 | Name resolution | Not run by the reference. The resolvers come from Neutron's DHCP (the operator's), through the tenant's egress, or from a resolver behind a plane the tenant joins (the operator's, the organisation's DNS, a platform team's), given as `dns_nameservers` ([planes contract](../reference/planes-contract.md)) |
 | Internal names | Each stack writes its records in Designate, and gives them as an output (`dns_records`) to publish in another DNS, on a cloud without Designate |
 | Time | From the cloud: instances on KVM follow the hypervisor's clock (kvm-clock). A workload that needs NTP-grade accuracy brings its own time servers |
-| Packages and images | An [integration point](../reference/integration-points.md#name-resolution-time-and-package-mirrors): mirrors and registry caches of the platform teams, reachable on a plane by tenants without Internet access, such as `isolated` |
+| Packages and images | An [integration point](../reference/integration-points.md#name-resolution-time-and-package-mirrors): mirrors and registry caches of the platform teams, reachable on a plane by tenants without Internet access, such as a private tenant |
 | Egress to the Internet | Declared per tenant: `none`, `router` (a router to an egress network in the tenant's own project) or `shared` (a shared egress of the landing zone that restricts and logs); never by default |
 | IPv6 | IPv4 until `v1.0`: the reference creates no IPv6 subnet, and the isolation test checks that tenants have no routed IPv6. Afterwards, one family per deployment, IPv4 or IPv6 ([ADR-0015](../adr/0015-ipv6.md)) |
 
@@ -226,7 +226,7 @@ flowchart LR
     subgraph ADM["Administration network"]
         B1["bastion entry point"]
         B2["bastion vm"]
-        B3["bastion isolated"]
+        B3["bastion private tenant"]
         API["Kubernetes API<br/>floating IP"]
         BS["bootstrap instance<br/>(temporary)"]
     end
@@ -234,7 +234,7 @@ flowchart LR
     OPS -->|"6443"| API
     B1 -->|"second port"| E["entry point instances"]
     B2 -->|"second port"| W["vm instances"]
-    B3 -->|"second port"| I["isolated instance"]
+    B3 -->|"second port"| I["private tenant instance"]
     BS -->|"6443, until clusterctl move"| API
 ```
 
@@ -257,7 +257,7 @@ flowchart TB
     P["shared/planes<br/>planes, RBAC, routes of the attachments"]
     S["shared services the tenants push to<br/>receivers"]
     E["shared/entry-point"]
-    T["tenants<br/>vm · isolated · kubernetes"]
+    T["tenants<br/>vm (web, private) · kubernetes"]
     S2["shared services that admit named consumers<br/>internal services"]
     P2["shared/planes again<br/>(hub planes: routes to the tenants)"]
     D["publish-domains.sh<br/>routes of the entry point, a reviewed input"]

@@ -13,7 +13,7 @@ What the test campaigns of 2026-11-19 ran, project by project, with the flavors 
 | `kubernetes` tenant | 3 (1 control plane, 2 workers) | 6 | 12 GiB | 2 (API, ingress) | 1 administration (API), 1 on the publication plane with NAT |
 | shared cluster | 5 (3 control plane, 2 workers) | 10 | 20 GiB | 3 (API, internal ingress, TCP service) | 1 administration (API), 2 on the internal services plane with NAT |
 | bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 0 | 1 administration |
-| `isolated` tenant | 1 | 1 | 1 GiB | 0 | 0 |
+| `vm` tenant, private | 1 | 1 | 1 GiB | 0 | 0 |
 | shared services: receiver | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with NAT |
 | shared services: internal service, ACME authority (tests) | 2 | 2 | 2 GiB | 0 | 1 on the internal services plane with NAT |
 | bastions (one per stack, optional) | 1 each | 1 each | 1 GiB each | 0 | 1 each, administration |

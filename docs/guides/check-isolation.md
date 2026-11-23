@@ -10,7 +10,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 
 ## Prerequisites
 
-- The entry point and the `vm` and `isolated` tenants applied **with bastions**, the domains published.
+- The entry point, the web tenant and the private tenant (two workspaces of the `vm` stack) applied **with bastions**, the domains published.
 - The test receiver [`tests/fixtures/receiver`](../../tests/fixtures/receiver/README.md), given to the stacks as `monitoring.receiver`: the test reads it to check that every tenant pushed.
 - With the published cluster: its kubeconfig, and the internal service it consumes (or the test one, [`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)).
 - For the optional rows: the test ACME authority (`--acme tests/fixtures/acme`) and, with the shared cluster (a Kubernetes cluster for shared services) and its demonstrated services applied, its kubeconfig (`--shared-kubeconfig`).

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `vm`: `exposure = "none"` and `egress` (`router`, the default, or `none`), declared per tenant ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1); `name` names the tenant's resources (`<site>-<name>`, default `web`: an existing deployment keeps its resource addresses). With neither exposure nor egress, a private tenant: no service address, no default route, no package, a stand-in workload from the image that pushes `workload_up`.
+- Campaign: several tenants of one stack directory, each in its own workspace with its own inputs file (`{ path, workspace }` in the scenario); the web and private tenants of `stacks/tenants/vm`.
 - CI: ruff lints the Python of the repository (`ruff.toml`).
 - Campaign: a preflight checks every credential the run will use, and the next credential of the shared cluster for the rotation, before the first step (`--no-preflight` to skip).
 - Isolation test: no routed IPv6 ([ADR-0015](docs/adr/0015-ipv6.md), D2): no global IPv6 address and no IPv6 default route on the instances of the entry point, the tenants and the receiver (4 rows: 51 with the published cluster, 49 with the shared cluster).
@@ -21,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The `isolated` stack is removed** ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1): a private tenant is a `vm` stack with `exposure = "none"` and `egress = "none"`. Its transit router no longer sends a default route to the observability plane. The isolation test names it `private`. **Migration:** a deployment of `isolated` is redeployed with `vm` (`name`, `web_cidr`, `exposure = "none"`, `egress = "none"`, `instance_count = 1`); its state does not move from one stack to the other.
 - Entry point: the domains are a reviewed input ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D5). `scripts/publish-domains.sh` no longer gathers the tenants' outputs: it plans the entry point from `domains.auto.tfvars.json`, prints the domains the plan adds, changes or withdraws, and applies the plan when it is not empty. The new `scripts/request-domains.sh` writes a tenant's `published_domains` into that file, the change to review. **Migration:** keep the `domains.auto.tfvars.json` your last publication wrote, in your deployment repository: the next publication changes nothing. Add each new domain with `request-domains.sh` and a merge request.
 - Kubernetes: CAAPH v0.6.6, which no longer duplicates the Helm release proxies after `clusterctl move` ([kubernetes-sigs/cluster-api-addon-provider-helm#606](https://github.com/kubernetes-sigs/cluster-api-addon-provider-helm/pull/606)). The repair in `create-cluster.sh` is removed; the script stops if a duplicate still appears.
 - Kubernetes: `create-cluster.sh` without inline programs (296 lines before v0.6.6, 147 now): the cloud configuration and the bootstrap address are small Python files, shared with `delete-cluster.sh`; the node deletion right and the default storage class are manifests; namespaces are created by one function.

@@ -13,7 +13,7 @@ The contract is [ADR-0007](../adr/0007-monitoring.md); the receiver is yours.
 | Plane | `observability` |
 | Direction | Push: the tenants connect to your receiver; nothing on the plane connects into a tenant |
 | Protocol | Prometheus remote write at `<receiver>/api/v1/write`; OTLP at `<receiver>/api/v1/otlp/v1/metrics` for workloads that use it |
-| In the tenants | The `vm` instances and the entry point run their exporters and a Prometheus agent ([`modules/metrics-agent`](../../modules/metrics-agent/README.md)); the published cluster's Prometheus pushes with remote write; the `isolated` stand-in workload pushes OTLP |
+| In the tenants | The `vm` instances and the entry point run their exporters and a Prometheus agent ([`modules/metrics-agent`](../../modules/metrics-agent/README.md)); the published cluster's Prometheus pushes with remote write; the stand-in workload of a `vm` tenant without egress pushes OTLP |
 | Identification | Labels `site`, `tenant` and `instance` on every series; with address translation, addresses do not identify the sources |
 | Configured by | The input `monitoring.receiver` of every stack: the receiver's base URL |
 | You provide | A receiver in a project of shared services, attached to `observability` with the role `shared`, admitting the plane (operator plane) or the tenant ranges routed to it (hub plane) on its port; the alerts on missing series |

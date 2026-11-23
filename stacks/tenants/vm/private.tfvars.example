@@ -1,0 +1,18 @@
+# A private tenant (ADR-0016, D1): neither exposure nor egress. Applied in its own workspace,
+# next to terraform.tfvars (common values):
+#   tofu workspace select -or-create=true private && tofu apply -var-file=private.tfvars
+cloud = "example-private" # the private tenant's own project
+
+name           = "private" # its resources: <site>-private-*
+web_cidr       = "10.22.0.0/24"
+exposure       = "none"
+egress         = "none"
+instance_count = 1
+
+# Values of terraform.tfvars that do not apply to a private tenant.
+certificates = null
+edge_sources = []
+
+# Its entry of the attachments output of stack shared/planes, for example:
+#   tofu -chdir=../../shared/planes output -json attachments | jq '{plane_attachment: .private.planes}' > private-planes.tfvars.json
+# and add -var-file=private-planes.tfvars.json to its applies.

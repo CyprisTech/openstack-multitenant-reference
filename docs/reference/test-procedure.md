@@ -15,7 +15,7 @@ flowchart LR
     P0["0. Projects<br/>and prerequisites"] --> F
     subgraph F["foundation"]
         direction TB
-        F1["1. Planes"] --> F2["2. Shared services<br/>(internal service closed)"] --> F3["3. Entry point"] --> F4["4. vm · isolated"] --> F5["5. Planes again,<br/>publication"]
+        F1["1. Planes"] --> F2["2. Shared services<br/>(internal service closed)"] --> F3["3. Entry point"] --> F4["4. vm: web, private"] --> F5["5. Planes again,<br/>publication"]
     end
     subgraph S["6. shared cluster"]
         direction TB
@@ -38,7 +38,7 @@ flowchart LR
 | shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service`, `tests/fixtures/acme` | `shared` on `observability` (receiver), `shared` on `internal` (internal service, ACME authority). On hub planes, one attachment per project and plane: the internal service and the ACME authority then need a project each |
 | shared cluster | `shared/kubernetes` ([section 6](#6-shared-cluster)) | `shared` on `internal`, `tenant` on `observability` |
 | entry point | `shared/entry-point` | `shared` on `publication`, `tenant` on `observability` |
-| one per tenant | `tenants/vm`, `tenants/isolated`, `tenants/kubernetes` | `tenant` |
+| one per tenant | `tenants/vm` (the web and private tenants, a workspace each), `tenants/kubernetes` | `tenant` |
 
 The steps of the campaign, in the order it runs them, with the section of each and its duration measured on 2026-11-21 (interface mode, from the `report.json` of the run):
 
@@ -48,7 +48,7 @@ The steps of the campaign, in the order it runs them, with the section of each a
 | `planes` | 1 | 20 s |
 | `receiver`, `acme`, `internal` | 2 | 1 min 20, 1 min, 50 s |
 | `edge` | 3 | 3 min (2 min 30 to 3 min 20 over the five campaigns of 2026-11-20 and 21) |
-| `web`, `isolated` | 4 | 3 min, 1 min 40 |
+| `web`, `private` | 4 | 3 min, 1 min 40 |
 | `transit`, `publish` | 5 (first publication) | 8 s, 4 s |
 | `k8s-shared`, `transit` | 6.1, the stack of the shared cluster, then its routes | 1 min, 6 s |
 | `cluster-shared` | 6.1, `create-cluster.sh` | 13 min |
@@ -74,13 +74,13 @@ Expected results are extracts of the campaign of 2026-11-21 (interface mode), an
 
 ### Inputs between stacks
 
-No stack reads an object of another project: each passes what the next ones need through its outputs. The simplest way to give a stack its per-cycle inputs is a git-ignored `mode.auto.tfvars.json` next to its `terraform.tfvars`: OpenTofu loads it automatically, also for the applies run by `scripts/publish-domains.sh`.
+No stack reads an object of another project: each passes what the next ones need through its outputs. The simplest way to give a stack its per-cycle inputs is a git-ignored `mode.auto.tfvars.json` next to its `terraform.tfvars`: OpenTofu loads it automatically, also for the applies run by `scripts/publish-domains.sh`. The two tenants of the `vm` stack share its directory: their inputs go to `mode.web.tfvars.json` and `mode.private.tfvars.json`, given with `-var-file` in their workspace (an auto file would be read by both).
 
 | Input | Of | From |
 |---|---|---|
 | `cloud` | every stack | the project's `clouds.yaml` entry |
 | `plane_attachment` | every attached stack | `tofu -chdir=stacks/shared/planes output -json attachments \| jq .<name>.planes` |
-| `monitoring.receiver` | entry point, `vm`, `isolated`, `kubernetes` | output `receiver_url` of the receiver |
+| `monitoring.receiver` | entry point, `vm`, `kubernetes` | output `receiver_url` of the receiver |
 | `edge_sources` | `vm`, `kubernetes` | output `publication_sources` of the entry point |
 | `allowed_sources` | internal service | output `internal_sources` of `kubernetes` |
 | `certificates` | `vm`, `kubernetes` | output `certificates` of the ACME authority, keyed by tenant (`jq .web`, `jq .published`) |
@@ -134,7 +134,7 @@ The **ACME authority** (Knot and step-ca, [`tests/fixtures/acme`](../../tests/fi
 
 ```bash
 cd tests/fixtures/acme && tofu init && tofu apply && tofu plan -detailed-exitcode
-tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/tenants/vm/certificates.auto.tfvars.json
+tofu output -json certificates | jq '{certificates: .web}' > ../../../stacks/tenants/vm/web-certificates.tfvars.json   # merge into mode.web.tfvars.json
 tofu output -json certificates | jq '{certificates: .published}' > ../../../stacks/tenants/kubernetes/certificates.auto.tfvars.json
 tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
 ```
@@ -168,14 +168,17 @@ $ tofu output -json publication_sources
 
 DNS records are the slowest resources: seconds normally, several minutes when Designate is congested. A record created after an apply timeout must be imported ([pitfalls](https://github.com/CyprisTech/terraform-openstack-tenant/blob/main/docs/pitfalls.md#dns)).
 
-## 4. Tenants `vm` and `isolated`
+## 4. Tenants `web` and `private`
 
-Independent of each other; run them in parallel.
+Two tenants of the `vm` stack, a workspace each ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1): `web`, behind the entry point, and `private`, with `exposure = "none"` and `egress = "none"`. They share the stack's directory: one after the other, each with its own inputs file.
 
 ```bash
-for s in stacks/tenants/vm stacks/tenants/isolated; do
-  (tofu -chdir=$s init && tofu -chdir=$s apply -auto-approve && tofu -chdir=$s plan -detailed-exitcode) &
-done; wait
+s=stacks/tenants/vm
+tofu -chdir=$s init
+for t in web private; do
+  tofu -chdir=$s workspace select -or-create=true $t
+  tofu -chdir=$s apply -auto-approve -var-file=mode.$t.tfvars.json && tofu -chdir=$s plan -detailed-exitcode -var-file=mode.$t.tfvars.json
+done
 ```
 
 | Checkpoint | If it fails |
@@ -203,7 +206,7 @@ $ tofu -chdir=stacks/shared/planes output -json transit     # here after section
     "address": "172.31.1.1",
     "routes": {
       "edge": "10.20.0.0/24 via 172.31.1.90",
-      "isolated": "10.22.0.0/24 via 172.31.1.33",
+      "private": "10.22.0.0/24 via 172.31.1.33",
       "published": "10.24.0.0/24 via 172.31.1.89",
       "receiver": "10.34.0.0/28 via 172.31.1.170",
       "web": "10.21.0.0/24 via 172.31.1.253"
@@ -225,7 +228,7 @@ $ tofu -chdir=stacks/shared/planes output -json transit     # here after section
 Each tenant asks for its domains, the change a merge request would carry, then the entry point is applied ([publish a domain](../guides/publish-a-domain.md)):
 
 ```bash
-scripts/request-domains.sh stacks/tenants/vm
+TF_WORKSPACE=web scripts/request-domains.sh stacks/tenants/vm
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 
@@ -237,7 +240,7 @@ OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 | it stops: "refusing to remove them all" | the domains file lists no domain; `--allow-empty` only to withdraw every domain on purpose |
 
 ```console
-$ scripts/request-domains.sh stacks/tenants/vm
+$ TF_WORKSPACE=web scripts/request-domains.sh stacks/tenants/vm
 site-a.example.org: added -> ["172.31.0.28:443"]
 site-b.example.org: added -> ["172.31.0.28:443"]
 written to stacks/shared/entry-point/domains.auto.tfvars.json: commit it and open a merge request
@@ -254,7 +257,7 @@ Run again with nothing to change, it says `domains unchanged: nothing to do`.
 
 The test cloud holds one Kubernetes cluster at a time: this cluster is created, tested and deleted here, before the published cluster (section 7). Deploy it with the previous minor Kubernetes version, its node image shared with the project: the **Lifecycle** step below upgrades it.
 
-1. **Stack and cluster**: `consumers` = `tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then section 5 again for its routes, then `create-cluster.sh` as in [section 7](#7-published-cluster), and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
+1. **Stack and cluster**: `consumers` = `TF_WORKSPACE=web tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then section 5 again for its routes, then `create-cluster.sh` as in [section 7](#7-published-cluster), and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
 2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
 3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
 4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
@@ -406,13 +409,14 @@ Each tenant type that can leave the entry point is switched to `exposure = "publ
 A tenant adds a route to another tenant through the transit router, and must still reach nothing. The isolation test only opens connections and does not run this step; the campaign does (step `hostile` of [`tests/campaign`](../../tests/campaign/README.md), interface mode). By hand:
 
 ```bash
-# isolated routes the web range through the observability transit router (172.31.1.1 here)
+# the private tenant routes the web range through the observability transit router (172.31.1.1 here)
+s=stacks/tenants/vm
 jq '.plane_attachment.observability.routes += [{destination: "10.21.0.0/24", next_hop: "172.31.1.1"}]' \
-  stacks/tenants/isolated/mode.auto.tfvars.json > /tmp/hostile.json
-tofu -chdir=stacks/tenants/isolated apply -var-file=/tmp/hostile.json
-# the route is on the tenant's transit router at once; on the isolated instance (through its bastion), probe a web instance
+  $s/mode.private.tfvars.json > /tmp/hostile.json
+TF_WORKSPACE=private tofu -chdir=$s apply -var-file=/tmp/hostile.json
+# the route is on the tenant's transit router at once; on the private instance (through its bastion), probe a web instance
 for p in 443 22 9100; do timeout 4 bash -c "</dev/tcp/<web address>/$p" && echo "$p OPEN" || echo "$p closed"; done
-tofu -chdir=stacks/tenants/isolated apply   # back to normal
+TF_WORKSPACE=private tofu -chdir=$s apply -var-file=mode.private.tfvars.json   # back to normal
 ```
 
 ```console
@@ -428,29 +432,29 @@ Expected: the route is there (`ip route`), every port closed — the security gr
 Neutron's port security filters the ports of the instances, not those of the routers ([lateral movement](../concepts/security.md#lateral-movement)). This step checks whether a member can disable port security on its own instance, then whether a packet sent with another project's address reaches anything. It changes a tenant's port, so it is manual; run it after the hostile route, with the same route in place.
 
 ```bash
-# credentials of the isolated stack (its clouds.yaml entry)
-PORT=$(openstack --os-cloud <isolated entry> port list --server <isolated instance> -f value -c ID)
-SGS=$(openstack --os-cloud <isolated entry> port show $PORT -f json -c security_group_ids | jq -r '.security_group_ids[]')
-openstack --os-cloud <isolated entry> port set --no-security-group --disable-port-security $PORT
+# credentials of the private tenant (its clouds.yaml entry)
+PORT=$(openstack --os-cloud <private entry> port list --server <private instance> -f value -c ID)
+SGS=$(openstack --os-cloud <private entry> port show $PORT -f json -c security_group_ids | jq -r '.security_group_ids[]')
+openstack --os-cloud <private entry> port set --no-security-group --disable-port-security $PORT
 ```
 
 If the cloud refuses (`Forbidden`), a member cannot disable port security there: record it in the [test results](../concepts/test-results.md) and stop. Otherwise, with the hostile route of the previous step applied:
 
 ```bash
-# on the isolated instance: send from the web load balancer's address, which the web instances admit on 443
+# on the private instance: send from the web load balancer's address, which the web instances admit on 443
 sudo ip addr add <web load balancer address>/32 dev ens3
 nc -s <web load balancer address> -z -w 4 <web address> 443 && echo "443 OPEN" || echo "443 closed"
 sudo ip addr del <web load balancer address>/32 dev ens3
 # back to normal: port security and security groups, then the route
-openstack --os-cloud <isolated entry> port set --enable-port-security $(for g in $SGS; do printf -- '--security-group %s ' $g; done) $PORT
-tofu -chdir=stacks/tenants/isolated apply
+openstack --os-cloud <private entry> port set --enable-port-security $(for g in $SGS; do printf -- '--security-group %s ' $g; done) $PORT
+TF_WORKSPACE=private tofu -chdir=stacks/tenants/vm apply -var-file=mode.private.tfvars.json
 ```
 
 ```console
 443 closed
 ```
 
-Expected: closed. The packet may reach the web instance, whose security group admits that source, but the answer goes to the real load balancer: no connection is established. Record whether port security could be disabled, and the result. Finally `openstack port show $PORT -c port_security_enabled` shows `True` and `tofu plan` is empty in the isolated stack.
+Expected: closed. The packet may reach the web instance, whose security group admits that source, but the answer goes to the real load balancer: no connection is established. Record whether port security could be disabled, and the result. Finally `openstack port show $PORT -c port_security_enabled` shows `True` and the plan of the private tenant is empty.
 
 ## 10. Teardown
 
@@ -461,8 +465,11 @@ kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --
   -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$B"'/32"}]'
 sleep 60   # the API load balancer takes the new sources
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
-for s in tests/fixtures/internal-service stacks/tenants/kubernetes stacks/tenants/isolated \
-         stacks/tenants/vm stacks/shared/entry-point tests/fixtures/receiver tests/fixtures/acme stacks/shared/planes; do
+for s in tests/fixtures/internal-service stacks/tenants/kubernetes; do tofu -chdir=$s destroy -auto-approve; done
+for t in private web; do
+  TF_WORKSPACE=$t tofu -chdir=stacks/tenants/vm destroy -auto-approve -var-file=mode.$t.tfvars.json
+done
+for s in stacks/shared/entry-point tests/fixtures/receiver tests/fixtures/acme stacks/shared/planes; do
   tofu -chdir=$s destroy -auto-approve
 done
 ```

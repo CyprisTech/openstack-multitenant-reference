@@ -1,6 +1,8 @@
 # Tenant type `vm`
 
-Instances serving several domains behind **one service address** ([ADR-0006](../../../docs/adr/0006-exposure.md)):
+Virtual machines whose exposure and egress are declared ([ADR-0016](../../../docs/adr/0016-network-services-and-edge-by-level.md), D1): exposed, they serve several domains behind one service address; with neither exposure nor egress, they are a [private tenant](#private-tenant).
+
+Exposed, instances serve several domains behind **one service address** ([ADR-0006](../../../docs/adr/0006-exposure.md)):
 
 - `instance_count` instances (2 by default) in a server group (anti-affinity) on the tenant network;
 - with more than one instance, an Octavia load balancer in TCP on 443 is the service address; with one, the instance itself;
@@ -42,6 +44,15 @@ flowchart LR
 
 Arrows show who opens the connection. With `exposure = "public"`, the service address gets a public floating IP instead of the entry point. Solid boxes: created by this stack; dashed boxes: provided by other stacks or outside the landing zone; grey: planes.
 
+## Private tenant
+
+`exposure = "none"` and `egress = "none"`: a tenant connected to its planes only, the equivalent of the landing zones' workloads connected to the hub and not exposed to the Internet.
+
+- no service address, no router on the publication plane, an empty `published_domains`;
+- no egress router and no default route on the transit router: unknown destinations are dropped; the tenant reaches the destinations of its planes, and nothing else;
+- no package can be installed: the instances run a workload from their image. The stack's stand-in, a Python standard-library service, pushes one metric (`workload_up`, OTLP) to the receiver. A real workload comes in the image, or from a package mirror reached on a plane ([integration points](../../../docs/reference/integration-points.md#name-resolution-time-and-package-mirrors));
+- `egress = "none"` needs `exposure = "none"` and no `certificates` (nothing would install the web server or the ACME client); `exposure = "public"` needs `egress = "router"` (its floating IP is on the egress network).
+
 ## Usage
 
 ```bash
@@ -51,6 +62,27 @@ tofu apply
 ```
 
 The stack uses the `cloud` entry of `clouds.yaml` given in `terraform.tfvars`. Make sure no `OS_*` variable is set in the shell.
+
+### Several tenants of this stack
+
+Each tenant has its own state, under its own key, with its own access rights when the backend is shared. The code stays the same: the common values in `terraform.tfvars`, the values of each tenant in its own file (never in an `*.auto.tfvars` file, which every tenant of the directory would read), and `name` to tell their resources apart (`<site>-<name>`).
+
+- **In production**, a backend key per tenant, given at init, with the tenant's values: what a pipeline runs for each tenant. The stacks declare no backend (no imposed tooling): add yours in a git-ignored `backend_override.tf`, for example `terraform { backend "s3" {} }`, and give its settings per tenant.
+
+  ```bash
+  tofu init -reconfigure -backend-config=private.backend.hcl   # the private tenant's state key
+  tofu apply -var-file=private.tfvars
+  ```
+
+- **Locally**, to evaluate, a workspace per tenant. Every workspace shares the backend and its credentials: whoever reads one state reads the others, which does not suit tenants run by different teams.
+
+  ```bash
+  cp private.tfvars.example private.tfvars   # adapt
+  tofu workspace select -or-create=true web && tofu apply
+  tofu workspace select -or-create=true private && tofu apply -var-file=private.tfvars
+  ```
+
+The web tenant is the one of `terraform.tfvars.example`; the private tenant, the one of [`private.tfvars.example`](private.tfvars.example). The test campaign uses workspaces (local states on one machine).
 
 ## Publishing the domains on the entry point
 

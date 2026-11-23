@@ -30,7 +30,7 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <rect x="892" y="452" width="230" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
 <text x="1007.0" y="472" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">entry point, SNI passthrough</text>
 <rect x="358" y="496" width="300" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
-<text x="508.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">tenant types: vm · isolated · kubernetes</text>
+<text x="508.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">tenants: vm, exposed or private · kubernetes</text>
 <rect x="670" y="496" width="150" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
 <text x="745.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">shared cluster</text>
 <rect x="832" y="496" width="220" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
@@ -39,7 +39,7 @@ Keep --window-size equal to the width and height of the svg element.</desc>
 <text x="1144.0" y="516" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">isolation, tested</text>
 <rect x="358" y="540" width="300" height="30" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.3"/>
 <text x="508.0" y="560" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="middle">availability, recovery of the architecture</text>
-<text x="358" y="602" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="start" font-style="italic">Kubernetes lifecycle the architecture requires · network services (egress, DNS, time, mirrors) · access and administration</text>
+<text x="358" y="602" font-size="12.5" fill="#1e3a8a" font-weight="normal" text-anchor="start" font-style="italic">Kubernetes lifecycle the architecture requires · network services (egress declared, DNS and time from the cloud) · access and administration</text>
 <line x1="420" y1="378" x2="420" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
 <text x="426" y="360" font-size="11.5" fill="#1d4ed8" font-weight="normal" text-anchor="start">metrics</text>
 <line x1="510" y1="378" x2="510" y2="330" stroke="#1d4ed8" stroke-width="2" marker-end="url(#ar)"/>
