@@ -24,6 +24,12 @@ def context(fake=None, dry_run=True, stacks=None, config=None):
     return Context(s, "gateway", config or {}, runner, root, root / "work")
 
 
+class WorkspaceTest(unittest.TestCase):
+    def test_a_stack_alone_in_its_directory_keeps_the_auto_file(self):
+        stack = context().stack("vm")
+        self.assertEqual((stack.inputs, stack.env(), stack.var_files()), (INPUTS, None, []))
+
+
 class RetryTest(unittest.TestCase):
     def test_returns_the_first_true_value(self):
         values = iter([None, False, "ok"])

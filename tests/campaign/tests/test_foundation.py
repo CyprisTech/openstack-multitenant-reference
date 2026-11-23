@@ -56,11 +56,11 @@ def answer_outputs(cmd, extra=None):
     return Result(0, "")
 
 
-def context(answer=answer_outputs, stacks=STACKS, options=None, config=None):
+def context(answer=answer_outputs, stacks=STACKS, options=None, config=None, workspaces=None):
     root = Path(tempfile.mkdtemp())
     for path in stacks.values():
-        (root / path).mkdir(parents=True)
-    scenario = Scenario("t", "private-cloud", ["gateway"], stacks, {}, options or {})
+        (root / path).mkdir(parents=True, exist_ok=True)
+    scenario = Scenario("t", "private-cloud", ["gateway"], stacks, {}, options or {}, workspaces or {})
     config = config or {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "vm": "web"},
                         "site": "t1", "ssh_user": "ops", "planes": {"gateway": {"publication": {"mode": "gateway"}}}}  # fmt: skip
     ctx = Context(scenario, "gateway", config, FakeRunner(answer), root, root / "work")
@@ -154,6 +154,24 @@ class InstancesTest(unittest.TestCase):
         with self.assertRaisesRegex(retry.Fatal, "cloud-init error on 10.21.0.11"):
             ctx.wait_for_instances("192.0.2.10", ["10.21.0.11"])
         self.assertEqual(len([c for c, _ in ctx.runner.commands if c[0] == "ssh"]), 1)
+
+
+class WorkspaceTest(unittest.TestCase):
+    """Two tenants of one stack directory: a workspace each, its own inputs file."""
+
+    def test_a_workspace_has_its_state_and_its_inputs(self):
+        stacks = dict(STACKS, private="stacks/tenants/vm")
+        ctx = context(stacks=stacks, workspaces={"vm": "web", "private": "private"})
+        (ctx.root / "stacks/tenants/vm" / INPUTS).write_text("{}")  # left by an earlier layout
+        ctx.set_inputs("private", name="private")
+        self.assertTrue((ctx.root / "stacks/tenants/vm/mode.private.tfvars.json").exists())
+        self.assertFalse((ctx.root / "stacks/tenants/vm" / INPUTS).exists())
+        ctx.apply("private")
+        apply, env = next((c, e) for c, e in ctx.runner.commands if "apply" in c)
+        self.assertIn("-var-file=mode.private.tfvars.json", apply)
+        self.assertEqual(env["TF_WORKSPACE"], "private")
+        select = [c for c, _ in ctx.runner.commands if "workspace" in c]
+        self.assertEqual(select[0][-2:], ["-or-create=true", "private"])
 
 
 class PublishTest(unittest.TestCase):

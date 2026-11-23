@@ -15,7 +15,7 @@ attachments = {
   edge     = { project_id = "<project id>", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
   receiver = { project_id = "<project id>", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
   web      = { project_id = "<project id>", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant" } }
-  isolated = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
+  private  = { project_id = "<project id>", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
 }
 
 # Per plane, aggregates of the tenant ranges, routed by the shared services through the transit

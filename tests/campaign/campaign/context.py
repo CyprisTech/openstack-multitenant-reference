@@ -9,9 +9,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .retry import Fatal, retry
-from .tools import OpenStack, Tofu
+from .tools import OpenStack, Stack, Tofu
 
-INPUTS = "mode.auto.tfvars.json"  # loaded by tofu by itself, also by a plain apply
+INPUTS = "mode.auto.tfvars.json"  # loaded by tofu by itself, also by a plain apply (no workspace)
 
 
 class StepFailed(RuntimeError):
@@ -63,10 +63,11 @@ class Context:
     # --- stacks ---------------------------------------------------------------------------------
 
     def stack(self, key):
-        """Path of a stack of the scenario, relative to the repository root."""
+        """Path of a stack of the scenario, relative to the repository root, with its workspace
+        when several tenants share the stack's directory."""
         if key not in self.scenario.stacks:
             raise KeyError(f"stack {key} is not in scenario {self.scenario.name}")
-        return self.scenario.stacks[key]
+        return Stack(self.scenario.stacks[key], self.scenario.workspaces.get(key))
 
     def has(self, key):
         return key in self.scenario.stacks
@@ -115,9 +116,10 @@ class Context:
 
     def _apply(self, key, extra=()):
         """One apply; its full output in the log, the summary lines printed."""
-        cmd = [self.tool, f"-chdir={self.stack(key)}", "apply", "-auto-approve", "-input=false", "-no-color", *extra]
+        stack = self.stack(key)
+        cmd = [self.tool, f"-chdir={stack}", "apply", "-auto-approve", "-input=false", "-no-color", *stack.var_files(), *extra]
         # A recorded step shows the apply as it runs; otherwise its summary lines only.
-        result = self.runner.run(cmd, cwd=self.root, check=False, stream=self.runner.verbose)
+        result = self.runner.run(cmd, cwd=self.root, env=stack.env(), check=False, stream=self.runner.verbose)
         if not self.runner.dry_run:
             self._log(key).write_text(result.stdout + result.stderr)
             for line in [] if self.runner.verbose else (result.stdout + result.stderr).splitlines():
@@ -159,8 +161,9 @@ class Context:
     def destroy(self, key):
         """Destroys a stack; its full output in the log."""
         started = time.monotonic()
-        cmd = [self.tool, f"-chdir={self.stack(key)}", "destroy", "-auto-approve", "-no-color"]
-        result = self.runner.run(cmd, cwd=self.root, check=False, stream=self.runner.verbose)
+        stack = self.stack(key)
+        cmd = [self.tool, f"-chdir={stack}", "destroy", "-auto-approve", "-no-color", *stack.var_files()]
+        result = self.runner.run(cmd, cwd=self.root, env=stack.env(), check=False, stream=self.runner.verbose)
         if not self.runner.dry_run:
             self._log(key).write_text(result.stdout + result.stderr)
             for line in [] if self.runner.verbose else (result.stdout + result.stderr).splitlines():
@@ -226,7 +229,14 @@ class Context:
         """Writes the inputs a stack receives from the others, and those of the profile; they
         become its reference inputs."""
         values = {**self.profile_inputs(key), **values}
-        path = self.root / self.stack(key) / INPUTS
+        stack = self.stack(key)
+        path = self.root / stack / stack.inputs
+        # In a directory shared by workspaces, an auto file left by an earlier layout would be read
+        # by every tenant of the directory.
+        stale = self.root / stack / INPUTS
+        if stack.workspace and stale.exists() and not self.runner.dry_run:
+            self.runner.echo(f"{key}: {stale.name} removed (read by every workspace of {stack})")
+            stale.unlink()
         self.runner.echo(f"inputs of {key}: {', '.join(values)}")
         if not self.runner.dry_run:
             path.write_text(json.dumps(values, indent=2) + "\n")
@@ -242,7 +252,7 @@ class Context:
         If an earlier run of the scene stopped before restoring, the kept inputs are restored
         first: the scene can be run again.
         """
-        path = self.root / self.stack(key) / INPUTS
+        path = self.root / self.stack(key) / self.stack(key).inputs
         backup = self._backup(key)
         if not self.runner.dry_run:
             if backup.exists():

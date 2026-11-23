@@ -1,11 +1,11 @@
 output "service_address" {
-  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its load balancer, or its only instance. On publication through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = \"public\"."
-  value       = local.service_address
+  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its load balancer, or its only instance. On publication through the entry point (a floating IP of the plane when it translates addresses, the address itself otherwise), or a public floating IP with exposure = \"public\". null with exposure = \"none\"."
+  value       = local.exposed ? local.service_address : null
 }
 
 output "published_domains" {
-  description = "Domains to publish through the entry point and their service address, for its domains input (scripts/request-domains.sh). Empty with exposure = \"public\"."
-  value       = local.public ? {} : { for d in var.domains : d => { backends = [local.service_address] } }
+  description = "Domains to publish through the entry point and their service address, for its domains input (scripts/request-domains.sh). Empty with exposure = \"public\" or \"none\"."
+  value       = var.exposure == "entry-point" ? { for d in var.domains : d => { backends = [local.service_address] } } : {}
 }
 
 output "edge_sources" {
@@ -14,7 +14,7 @@ output "edge_sources" {
 }
 
 output "instances" {
-  description = "Web instances and their private addresses."
+  description = "Instances and their private addresses."
   value       = { for name in local.instances : name => module.web.instances[name].ports["main"].ip }
 }
 
@@ -25,7 +25,8 @@ output "bastion" {
 
 
 locals {
-  service_address = "${local.load_balancer ? (
+  # Read only when the tenant is exposed (output service_address).
+  service_address = !local.exposed ? null : "${local.load_balancer ? (
     local.public || try(module.planes.nat["publication"], false) ? module.web.load_balancers[local.prefix].floating_ip : module.web.load_balancers[local.prefix].vip
     ) : (
     local.public || try(module.planes.nat["publication"], false) ? module.web.instances[local.instances[0]].ports["main"].floating_ip : module.web.instances[local.instances[0]].ports["main"].ip

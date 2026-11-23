@@ -11,11 +11,14 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
+        [--web-workspace web] [--private stacks/tenants/vm --private-workspace private] \
         [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
         [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 
-Requirements: the stacks shared/entry-point, tenants/vm and tenants/isolated applied with
-bastions and pushing to the test receiver, and the receiver applied. With
+Requirements: the stacks shared/entry-point, the web tenant (tenants/vm) and the private tenant
+(tenants/vm with exposure = "none" and egress = "none", ADR-0016 D1) applied with bastions and
+pushing to the test receiver, and the receiver applied. Two tenants of one stack directory are two
+workspaces: give them with --web-workspace and --private-workspace. With
 --published-kubeconfig, the rows of the published cluster are added: probes from the cluster run
 in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
@@ -42,8 +45,10 @@ import subprocess
 import sys
 
 
-def outputs(tool, directory):
-    out = subprocess.run([tool, "output", "-json"], cwd=directory, check=True, capture_output=True, text=True).stdout
+def outputs(tool, directory, workspace=None):
+    """The outputs of a stack; of its workspace, for a tenant that shares the stack's directory."""
+    env = dict(os.environ, TF_WORKSPACE=workspace) if workspace else None
+    out = subprocess.run([tool, "output", "-json"], cwd=directory, env=env, check=True, capture_output=True, text=True).stdout
     return {k: v["value"] for k, v in json.loads(out).items()}
 
 
@@ -95,6 +100,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stacks", default="stacks")
     ap.add_argument("--receiver", default="tests/fixtures/receiver")
+    ap.add_argument("--web-workspace", help="workspace of the web tenant in stacks/tenants/vm, if any")
+    ap.add_argument("--private", default=None, help="directory of the private tenant (default: <stacks>/tenants/vm)")
+    ap.add_argument("--private-workspace", default="private", help="its workspace (default: private)")
     ap.add_argument("--user", default="ops")
     ap.add_argument("--published-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
@@ -106,14 +114,14 @@ def main():
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
-    web = outputs(args.tool, os.path.join(args.stacks, "tenants", "vm"))
-    iso = outputs(args.tool, os.path.join(args.stacks, "tenants", "isolated"))
+    web = outputs(args.tool, os.path.join(args.stacks, "tenants", "vm"), args.web_workspace)
+    prv = outputs(args.tool, args.private or os.path.join(args.stacks, "tenants", "vm"), args.private_workspace or None)
     rcv = outputs(args.tool, args.receiver)
     p = Prober(args.user, args.key)
 
     edge_vm = sorted(edge["instances"].items())[0]
     web_vm = sorted(web["instances"].items())[0]
-    iso_vm = sorted(iso["instances"].items())[0]
+    prv_vm = sorted(prv["instances"].items())[0]
     public_ip = edge["load_balancer"]["floating_ip"]
     service = web["service_address"].split(":")[0]
     receiver = rcv["receiver_url"].split("//")[1].split(":")[0]
@@ -124,8 +132,8 @@ def main():
     def from_web(target, port):
         return lambda: p.remote(web["bastion"], web_vm[1], target, port)
 
-    def from_iso(target, port):
-        return lambda: p.remote(iso["bastion"], iso_vm[1], target, port)
+    def from_private(target, port):
+        return lambda: p.remote(prv["bastion"], prv_vm[1], target, port)
 
     def from_receiver(target, port):
         return lambda: p.remote(rcv["bastion"], rcv["address"], target, port)
@@ -159,31 +167,32 @@ def main():
         return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
 
     rows = []  # (from, to, port, expected, probe)
+    tenants = ((f"edge {edge_vm[0]}", from_edge), (f"web {web_vm[0]}", from_web), (f"private {prv_vm[0]}", from_private))
     # Publication (ADR-0006): the entry point reaches the tenant's service address, and only it.
     rows.append(("test runner", "entry point (public IP)", 443, "open", lambda: p.local(public_ip, 443)))
     rows.append(("test runner", "entry point (public IP)", 80, "open", lambda: p.local(public_ip, 80)))
     rows.append(("test runner", f"web service address {service}", 443, "closed", lambda: p.local(service, 443)))
     rows.append((f"edge {edge_vm[0]}", f"web service address {service}", 443, "open", from_edge(service, 443)))
     rows.append((f"edge {edge_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_edge(web_vm[1], 443)))
-    rows.append((f"isolated {iso_vm[0]}", f"web service address {service}", 443, "closed", from_iso(service, 443)))
+    rows.append((f"private {prv_vm[0]}", f"web service address {service}", 443, "closed", from_private(service, 443)))
     rows.append((f"web {web_vm[0]}", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", from_web(edge_vm[1], 443)))
     # Monitoring (ADR-0007): every tenant pushes to the receiver; nothing reaches a tenant's metrics.
-    for name, probe in ((f"edge {edge_vm[0]}", from_edge), (f"web {web_vm[0]}", from_web), (f"isolated {iso_vm[0]}", from_iso)):
+    for name, probe in tenants:
         rows.append((name, f"receiver {receiver}", 9090, "open", probe(receiver, 9090)))
-    for name, ip in ((edge_vm[0], edge_vm[1]), (web_vm[0], web_vm[1]), (iso_vm[0], iso_vm[1])):
+    for name, ip in ((edge_vm[0], edge_vm[1]), (web_vm[0], web_vm[1]), (prv_vm[0], prv_vm[1])):
         rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", from_receiver(ip, 9100)))
     # Lateral movement (docs/concepts/architecture.md): a tenant or the entry point reaches the receiver on its port only,
     # and the receiver reaches neither a tenant's service address nor the entry point.
-    for name, probe in ((f"edge {edge_vm[0]}", from_edge), (f"web {web_vm[0]}", from_web), (f"isolated {iso_vm[0]}", from_iso)):
+    for name, probe in tenants:
         rows.append((name, f"receiver {receiver} (SSH)", 22, "closed", probe(receiver, 22)))
     rows.append(("receiver", f"web service address {service}", 443, "closed", from_receiver(service, 443)))
     rows.append(("receiver", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", from_receiver(edge_vm[1], 443)))
-    for tenant in ("edge", "web", "isolated"):
+    for tenant in ("edge", "web", "private"):
         rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: pushed(t)))
-    # Tenant to tenant, at the private addresses, and the isolated tenant's way out.
-    rows.append((f"web {web_vm[0]}", f"isolated {iso_vm[0]} (private {iso_vm[1]})", 22, "closed", from_web(iso_vm[1], 22)))
-    rows.append((f"isolated {iso_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_iso(web_vm[1], 443)))
-    rows.append((f"isolated {iso_vm[0]}", "Internet (1.1.1.1)", 443, "closed", from_iso("1.1.1.1", 443)))
+    # Tenant to tenant, at the private addresses, and the private tenant's way out (no egress).
+    rows.append((f"web {web_vm[0]}", f"private {prv_vm[0]} (private {prv_vm[1]})", 22, "closed", from_web(prv_vm[1], 22)))
+    rows.append((f"private {prv_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_private(web_vm[1], 443)))
+    rows.append((f"private {prv_vm[0]}", "Internet (1.1.1.1)", 443, "closed", from_private("1.1.1.1", 443)))
     # IPv6 (ADR-0015, D2): no global IPv6 address and no IPv6 default route on any instance, so
     # that no IPv6 path exists next to the IPv4 rules. A cloud that adds IPv6 by itself shows here.
     def ipv6(jump, host):
@@ -193,7 +202,7 @@ def main():
         return "none" if not out else "present: " + out.splitlines()[0][:60]
 
     for name, jump, host in ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
-                             (f"isolated {iso_vm[0]}", iso["bastion"], iso_vm[1]), ("receiver", rcv["bastion"], rcv["address"])):
+                             (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"])):
         rows.append((name, "routed IPv6 (global address, default route)", "-", "none", lambda j=jump, h=host: ipv6(j, h)))
 
     probe_pod = None
@@ -217,16 +226,16 @@ def main():
         rows.append((f"edge {edge_vm[0]}", f"published ingress {ingress}", 443, "open", from_edge(ingress, 443)))
         rows.append(("test runner", f"published ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)))
         rows.append((f"web {web_vm[0]}", f"published ingress {ingress}", 443, "closed", from_web(ingress, 443)))
-        rows.append((f"isolated {iso_vm[0]}", f"published ingress {ingress}", 443, "closed", from_iso(ingress, 443)))
+        rows.append((f"private {prv_vm[0]}", f"published ingress {ingress}", 443, "closed", from_private(ingress, 443)))
         rows.append(("published pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(probe_pod, receiver, 9090)))
         rows.append(("receiver", "series pushed by published", "-", "yes", lambda: pushed("published")))
         rows.append(("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
-        for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
+        for tenant, out in (("edge", edge), ("web", web), ("private", prv)):
             rows.append(("published pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(probe_pod, b, 22)))
         rows.append(("published pod", f"internal service {internal}", 8080, "open", lambda: p.pod(probe_pod, internal, 8080)))
         rows.append((f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", from_web(internal, 8080)))
-        rows.append((f"isolated {iso_vm[0]}", f"internal service {internal}", 8080, "closed", from_iso(internal, 8080)))
+        rows.append((f"private {prv_vm[0]}", f"internal service {internal}", 8080, "closed", from_private(internal, 8080)))
         rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
         rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
         rows.append(("receiver", f"published ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
@@ -246,7 +255,7 @@ def main():
                      lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"))
         rows.append((f"web {web_vm[0]}", f"shared internal ingress {s_ingress}", 443, "open", from_web(s_ingress, 443)))
         rows.append((f"web {web_vm[0]}", f"shared TCP echo {s_echo}", 7000, "open", from_web(s_echo, 7000)))
-        rows.append((f"isolated {iso_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_iso(s_ingress, 443)))
+        rows.append((f"private {prv_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_private(s_ingress, 443)))
         rows.append((f"edge {edge_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_edge(s_ingress, 443)))
         rows.append(("receiver", f"shared TCP echo {s_echo}", 7000, "closed", from_receiver(s_echo, 7000)))
         rows.append(("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)))
@@ -255,7 +264,7 @@ def main():
                          lambda: p.pod(probe_pod, s_ingress, 443)))
         rows.append(("shared pod", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", lambda: p.pod(sk, web_vm[1], 443)))
         rows.append(("shared pod", f"web service address {service}", 443, "closed", lambda: p.pod(sk, service, 443)))
-        for tenant, out in (("edge", edge), ("web", web), ("isolated", iso)):
+        for tenant, out in (("edge", edge), ("web", web), ("private", prv)):
             rows.append(("shared pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
                          lambda b=out["bastion"]: p.pod(sk, b, 22)))
         # Positive control: the shared cluster pushes to the receiver, so the probe pod reaches it.

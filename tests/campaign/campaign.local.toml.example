@@ -25,7 +25,7 @@ acme             = "my-shared-services"
 internal-service = "my-shared-services"
 entry-point      = "my-edge"
 vm               = "my-web"
-isolated         = "my-isolated"
+private          = "my-private"
 shared           = "my-k8s-shared"
 published        = "my-published"
 

@@ -35,7 +35,7 @@ The campaign tests behaviour, not capacity: each instance gets the smallest size
 | shared cluster | 3 control plane nodes and 2 workers, 2 vCPU and 4 GB each | the high availability of the control plane, the upgrade and the credential rotation are tested on this cluster |
 | published cluster | 1 control plane node and 2 workers (`control_plane_count = 1`) | its tests (isolation, publication, direct exposure, consumers) do not depend on the control plane's availability; the two workers carry the two Traefik replicas, spread on two nodes |
 | bootstrap instances | 2 vCPU and 4 GB | kind runs there |
-| entry point, `vm`, `isolated`, internal service, ACME authority | 1 vCPU and 1 GB | nginx, Traefik, Knot, step-ca and the metrics agent |
+| entry point, `vm` (web and private tenants), internal service, ACME authority | 1 vCPU and 1 GB | nginx, Traefik, Knot, step-ca and the metrics agent |
 | receiver | 2 vCPU and 2 GB | Prometheus |
 
 A smaller cloud can also run the shared cluster with one control plane node: the upgrade is then tested without a highly available control plane.
@@ -54,6 +54,12 @@ A smaller cloud can also run the shared cluster with one control plane node: the
 A step that changes a stack and restores it (direct exposure, a consumer, the hostile route) is a scene: it keeps the stack's inputs first and restores them even when it fails; run again after a failure, it starts from the inputs it kept. An instance whose cloud-init ends in error stops the campaign, it is not retried.
 
 The inputs a stack receives from the others are written to its `mode.auto.tfvars.json`, which tofu loads by itself: a plain apply of the stack, or `scripts/publish-domains.sh`, uses them too.
+
+Two tenants of one stack, such as the web and private tenants of `stacks/tenants/vm`, share its directory: each is a workspace (its state key), declared in the scenario as `{ path, workspace }`. Its inputs go to `mode.<workspace>.tfvars.json`, given with `-var-file` (an auto file would be read by every workspace), and its commands run with `TF_WORKSPACE`, as the printed commands show:
+
+```console
+$ TF_WORKSPACE=private tofu -chdir=stacks/tenants/vm apply -auto-approve -input=false -no-color -var-file=mode.private.tfvars.json
+```
 
 `notify_hook` (optional) tells the operator, given a message: when the campaign waits for someone (the revocation of the old credential, in step `rotate`) and when it stops. `repair_hook` (optional) may clean a known failure of your test cloud after a failed apply: given the stack path, it prints extra apply arguments.
 

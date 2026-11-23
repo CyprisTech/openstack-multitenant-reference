@@ -164,13 +164,24 @@ def web(ctx, report):
     ctx.wait_for_instances(ctx.value("vm", "bastion"), ctx.instances("vm"))
 
 
-@step("isolated")
-def isolated(ctx, report):
+@step("private")
+def private(ctx, report):
+    """A private tenant (ADR-0016, D1): the vm stack in its own workspace, with neither exposure
+    nor egress; its workload pushes its metric, nothing else."""
+    cidr = ctx.options.get("planes", {}).get("attachments", {}).get("private", {}).get("cidr", "10.22.0.0/24")
     ctx.set_inputs(
-        "isolated", cloud=ctx.cloud("isolated"), plane_attachment=attachment(ctx, "isolated"), monitoring=monitoring(ctx)
+        "private",
+        cloud=ctx.cloud("private"),
+        name="private",
+        exposure="none",
+        egress="none",
+        instance_count=1,
+        web_cidr=cidr,
+        plane_attachment=attachment(ctx, "private"),
+        monitoring=monitoring(ctx),
     )
-    ctx.apply("isolated")
-    ctx.wait_for_instances(ctx.value("isolated", "bastion"), ctx.instances("isolated"))
+    ctx.apply("private")
+    ctx.wait_for_instances(ctx.value("private", "bastion"), ctx.instances("private"))
 
 
 @step("transit")
@@ -189,8 +200,9 @@ def request_domains(ctx):
     the entry point (ADR-0016, D5); the campaign plays the reviewer."""
     for key in PUBLISHING:
         if ctx.has(key) and ctx.tofu.deployed(ctx.stack(key)):
-            cmd = ["scripts/request-domains.sh", ctx.stack(key), "--tool", ctx.tool]
-            result = ctx.runner.run(cmd, cwd=ctx.root, check=False)
+            stack = ctx.stack(key)
+            cmd = ["scripts/request-domains.sh", stack, "--tool", ctx.tool]
+            result = ctx.runner.run(cmd, cwd=ctx.root, env=stack.env(), check=False)
             if result.stdout.strip() and not ctx.runner.verbose:  # a recorded step showed it already
                 ctx.runner.echo(result.stdout.strip())
             if result.returncode != 0:

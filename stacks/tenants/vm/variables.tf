@@ -13,6 +13,17 @@ variable "site" {
   }
 }
 
+variable "name" {
+  description = "Name of the tenant, in the names of its resources (<site>-<name>) and in the labels of its metrics. Two tenants of one site need two names."
+  type        = string
+  default     = "web"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{0,15}$", var.name))
+    error_message = "name must be 1 to 16 lowercase letters, digits or dashes, starting with a letter."
+  }
+}
+
 variable "zones" {
   description = "Availability zones of the instances, at least one. The instances of a role are spread over them in order (the first instance in the first zone); changing the order moves instances. One zone places everything in it."
   type        = list(string)
@@ -57,12 +68,42 @@ variable "dns_nameservers" {
   default     = []
 }
 
+variable "egress" {
+  description = <<-EOT
+    How the tenant reaches the Internet (ADR-0016, D1):
+    - "router": its own router to egress_network, which takes the default route (package
+      installation at first boot);
+    - "none": no default route, no package: the instances run a workload from the image only, a
+      stand-in that pushes one metric (workload_up) to the receiver. With exposure = "none", a
+      private tenant.
+  EOT
+  type        = string
+  default     = "router"
+
+  validation {
+    condition     = contains(["router", "none"], var.egress)
+    error_message = "egress must be \"router\" or \"none\"."
+  }
+
+  # Without egress, nothing installs the web server, the ACME client or the metrics agent.
+  validation {
+    condition     = var.egress == "router" || (var.exposure == "none" && var.certificates == null)
+    error_message = "egress = \"none\" runs the stand-in workload only: it needs exposure = \"none\" (exposure = \"public\" takes its floating IP on the egress network) and no certificates."
+  }
+}
+
 variable "egress_network" {
-  description = "External network giving the default route (package installation). The instances get no public address on it; with exposure = \"public\", the service address is a floating IP of this network. subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name)."
+  description = "External network of the egress router (egress = \"router\"). The instances get no public address on it; with exposure = \"public\", the service address is a floating IP of this network. subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name). null with egress = \"none\"."
   type = object({
     network = string
     subnet  = optional(string)
   })
+  default = null
+
+  validation {
+    condition     = var.egress != "router" || var.egress_network != null
+    error_message = "egress = \"router\" needs egress_network."
+  }
 }
 
 variable "plane_attachment" {
@@ -95,18 +136,20 @@ variable "instance_count" {
 
 variable "exposure" {
   description = <<-EOT
-    How the service address is published (ADR-0006, D2):
+    How the service address is published (ADR-0006, D2; ADR-0016, D1):
     - "entry-point": through the shared entry point (output published_domains), reachable from
       the entry point only;
     - "public": a floating IP of egress_network, reachable from anywhere; the shared entry point
-      is not used.
+      is not used;
+    - "none": no service address, no route to the publication plane; nothing reaches the
+      instances but the bastion.
   EOT
   type        = string
   default     = "entry-point"
 
   validation {
-    condition     = contains(["entry-point", "public"], var.exposure)
-    error_message = "exposure must be \"entry-point\" or \"public\"."
+    condition     = contains(["entry-point", "public", "none"], var.exposure)
+    error_message = "exposure must be \"entry-point\", \"public\" or \"none\"."
   }
 }
 
@@ -121,7 +164,7 @@ variable "edge_sources" {
 }
 
 variable "domains" {
-  description = "Domains served by the instances and published through the entry point."
+  description = "Domains served by the instances and published through the entry point. Unused with exposure = \"none\"."
   type        = list(string)
   default     = ["site-a.example.org", "site-b.example.org"]
 }

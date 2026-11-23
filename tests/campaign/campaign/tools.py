@@ -1,6 +1,7 @@
 """One place to run the commands of a campaign: printed as they run, or only printed (dry run)."""
 
 import json
+import os
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -42,7 +43,9 @@ class Runner:
         With `stream`, the output is printed line by line as it comes (long scripts), and kept."""
         cmd = [str(c) for c in cmd]
         if not quiet:
-            self.echo("$ " + shlex.join(cmd))
+            # The workspace of a tenant that shares its stack's directory, as a shell would show it.
+            workspace = f"TF_WORKSPACE={env['TF_WORKSPACE']} " if env and env.get("TF_WORKSPACE") else ""
+            self.echo("$ " + workspace + shlex.join(cmd))
         if self.dry_run:
             self.commands.append((cmd, str(cwd) if cwd else None))
             result = self.fake(cmd)
@@ -73,6 +76,34 @@ class Runner:
         return Result(process.returncode, "".join(lines), "")
 
 
+class Stack(str):
+    """The path of a stack from the repository root and, when several tenants share its
+    directory, the workspace that holds this one's state (its state key) and its inputs file."""
+
+    def __new__(cls, path, workspace=None):
+        stack = super().__new__(cls, path)
+        stack.workspace = workspace
+        return stack
+
+    @property
+    def inputs(self):
+        """The inputs the campaign writes: loaded by tofu by itself, or given with -var-file
+        in a workspace (an auto file would be loaded by every workspace of the directory)."""
+        return f"mode.{self.workspace}.tfvars.json" if self.workspace else "mode.auto.tfvars.json"
+
+    def env(self):
+        """The environment of a command on this stack: its workspace, if any."""
+        return dict(os.environ, TF_WORKSPACE=self.workspace) if self.workspace else None
+
+    def var_files(self):
+        """Arguments of plan, apply and destroy for the inputs of a workspace."""
+        return [f"-var-file={self.inputs}"] if self.workspace else []
+
+
+def stack_of(stack):
+    return stack if isinstance(stack, Stack) else Stack(stack)
+
+
 class Tofu:
     """OpenTofu or Terraform on the stacks of a campaign."""
 
@@ -85,20 +116,29 @@ class Tofu:
         return [self.tool, f"-chdir={stack}", *args]
 
     def init(self, stack):
-        return self.runner.run(self._cmd(stack, "init", "-input=false", "-no-color"), cwd=self.root, quiet=True)
+        """Init, then the stack's workspace selected, created the first time."""
+        stack = stack_of(stack)
+        result = self.runner.run(self._cmd(stack, "init", "-input=false", "-no-color"), cwd=self.root, quiet=True)
+        if stack.workspace:
+            cmd = self._cmd(stack, "workspace", "select", "-or-create=true", stack.workspace)
+            self.runner.run(cmd, cwd=self.root, quiet=True)
+        return result
 
     def plan_exitcode(self, stack):
         """0: no change, 2: changes, 1: error (plan -detailed-exitcode)."""
-        cmd = self._cmd(stack, "plan", "-detailed-exitcode", "-input=false", "-no-color")
-        return self.runner.run(cmd, cwd=self.root, check=False).returncode
+        stack = stack_of(stack)
+        cmd = self._cmd(stack, "plan", "-detailed-exitcode", "-input=false", "-no-color", *stack.var_files())
+        return self.runner.run(cmd, cwd=self.root, env=stack.env(), check=False).returncode
 
     def deployed(self, stack):
         """Whether the stack's state holds resources (a dry run lists the commands of every stack)."""
-        result = self.runner.run(self._cmd(stack, "state", "list"), cwd=self.root, check=False, quiet=True)
+        stack = stack_of(stack)
+        result = self.runner.run(self._cmd(stack, "state", "list"), cwd=self.root, env=stack.env(), check=False, quiet=True)
         return self.runner.dry_run or (result.returncode == 0 and bool(result.stdout.strip()))
 
     def output(self, stack, name):
-        result = self.runner.run(self._cmd(stack, "output", "-json", name), cwd=self.root, quiet=True)
+        stack = stack_of(stack)
+        result = self.runner.run(self._cmd(stack, "output", "-json", name), cwd=self.root, env=stack.env(), quiet=True)
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 

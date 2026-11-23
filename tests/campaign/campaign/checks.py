@@ -21,6 +21,12 @@ def isolation_test(ctx, report, cluster=None):
            "--tool", ctx.tool]  # fmt: skip
     if ctx.has("acme"):
         cmd += ["--acme", ctx.stack("acme")]
+    # Tenants sharing the vm stack's directory: one workspace each.
+    if ctx.has("vm") and ctx.stack("vm").workspace:
+        cmd += ["--web-workspace", ctx.stack("vm").workspace]
+    if ctx.has("private"):
+        private = ctx.stack("private")
+        cmd += ["--private", private, "--private-workspace", private.workspace or ""]
     if cluster == "shared":
         cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
     elif cluster == "published":

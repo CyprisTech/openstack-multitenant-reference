@@ -241,19 +241,19 @@ def hostile(ctx, report):
         observability = values["plane_attachment"]["observability"]
         observability["routes"] = list(observability.get("routes", [])) + [{"destination": web, "next_hop": hop}]
 
-    with ctx.scene("isolated") as inputs:
+    with ctx.scene("private") as inputs:
         edit_inputs(ctx, inputs, add_route)
-        ctx.apply("isolated", empty_plan=False)
-        bastion = ctx.value("isolated", "bastion")
-        instance = ctx.instances("isolated")[0]
+        ctx.apply("private", empty_plan=False)
+        bastion = ctx.value("private", "bastion")
+        instance = ctx.instances("private")[0]
         target = ctx.instances("vm")[0]
         ctx.wait_for_instances(bastion, [instance])
         # The route is on the tenant's transit router (ADR-0013): it applies at once.
         opened = [port for port in (443, 22, 9100) if reachable(ctx, bastion, instance, target, port)]
         record(ctx, [f"hostile route {instance} -> {target}:{port} {'OPEN' if port in opened else 'closed'}"
                      for port in (443, 22, 9100)])
-    ctx.apply("isolated", empty_plan=False)
-    ctx.scene_done("isolated")
+    ctx.apply("private", empty_plan=False)
+    ctx.scene_done("private")
     report.measures["hostile"] = "closed" if not opened else f"open: {opened}"
     if opened:
         raise StepFailed(f"a hostile route opened {target} on ports {opened}")
