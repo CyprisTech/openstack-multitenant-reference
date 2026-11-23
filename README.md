@@ -146,7 +146,7 @@ Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintaine
 | `public-cloud` | a public cloud, with the member role only | hub planes ([`hub.tfvars.example`](examples/planes/hub.tfvars.example)); `bastion_placement = "stack-network"` in `entry-point` and `vm`: the bastion on the stack's network, its floating IP on the egress router, 4 routers per project at most; security groups allowed in each project (some providers require a request) | [`scenarios/public-cloud.toml`](tests/campaign/scenarios/public-cloud.toml) |
 
 <details>
-<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-19)</summary>
+<summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-23)</summary>
 
 ```console
 $ for d in site-a.example.org site-b.example.org apps.published.example.org; do
@@ -155,56 +155,61 @@ $ for d in site-a.example.org site-b.example.org apps.published.example.org; do
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
 $ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --acme tests/fixtures/acme \
-    --published-kubeconfig published.kubeconfig
-from                         to                                                      port  expected  actual  
-test runner                  entry point (public IP)                                  443  open      open      ✅
-test runner                  entry point (public IP)                                   80  open      open      ✅
-test runner                  web service address 10.21.0.233                          443  closed    closed    ✅
-edge t1-edge-1               web service address 10.21.0.233                          443  open      open      ✅
-edge t1-edge-1               web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
-private t1-private-1         web service address 10.21.0.233                          443  closed    closed    ✅
-web t1-web-1                 edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
-edge t1-edge-1               receiver 10.34.0.9                                      9090  open      open      ✅
-web t1-web-1                 receiver 10.34.0.9                                      9090  open      open      ✅
-private t1-private-1         receiver 10.34.0.9                                      9090  open      open      ✅
-receiver                     t1-edge-1 metrics (private 10.20.0.64)                  9100  closed    closed    ✅
-receiver                     t1-web-1 metrics (private 10.21.0.74)                   9100  closed    closed    ✅
-receiver                     t1-private-1 metrics (private 10.22.0.68)              9100  closed    closed    ✅
-edge t1-edge-1               receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
-web t1-web-1                 receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
-private t1-private-1         receiver 10.34.0.9 (SSH)                                  22  closed    closed    ✅
-receiver                     web service address 10.21.0.233                          443  closed    closed    ✅
-receiver                     edge t1-edge-1 (private 10.20.0.64)                      443  closed    closed    ✅
-receiver                     series pushed by edge                                      -  yes       yes       ✅
-receiver                     series pushed by web                                       -  yes       yes       ✅
-receiver                     series pushed by private                                   -  yes       yes       ✅
-web t1-web-1                 private t1-private-1 (private 10.22.0.68)                22  closed    closed    ✅
-private t1-private-1         web t1-web-1 (private 10.21.0.74)                        443  closed    closed    ✅
-private t1-private-1         Internet (192.0.2.1)                                     443  closed    closed    ✅
-published Service            ingress on the stack address                               -  yes       yes       ✅
-edge t1-edge-1               published ingress 10.24.0.10                             443  open      open      ✅
-test runner                  published ingress 10.24.0.10                             443  closed    closed    ✅
-web t1-web-1                 published ingress 10.24.0.10                             443  closed    closed    ✅
-private t1-private-1         published ingress 10.24.0.10                             443  closed    closed    ✅
-published pod                receiver 10.34.0.9                                      9090  open      open      ✅
-receiver                     series pushed by published                                 -  yes       yes       ✅
-test runner (administrator)  published Kubernetes API 198.51.100.1                   6443  open      open      ✅
-published pod                edge bastion 198.51.100.2 (SSH)                           22  closed    closed    ✅
-published pod                web bastion 192.0.2.100 (SSH)                             22  closed    closed    ✅
-published pod                private bastion 192.0.2.101 (SSH)                         22  closed    closed    ✅
-published pod                internal service 198.51.100.3                           8080  open      open      ✅
-web t1-web-1                 internal service 198.51.100.3                           8080  closed    closed    ✅
-private t1-private-1         internal service 198.51.100.3                           8080  closed    closed    ✅
-edge t1-edge-1               internal service 198.51.100.3                           8080  closed    closed    ✅
-receiver                     internal service 198.51.100.3                           8080  closed    closed    ✅
-receiver                     published ingress 10.24.0.10                             443  closed    closed    ✅
-test runner                  published certificate of apps.published.example.org      443  valid     valid     ✅
-test runner                  web certificate of site-a.example.org                    443  valid     valid     ✅
-test runner                  web certificate of site-b.example.org                    443  valid     valid     ✅
-web t1-web-1                 TSIG update _acme-challenge.site-a.example.org            53  accepted  accepted  ✅
-web t1-web-1                 TSIG update _acme-challenge.apps.published.example.org    53  refused   refused   ✅
-web t1-web-1                 TSIG update _acme-challenge.services.example.org          53  refused   refused   ✅
-47/47 rows as expected
+    --web-workspace web --private-workspace private --published-kubeconfig published.kubeconfig
+from                   to                                                    port  expected actual  
+test runner            entry point (public IP)                                443  open     open     ✅
+test runner            entry point (public IP)                                 80  open     open     ✅
+test runner            web service address 10.21.0.6                          443  closed   closed   ✅
+edge t1-edge-1         web service address 10.21.0.6                          443  open     open     ✅
+edge t1-edge-1         web t1-web-1 (private 10.21.0.16)                      443  closed   closed   ✅
+private t1-private-1   web service address 10.21.0.6                          443  closed   closed   ✅
+web t1-web-1           edge t1-edge-1 (private 10.20.0.194)                   443  closed   closed   ✅
+edge t1-edge-1         receiver 10.34.0.4                                    9090  open     open     ✅
+web t1-web-1           receiver 10.34.0.4                                    9090  open     open     ✅
+private t1-private-1   receiver 10.34.0.4                                    9090  open     open     ✅
+receiver               t1-edge-1 metrics (private 10.20.0.194)               9100  closed   closed   ✅
+receiver               t1-web-1 metrics (private 10.21.0.16)                 9100  closed   closed   ✅
+receiver               t1-private-1 metrics (private 10.22.0.245)            9100  closed   closed   ✅
+edge t1-edge-1         receiver 10.34.0.4 (SSH)                                22  closed   closed   ✅
+web t1-web-1           receiver 10.34.0.4 (SSH)                                22  closed   closed   ✅
+private t1-private-1   receiver 10.34.0.4 (SSH)                                22  closed   closed   ✅
+receiver               web service address 10.21.0.6                          443  closed   closed   ✅
+receiver               edge t1-edge-1 (private 10.20.0.194)                   443  closed   closed   ✅
+receiver               series pushed by edge                                    -  yes      yes      ✅
+receiver               series pushed by web                                     -  yes      yes      ✅
+receiver               series pushed by private                                 -  yes      yes      ✅
+web t1-web-1           private t1-private-1 (private 10.22.0.245)              22  closed   closed   ✅
+private t1-private-1   web t1-web-1 (private 10.21.0.16)                      443  closed   closed   ✅
+private t1-private-1   Internet (192.0.2.101)                                     443  closed   closed   ✅
+edge t1-edge-1         routed IPv6 (global address, default route)              -  none     none     ✅
+web t1-web-1           routed IPv6 (global address, default route)              -  none     none     ✅
+private t1-private-1   routed IPv6 (global address, default route)              -  none     none     ✅
+receiver               routed IPv6 (global address, default route)              -  none     none     ✅
+published Service      ingress on the stack address                             -  yes      yes      ✅
+edge t1-edge-1         published ingress 10.24.0.10                           443  open     open     ✅
+test runner            published ingress 10.24.0.10                           443  closed   closed   ✅
+web t1-web-1           published ingress 10.24.0.10                           443  closed   closed   ✅
+private t1-private-1   published ingress 10.24.0.10                           443  closed   closed   ✅
+published pod          receiver 10.34.0.4                                    9090  open     open     ✅
+receiver               series pushed by published                               -  yes      yes      ✅
+test runner (administrator) published Kubernetes API 192.0.2.102                  6443  open     open     ✅
+published pod          edge bastion 192.0.2.103 (SSH)                          22  closed   closed   ✅
+published pod          web bastion 192.0.2.104 (SSH)                           22  closed   closed   ✅
+published pod          private bastion 192.0.2.105 (SSH)                       22  closed   closed   ✅
+published pod          internal service 192.0.2.106                         8080  open     open     ✅
+web t1-web-1           internal service 192.0.2.106                         8080  closed   closed   ✅
+private t1-private-1   internal service 192.0.2.106                         8080  closed   closed   ✅
+edge t1-edge-1         internal service 192.0.2.106                         8080  closed   closed   ✅
+receiver               internal service 192.0.2.106                         8080  closed   closed   ✅
+receiver               published ingress 10.24.0.10                           443  closed   closed   ✅
+test runner            published certificate of apps.published.example.org   443  valid    valid    ✅
+test runner            web certificate of site-a.example.org   443  valid    valid    ✅
+test runner            web certificate of site-b.example.org   443  valid    valid    ✅
+web t1-web-1           TSIG update _acme-challenge.site-a.example.org    53  accepted accepted ✅
+web t1-web-1           TSIG update _acme-challenge.apps.published.example.org    53  refused  refused  ✅
+web t1-web-1           TSIG update _acme-challenge.services.example.org    53  refused  refused  ✅
+
+51/51 rows as expected
 ```
 
 </details>
