@@ -18,4 +18,5 @@ Specs and [ADRs](../adr/README.md) play different parts:
 
 | Spec | Status |
 |---|---|
+| [Network services and the edge](network-services.md) | Proposed |
 | [Several regions](regions.md) | Proposed |
