@@ -221,7 +221,7 @@ The contract between the sources and the receivers:
 
 ## Network services
 
-**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered.
+**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered, and the package mirrors, planned in `v0.8` with the other integration points.
 
 What every tenant needs from the network, split by level ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)):
 
