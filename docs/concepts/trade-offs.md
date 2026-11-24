@@ -24,6 +24,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 18 | [The entry point's software](#18-the-entry-points-software) | Traefik in a container; any software that keeps the contract fits |
 | 19 | [Hub planes are shared segments](#19-hub-planes-are-shared-segments) | Router ports of every attached project on one network; isolation by the targets |
 | 20 | [A bastion per stack](#20-a-bastion-per-stack) | One optional bastion per stack; a central access fits in front of it |
+| 21 | [One network per plane](#21-one-network-per-plane) | Each plane its own network, joined by a router of its own |
 
 ## 1. TLS passthrough at the public entry point
 
@@ -262,6 +263,32 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 **Cost.** One more instance, floating IP and set of keys per stack; the administrators' addresses are repeated in every stack and must be kept current.
 
 **A central access fits in front of it:** a VPN or a zero-trust access service in front of the administration network. Its egress addresses become the administrators' addresses, and the bastions may go (they are optional) when the central access reaches the instances directly.
+
+## 21. One network per plane
+
+**Choice.** Each plane is a network of its own, and each tenant joins it with a router of its own: a plane is a routing domain for one purpose ([ADR-0004](../adr/0004-planes-and-isolation.md)).
+
+**Why.** What does not join a plane has no path to it, before any security group decides:
+
+- private tenants and directly exposed tenants do not join the publication plane: they have no path to the other tenants' service addresses or to the entry point's instances;
+- only the consumers of internal services join the internal services plane: the entry point, the receiver and the other tenants have no route to it ([isolation matrix](../reference/isolation-matrix.md));
+- the receiver joins the observability plane only.
+
+A compromised shared service or tenant reaches the planes it joins, and no other ([lateral movement](security.md#lateral-movement)).
+
+The router per plane keeps these domains apart. Each plane router knows the tenant's subnet and the destinations of its own plane only: a packet that another project routes to a tenant on one plane, towards another plane, is dropped there. A single router with an interface on every hub plane would forward it: one compromised project, adding a route through a tenant that knows nothing of it, would reach a plane it does not join.
+
+What keeps the planes apart depends on where they come from:
+
+| Planes | What keeps them apart | The router per plane |
+|---|---|---|
+| hub planes (`interface`) | the hub's networks and the router per plane | is the separation |
+| operator planes with NAT | the operator's distinct external networks | is required: a router has one gateway |
+| operator planes, routed | the operator's routing policy (routing domains, a firewall between them) | is required: a router has one gateway |
+
+**Cost.** A router per plane and tenant, on top of the transit router and the egress router: a tenant exposed through the entry point, consuming internal services and with an egress, has five. Plan the router quota of each project ([planes contract](../reference/planes-contract.md)); on the public cloud profile, which allows four by default, ask the provider for more, or join only the planes a tenant needs.
+
+**Alternative.** One network for several planes: fewer routers, but projects of different purposes share a segment and a routing domain, and only the security groups of the targets keep them apart.
 
 ## Evidence
 

@@ -78,7 +78,7 @@ flowchart LR
 - **Tenant ranges must not overlap**, with each other or with the planes; `shared/planes` checks it.
 - **Limit**: Neutron caps the routes of a router (`max_routes`, 30 by default), so a transit router serves about 30 attachments per plane.
 
-On a hub plane, a project joins with one router: one attachment per project and plane (checked by `shared/planes`). A second network with its own router belongs in another project, like any other tenant or shared service ([ADR-0003](../adr/0003-scope-and-boundary.md)).
+On a hub plane, a project joins with one router: one attachment per project and plane (checked by `shared/planes`). That router knows the project's subnet and the destinations of its plane only, so that no project becomes a path from one plane to another ([trade-offs](trade-offs.md#21-one-network-per-plane)). A second network with its own router belongs in another project, like any other tenant or shared service ([ADR-0003](../adr/0003-scope-and-boundary.md)).
 
 ## A tenant offering a service to another
 
