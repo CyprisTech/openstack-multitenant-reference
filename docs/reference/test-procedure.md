@@ -438,6 +438,22 @@ TF_WORKSPACE=private tofu -chdir=$s apply -var-file=mode.private.tfvars.json   #
 
 Expected: the route is there (`ip route`), every port closed — the security groups of the target admit only its load balancer, its bastion and the administrators.
 
+### Hostile route (gateway mode)
+
+The same case on planes with NAT, run by hand once per cloud: the stacks give no input for such a route, so the tenant adds it through the API, as a hostile member would. In the private tenant's project, on its observability router and on its transit router; the next hop is the web tenant's observability router address on the plane (`openstack router show <router> -c external_gateway_info`, in the web tenant's project):
+
+```bash
+openstack router add route --route destination=10.21.0.0/24,gateway=<web router address on the plane> <private observability router>
+openstack router add route --route destination=10.21.0.0/24,gateway=<observability router address on the subnet> <private transit router>
+# on the private instance (through its bastion), probe a web instance
+for p in 443 22 9100; do timeout 4 bash -c "</dev/tcp/<web address>/$p" && echo "$p OPEN" || echo "$p closed"; done
+openstack router remove route --route destination=10.21.0.0/24,gateway=<web router address on the plane> <private observability router>
+openstack router remove route --route destination=10.21.0.0/24,gateway=<observability router address on the subnet> <private transit router>
+TF_WORKSPACE=private tofu -chdir=stacks/tenants/vm plan -var-file=mode.private.tfvars.json   # no change
+```
+
+Expected: every port closed, the security groups decide. Record in the [test results](../concepts/test-results.md) whether the packets reached the web tenant's subnet (its instance's security group log, or `tcpdump` on the web instance): that says whether address translation is a further layer on this cloud.
+
 ### Spoofed source (interface mode)
 
 Neutron's port security filters the ports of the instances, not those of the routers ([lateral movement](../concepts/security.md#lateral-movement)). This step checks whether a member can disable port security on its own instance, then whether a packet sent with another project's address reaches anything. It changes a tenant's port, so it is manual; run it after the hostile route, with the same route in place.

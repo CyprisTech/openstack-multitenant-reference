@@ -9,16 +9,16 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | Internet | entry point load balancer | 80, 443 | allowed | public floating IP |
 | Internet | a tenant's service address | 443 | denied | not routed from the Internet; load balancer sources (`allowed_cidrs`) = entry point |
 | entry point | a tenant's service address (`vm` load balancer, Kubernetes ingress) | 443 | allowed | route to the publication plane; load balancer sources = entry point (`edge_sources`) |
-| entry point | a tenant's instance, at its private address | 443 | denied | NAT plane: no route; routed plane: security group of the instances (source = their load balancer) |
+| entry point | a tenant's instance, at its private address | 443 | denied | security group of the instances (source = their load balancer); with NAT, the address is also not routed on the plane: observed, not relied on ([hostile route, gateway mode](test-procedure.md#hostile-route-gateway-mode)) |
 | a tenant | another tenant's service address | 443 | denied | load balancer sources = entry point only |
-| a tenant | another tenant, at its private address | any | denied | NAT plane: no route between tenants; routed plane: routes go to the shared services only, and the security groups of the target admit only its load balancer, its bastion or the administrators — also when a tenant adds a route to another through the transit router |
+| a tenant | another tenant, at its private address | any | denied | the security groups of the target admit only its load balancer, its bastion or the administrators, whatever routes a tenant adds; the routes of the planes go to the shared services only; with NAT, the address is also not routed on the plane: observed, not relied on ([hostile route, gateway mode](test-procedure.md#hostile-route-gateway-mode)) |
 | a tenant | the metrics receiver | 9090 | allowed | route to the observability plane; security group of the receiver (sources = the plane, or the routed tenant ranges) |
 | any instance | IPv6: a global address or a default route | — | none | the reference creates no IPv6 subnet ([ADR-0015](../adr/0015-ipv6.md), D2) |
-| the receiver, or anything on the observability plane | a tenant's metrics ports | 9100 | denied | NAT plane: no address on the plane; routed plane: security groups (no metrics rule) |
+| the receiver, or anything on the observability plane | a tenant's metrics ports | 9100 | denied | security groups (no metrics rule); with NAT, the instances also have no address on the plane |
 | the receiver | series of every tenant | — | present | agents push with `site`, `tenant`, `instance` labels |
 | a tenant, or the entry point | the receiver | 22 | denied | security group of the receiver: SSH from the administrator addresses only |
 | the receiver | a tenant's service address | 443 | denied | load balancer sources = entry point only |
-| the receiver | the entry point's instances | 443 | denied | NAT plane: no route; routed plane: security group of the proxies (source = their load balancer) |
+| the receiver | the entry point's instances | 443 | denied | security group of the proxies (source = their load balancer); with NAT, the address is also not routed on the plane: observed, not relied on ([hostile route, gateway mode](test-procedure.md#hostile-route-gateway-mode)) |
 | the Kubernetes tenant | an internal service | its port | allowed | router to the internal services plane; the service admits the tenant's `internal_sources` |
 | the `vm` tenants, web and private | an internal service | its port | denied | a `vm` tenant joins the internal services plane only when it consumes internal services, and the service admits only its consumers |
 | the entry point, the receiver | an internal service | its port | denied | the service admits only its consumers |
@@ -36,4 +36,6 @@ Every flow of the reference scenario between the Internet, the planes, the share
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/security.md#lateral-movement)).
 
-The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the isolation test, which only opens TCP connections and reads the receiver. The hostile route is automated by [`tests/campaign`](../../tests/campaign/README.md) (step `hostile`, interface mode); the spoofed source is run by hand.
+The hostile-route case (a tenant routing to another through the transit router) and the spoofed-source case (a tenant sending with another address) change a tenant's router or port: they are steps of the [test procedure](test-procedure.md), not of the isolation test, which only opens TCP connections and reads the receiver. The hostile route is automated by [`tests/campaign`](../../tests/campaign/README.md) (step `hostile`, interface mode) and run by hand in gateway mode; the spoofed source is run by hand.
+
+Address translation is not a boundary these rows rely on. A tenant can add a route on its own router, through the API, towards another tenant's range via that tenant's router address on a plane with NAT; whether the cloud forwards such a packet to the tenant's subnet depends on its network back end. The security groups of the targets decide, as on a routed plane.
