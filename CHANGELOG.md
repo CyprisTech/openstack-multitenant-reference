@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Stack `shared/egress`: the shared egress of the landing zone ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1), Squid forward proxies behind an Octavia load balancer on the internal services plane; each tenant reaches the names it declares, every request is logged; the tenants delivered as instance metadata, a change replaces no instance.
+- `vm`: `egress = "shared"` (input `shared_egress`): no egress router, no default route, the proxy for apt, the shells and the system services; the instance waits for its admission at first boot.
+- Isolation test: the rows of the shared egress (`--egress`, `--egress-tenant`).
 - Entry point and shared cluster: `dns` (`designate`, the default, or `output`) and the `dns_records` output, keyed `"<name> <type>"` ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D2): the records written in Designate, or published with another DNS provider on a cloud without it. `internal_zone.id` is optional with `dns = "output"`.
 - Test fixture `tests/fixtures/resolver`: Unbound behind the internal services plane, for a tenant without egress ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D3); the private tenant of the campaign joins that plane and uses it.
 - Isolation test: name resolution (`--zone`, `--resolver`): every instance resolves the zone of the landing zone and a public name; the private tenant uses its resolver.

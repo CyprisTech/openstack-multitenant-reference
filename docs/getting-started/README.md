@@ -1,6 +1,6 @@
 # Getting started
 
-One path for every cloud. Only step 1 depends on where the shared planes come from: the operator's external networks, or private networks you build in a hub project with a member role (on a public cloud, or on a private one that gives no planes). Every other stack takes its `plane_attachment` from step 1 and works the same way ([How a tenant joins a plane](../concepts/plane-attachment.md)).
+One path for every cloud. Only step 1 depends on where the shared planes come from: the operator's external networks, or private networks you build in a hub project with a member role (on a public cloud, or on a private one that gives no planes). Every other stack takes its `plane_attachment` from step 1 and works the same way ([How a tenant joins a plane](../concepts/plane-attachment.md)). Deploy only the roles you need: [what you deploy, what we test](../reference/sizing-and-limits.md#what-you-deploy-what-we-test).
 
 ```mermaid
 flowchart LR

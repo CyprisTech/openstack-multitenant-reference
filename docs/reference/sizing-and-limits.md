@@ -2,6 +2,12 @@
 
 What a deployment needs, what it shares, and how far it scales.
 
+## What you deploy, what we test
+
+**A deployment** has one project per role ([ADR-0003](../adr/0003-scope-and-boundary.md)), and only the roles it needs. The smallest useful one is three or four projects: the hub of the planes (none when the operator provides them), the entry point if the tenants share one, and one project per tenant. The shared egress, the shared cluster and the internal services are added when they are needed.
+
+**The test campaign** deploys more, because what it proves is the isolation between projects, and each role in its own project ([test procedure](test-procedure.md)): every stack, both tenant types and the private tenant, and test fixtures that stand in for services your organisation already runs, the metrics receiver, the certificate authority and its DNS, a resolver behind a plane and an internal service. You do not deploy the fixtures. In 2026-11, the private cloud scenario uses nine projects; what you run on your own deployment is the [isolation test](../guides/check-isolation.md), against the projects you have.
+
 ## Sizing
 
 What the test campaigns of 2026-11-19 ran, project by project, with the flavors of the test cloud ([campaign sizing](../../tests/campaign/README.md#sizing)); every instance boots from the flavor's local disk. The Kubernetes clusters are deployed one after the other in the tests; in production both run at once, and a published cluster usually has 3 control plane nodes.
@@ -15,7 +21,9 @@ What the test campaigns of 2026-11-19 ran, project by project, with the flavors 
 | bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 0 | 1 administration |
 | `vm` tenant, private | 1 | 1 | 1 GiB | 0 | 0 |
 | shared services: receiver | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with NAT |
-| shared services: internal service, ACME authority (tests) | 2 | 2 | 2 GiB | 0 | 1 on the internal services plane with NAT |
+| shared services: internal service, ACME authority, resolver (tests) | 3 | 3 | 3 GiB | 0 | 1 each on the internal services plane with NAT |
+| shared egress | 2 | 2 | 2 GiB | 1 | 1 on the internal services plane with NAT |
+| `vm` tenant with the shared egress (tests) | 1 | 1 | 1 GiB | 0 | 0 |
 | bastions (one per stack, optional) | 1 each | 1 each | 1 GiB each | 0 | 1 each, administration |
 | **Total, both clusters, without bastions and bootstrap** | **16** | **25** | **41 GiB** | **7** | **up to 10** |
 | **Peak of a test campaign** (2026-11-21, measured on the test cloud during the upgrade of the shared cluster: one cluster at a time, with the bastions, a bootstrap instance and the extra machine of the rolling upgrade) | **20** | **29** | **43 GiB** | | |
@@ -34,6 +42,7 @@ With hub planes, the hub project holds one router per plane and no instance.
 | Hub project and its transit router | every project on hub planes | the router's high availability is Neutron's (OVN gateway chassis, L3 HA) | the planes stop routing between projects; each project keeps its own egress |
 | A tenant's transit router | the tenant | as above | the tenant loses its planes and its egress |
 | Receiver, internal services | their consumers | yours: they are integration points | metrics are not stored; the consumers of the service lose it |
+| Shared egress | the tenants with `egress = "shared"` | two Squid instances in anti-affinity behind the load balancer | those tenants lose their way out; the others are not affected |
 | Kubernetes API | the cluster's administration | the CAPO load balancer, active/standby where offered; 3 control plane nodes | the cluster runs, but cannot be changed |
 | Bastions | the administration of their stack | one per stack | administrators lose SSH to that stack; workloads are not affected |
 

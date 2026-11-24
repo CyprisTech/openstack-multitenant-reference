@@ -34,6 +34,10 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
 | every instance: entry point, tenants, receiver | a public name; for the tenants, also the zone of the landing zone (SOA), whose names they use | 53 | resolved | the resolvers of its subnet: Neutron's DHCP, or `dns_nameservers` ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D3) |
 | the private tenant | its resolver, behind the internal services plane | 53 | in use | `dns_nameservers` of the tenant; the resolver admits the sources of the plane only |
+| the tenant with `egress = "shared"` | a declared name, through the shared egress | 80, 443 | allowed | the proxy's rules: the tenant, known by its source, and its names ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) |
+| the tenant with `egress = "shared"` | a name it did not declare, through the shared egress | 443 | refused (403) | the proxy's rules; every request is logged |
+| the tenant with `egress = "shared"` | the Internet, directly | any | denied | no egress router and no default route on its transit router |
+| the web and private tenants, not declared | the shared egress | its port | denied | the load balancer admits the declared tenants only (`allowed_cidrs`) |
 | the private tenant (`egress = "none"`) | the Internet | any | denied | no egress router and no default route on its transit router ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1): it reaches the destinations of its planes and nothing more |
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/security.md#lateral-movement)).
