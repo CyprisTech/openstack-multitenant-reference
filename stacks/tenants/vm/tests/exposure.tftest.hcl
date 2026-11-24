@@ -144,3 +144,70 @@ run "exposed_tenant_unchanged" {
     error_message = "By default the tenant is published through the entry point and goes out through its egress router."
   }
 }
+
+run "shared_egress" {
+  command = plan
+
+  variables {
+    name           = "builds"
+    zones          = ["az-1"]
+    exposure       = "none"
+    egress         = "shared"
+    egress_network = null
+    shared_egress  = { proxy = "http://203.0.113.39:3128" }
+    edge_sources   = []
+    instance_count = 1
+    plane_attachment = {
+      observability = {
+        mode         = "gateway"
+        nat          = false
+        cidr         = "198.51.100.0/24"
+        network_id   = "00000000-0000-0000-0000-000000000003"
+        network_name = "observability"
+        subnet_id    = "00000000-0000-0000-0000-000000000004"
+      }
+      internal = {
+        mode         = "gateway"
+        nat          = false
+        cidr         = "203.0.113.0/24"
+        network_id   = "00000000-0000-0000-0000-000000000005"
+        network_name = "internal"
+        subnet_id    = "00000000-0000-0000-0000-000000000006"
+      }
+    }
+  }
+
+  assert {
+    condition     = keys(module.planes.routers) == ["internal", "observability", "transit"] && length([for r in module.planes.routers.transit.routes : r if r.destination == "0.0.0.0/0"]) == 0
+    error_message = "With the shared egress: no egress router, no default route; the internal services plane joined."
+  }
+
+  assert {
+    condition     = strcontains(local.apt_proxy, "Acquire::https::Proxy \"http://203.0.113.39:3128\";") && strcontains(local.no_proxy, "203.0.113.0/24")
+    error_message = "apt goes through the proxy; the planes are not proxied."
+  }
+
+  assert {
+    condition     = strcontains(local.proxy_files["/etc/systemd/system.conf.d/proxy.conf"].content, "HTTPS_PROXY=http://203.0.113.39:3128")
+    error_message = "The system services get the proxy."
+  }
+
+  assert {
+    condition     = strcontains(local.proxy_wait[0], "/dev/tcp/203.0.113.39/3128")
+    error_message = "At first boot, the instance waits until the proxy admits it."
+  }
+}
+
+run "shared_egress_needs_the_internal_plane" {
+  command = plan
+
+  variables {
+    zones          = ["az-1"]
+    exposure       = "none"
+    egress         = "shared"
+    egress_network = null
+    shared_egress  = { proxy = "http://203.0.113.39:3128" }
+  }
+
+  expect_failures = [var.egress]
+}

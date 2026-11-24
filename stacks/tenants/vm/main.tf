@@ -26,7 +26,11 @@ locals {
   # Exposure and egress (ADR-0016, D1).
   exposed = var.exposure != "none"
   public  = var.exposure == "public"
-  egress  = var.egress == "router"
+  # router: the tenant's own egress router. egress: a way out, its own router or the shared egress
+  # (packages at first boot, the web server, the agents).
+  router = var.egress == "router"
+  egress = var.egress != "none"
+  shared = var.egress == "shared"
 
   # One service address (ADR-0006, D1): a load balancer in front of several instances.
   load_balancer = local.exposed && var.instance_count > 1
@@ -96,7 +100,7 @@ module "bastion" {
   default_cidr  = "10.31.0.0/28"
   network       = local.prefix
   port          = "web"
-  egress        = local.egress ? { pool = "egress", network = var.egress_network.network } : null
+  egress        = local.router ? { pool = "egress", network = var.egress_network.network } : null
   users         = var.admin.users
   instance = {
     az     = var.zones[0]
@@ -121,7 +125,7 @@ module "planes" {
   attachment = var.plane_attachment
   # The transit router sends the default route to the egress router; without egress, there is no
   # default route: unknown destinations are dropped.
-  default_router = local.egress ? "egress" : null
+  default_router = local.router ? "egress" : null
   instances      = local.instances
   exposure = {
     # A single instance is the service address; behind a load balancer, instances have none.
@@ -168,6 +172,28 @@ locals {
   standin_runcmd = local.egress || var.monitoring.receiver == null ? [] : ["systemctl daemon-reload", "systemctl enable --now push-metrics.service"]
 }
 
+# The shared egress (ADR-0016, D1): no route to the Internet, a proxy on the internal services
+# plane. apt, the shells and the system services use it; nothing in the landing zone goes through it
+# (the planes and the tenant's own network are in NO_PROXY).
+locals {
+  no_proxy = join(",", concat(["localhost", "127.0.0.1", "169.254.169.254", var.web_cidr], [for p in values(var.plane_attachment) : p.cidr]))
+  proxy_files = local.shared ? {
+    "/etc/systemd/system.conf.d/proxy.conf" = {
+      content = "[Manager]\nDefaultEnvironment=\"HTTP_PROXY=${var.shared_egress.proxy}\" \"HTTPS_PROXY=${var.shared_egress.proxy}\" \"http_proxy=${var.shared_egress.proxy}\" \"https_proxy=${var.shared_egress.proxy}\" \"NO_PROXY=${local.no_proxy}\" \"no_proxy=${local.no_proxy}\"\n"
+    }
+    "/etc/profile.d/proxy.sh" = {
+      content = "export HTTP_PROXY=${var.shared_egress.proxy} HTTPS_PROXY=${var.shared_egress.proxy} http_proxy=${var.shared_egress.proxy} https_proxy=${var.shared_egress.proxy} NO_PROXY=${local.no_proxy} no_proxy=${local.no_proxy}\n"
+    }
+  } : {}
+  apt_proxy = local.shared ? "Acquire::http::Proxy \"${var.shared_egress.proxy}\";\nAcquire::https::Proxy \"${var.shared_egress.proxy}\";\n" : ""
+  # The proxy admits the tenant once it is declared there, with the address its router got on the
+  # plane: at first boot, before the packages, the instance waits for it (up to 30 minutes).
+  proxy_hostport = local.shared ? regex("^https?://([^/:]+):([0-9]+)", var.shared_egress.proxy) : []
+  proxy_wait = local.shared ? [
+    "bash -c 'for i in $(seq 180); do timeout 3 bash -c \"</dev/tcp/${local.proxy_hostport[0]}/${local.proxy_hostport[1]}\" 2>/dev/null && exit 0; sleep 10; done; echo shared egress not reached >&2'",
+  ] : []
+}
+
 module "cloudinit" {
   source   = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
   for_each = toset(local.instances)
@@ -185,6 +211,7 @@ module "cloudinit" {
     local.acme ? { "/etc/nginx/web.conf" = { content = local.nginx_conf } } : { "/etc/nginx/conf.d/web.conf" = { content = local.nginx_conf } },
     module.acme.write_files,
     try(module.metrics[each.key].write_files, {}),
+    local.proxy_files,
   )] : f if local.egress]...)
 
   # Demonstration mode: the certificate must exist before the nginx package starts the service
@@ -193,8 +220,8 @@ module "cloudinit" {
   # packages, silently.
   # (A conditional of objects needs one type: the settings are kept, or not, through a list.)
   extra_config = merge({}, [for c in [{
-    apt = { conf = "Acquire::Retries \"10\";\n" }
-    bootcmd = concat(["mkdir -p /etc/nginx/tls"], local.acme ? [] : [
+    apt = { conf = "Acquire::Retries \"10\";\n${local.apt_proxy}" }
+    bootcmd = concat(local.proxy_wait, ["mkdir -p /etc/nginx/tls"], local.acme ? [] : [
       "test -f /etc/nginx/tls/cert.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj /CN=${var.domains[0]} -addext subjectAltName=${local.san} -keyout /etc/nginx/tls/key.pem -out /etc/nginx/tls/cert.pem",
     ])
   }] : c if local.egress]...)
@@ -210,7 +237,7 @@ module "web" {
 
   tenant = {
     existing = {
-      networks = merge(local.egress ? {
+      networks = merge(local.router ? {
         egress = { name = var.egress_network.network, subnets = { for k, s in { main = var.egress_network.subnet } : k => { name = s } if s != null } }
       } : {}, module.planes.networks, module.bastion.existing_networks)
     }
@@ -223,7 +250,7 @@ module "web" {
         }
         # Gateway mode: the published addresses are floating IPs of the router on publication.
         # Interface mode: the instances' own addresses, reached through the routes.
-        routers = merge(local.egress ? {
+        routers = merge(local.router ? {
           egress = { external_network = "egress", internal_subnet = "main" }
         } : {}, module.planes.routers)
       }

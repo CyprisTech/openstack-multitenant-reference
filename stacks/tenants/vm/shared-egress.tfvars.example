@@ -1,0 +1,15 @@
+# A tenant that goes out through the shared egress of the landing zone (ADR-0016, D1): no egress
+# router, the proxy of stack shared/egress, where it is declared with its internal_sources and the
+# names it may reach. Applied in its own workspace, next to terraform.tfvars (common values):
+#   tofu workspace select -or-create=true builds && tofu apply -var-file=shared-egress.tfvars
+cloud = "example-builds" # the tenant's own project
+
+name           = "builds" # its resources: <site>-builds-*
+web_cidr       = "10.23.0.0/24"
+exposure       = "none"
+egress         = "shared"
+shared_egress  = { proxy = "http://203.0.113.39:3128" } # output proxy of stack shared/egress
+egress_network = null
+instance_count = 1
+# plane_attachment: its entry of the attachments output of shared/planes, with the internal
+# services plane, where the proxy is.

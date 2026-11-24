@@ -73,6 +73,10 @@ variable "egress" {
     How the tenant reaches the Internet (ADR-0016, D1):
     - "router": its own router to egress_network, which takes the default route (package
       installation at first boot);
+    - "shared": the shared egress of the landing zone (stack shared/egress), on the internal
+      services plane: no egress router and no default route, the proxy of shared_egress for
+      packages and the names the tenant declared there; the tenant joins the internal services
+      plane;
     - "none": no default route, no package: the instances run a workload from the image only, a
       stand-in that pushes one metric (workload_up) to the receiver. With exposure = "none", a
       private tenant.
@@ -81,15 +85,30 @@ variable "egress" {
   default     = "router"
 
   validation {
-    condition     = contains(["router", "none"], var.egress)
-    error_message = "egress must be \"router\" or \"none\"."
+    condition     = contains(["router", "shared", "none"], var.egress)
+    error_message = "egress must be \"router\", \"shared\" or \"none\"."
+  }
+
+  # The shared egress is reached on the internal services plane; exposed directly, the tenant would
+  # take its floating IP on an egress network it does not join.
+  validation {
+    condition     = var.egress != "shared" || (var.shared_egress != null && contains(keys(var.plane_attachment), "internal") && var.exposure != "public")
+    error_message = "egress = \"shared\" needs shared_egress, the internal services plane in plane_attachment, and an exposure other than \"public\"."
   }
 
   # Without egress, nothing installs the web server, the ACME client or the metrics agent.
   validation {
-    condition     = var.egress == "router" || (var.exposure == "none" && var.certificates == null)
+    condition     = var.egress != "none" || (var.exposure == "none" && var.certificates == null)
     error_message = "egress = \"none\" runs the stand-in workload only: it needs exposure = \"none\" (exposure = \"public\" takes its floating IP on the egress network) and no certificates."
   }
+}
+
+variable "shared_egress" {
+  description = "The shared egress of the landing zone, with egress = \"shared\": proxy, the URL of the proxy output of stack shared/egress, where this tenant is declared with its internal_sources and its names (ADR-0016, D1)."
+  type = object({
+    proxy = string
+  })
+  default = null
 }
 
 variable "egress_network" {
