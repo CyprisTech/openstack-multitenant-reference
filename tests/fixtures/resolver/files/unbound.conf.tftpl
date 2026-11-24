@@ -1,0 +1,21 @@
+# Resolver of the landing zone, a test fixture (ADR-0016, D3): recursive for the tenants of the
+# internal services plane, the zones of the landing zone forwarded to their servers.
+server:
+    interface: 0.0.0.0
+    port: 53
+    do-ip6: no
+    access-control: 0.0.0.0/0 refuse
+    access-control: 127.0.0.0/8 allow
+%{ for source in sources ~}
+    access-control: ${source} allow
+%{ endfor ~}
+    hide-identity: yes
+    hide-version: yes
+%{ for zone, servers in forward_zones ~}
+
+forward-zone:
+    name: "${zone}"
+%{ for server in servers ~}
+    forward-addr: ${server}
+%{ endfor ~}
+%{ endfor ~}
