@@ -23,9 +23,12 @@ locals {
     remote_write = [{ url = "${trimsuffix(var.receiver == null ? "" : var.receiver, "/")}/api/v1/write" }]
   })
 
+  # A short flush deadline: on a restart, the agent stops at once even when the receiver cannot be
+  # reached yet (on a hub plane, before the transit routes), instead of waiting a minute for it
+  # and failing its start; the samples it holds stay in its WAL.
   drop_in = <<-EOT
     [Service]
     ExecStart=
-    ExecStart=/usr/bin/prometheus --enable-feature=agent --config.file=/etc/prometheus/agent.yml --storage.agent.path=/var/lib/prometheus/agent
+    ExecStart=/usr/bin/prometheus --enable-feature=agent --config.file=/etc/prometheus/agent.yml --storage.agent.path=/var/lib/prometheus/agent --storage.remote.flush-deadline=5s
   EOT
 }
