@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Prints the cloud.conf of the OpenStack cloud controller manager and Cinder CSI, from the
-cluster credential (/opt/platform/clouds.yaml, entry "openstack")."""
+cluster credential (clouds.yaml next to this script, entry "openstack")."""
 
 import os
 
 import yaml
 
-cloud = yaml.safe_load(open("/opt/platform/clouds.yaml"))["clouds"]["openstack"]
+here = os.path.dirname(os.path.abspath(__file__))
+cloud = yaml.safe_load(open(os.path.join(here, "clouds.yaml")))["clouds"]["openstack"]
 auth = cloud["auth"]
 print("[Global]")
 print(f"auth-url={auth['auth_url']}")
@@ -14,7 +15,7 @@ if "application_credential_id" in auth:
     print(f"application-credential-id={auth['application_credential_id']}")
     print(f"application-credential-secret={auth['application_credential_secret']}")
 print(f"region={cloud.get('region_name', 'RegionOne')}")
-if os.path.exists("/opt/platform/cacert.pem"):
+if os.path.exists(os.path.join(here, "cacert.pem")):
     print("ca-file=/etc/config/ca.crt")
 print("[LoadBalancer]")
 print("create-monitor=true")

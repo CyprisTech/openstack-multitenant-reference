@@ -45,6 +45,15 @@ fi
 # the cluster's.
 
 if [[ -z "$not_moved" ]]; then
+  # A kind cluster left by an earlier run, with providers of another release: clusterctl move
+  # refuses a target older than the source. It holds nothing (the cluster manages itself): recreate it.
+  wanted="cluster-api:${versions.cluster_api} kubeadm:${versions.cluster_api} openstack:${versions.capo} helm:${versions.caaph}"
+  if kind get clusters | grep -qx bootstrap && kubectl get namespace capo-system >/dev/null 2>&1; then
+    installed=$(kubectl get providers -A -o jsonpath='{range .items[*]}{.providerName}:{.version} {end}')
+    for p in $wanted; do
+      grep -qw -- "$p" <<<"$installed" || { echo "kind cluster with other providers ($installed): recreated"; kind delete cluster --name bootstrap; break; }
+    done
+  fi
   kind get clusters | grep -qx bootstrap || kind create cluster --name bootstrap --kubeconfig "$KUBECONFIG"
   kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
   kubectl get crd -o name | grep k-orc.cloud | xargs -I{} kubectl label --overwrite {} clusterctl.cluster.x-k8s.io/move=

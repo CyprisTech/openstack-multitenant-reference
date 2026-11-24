@@ -101,6 +101,7 @@ locals {
   scripts = {
     "create-cluster.sh" = templatefile("${path.module}/scripts/create-cluster.sh.tftpl", local.manifest_vars)
     "delete-cluster.sh" = templatefile("${path.module}/scripts/delete-cluster.sh.tftpl", local.manifest_vars)
+    "update-cluster.sh" = templatefile("${path.module}/scripts/update-cluster.sh.tftpl", local.manifest_vars)
     "bootstrap-source"  = file("${path.module}/scripts/bootstrap-source.py")
     "cloud-conf"        = templatefile("${path.module}/scripts/cloud-conf.py.tftpl", local.manifest_vars)
   }

@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Update the objects of a cluster that manages itself (ADR-0017, D3): the providers of Cluster API
+# when a release changes their versions, the ClusterClass, the add-ons and the cluster, and the
+# objects of the workload cluster that are not Helm charts. Run it after each apply of the stack,
+# from a host of the administration sources, with the cluster's kubeconfig:
+#
+#     KUBECONFIG=<cluster>.kubeconfig ./update-cluster.sh
+#
+# in a directory holding this script, cloud-conf and manifests/ (the stack's scripts and
+# manifests outputs), and, to update the cluster's credential, the clouds.yaml (entry "openstack")
+# and cacert.pem that create-cluster.sh took. create-cluster.sh runs it too: --workload-only before
+# the move, --from-bootstrap at the end (the last apply cuts the bootstrap instance off the API, so
+# the script does not wait for the cluster). The script can be run again.
+set -euo pipefail
+cd "$(dirname "$0")"
+: "$${KUBECONFIG:?set KUBECONFIG to the kubeconfig of the cluster}"
+workload_only=false from_bootstrap=false
+case "$${1:-}" in
+  --workload-only) workload_only=true ;;
+  --from-bootstrap) from_bootstrap=true ;;
+  "") ;;
+  *) echo "usage: $0 [--workload-only | --from-bootstrap]" >&2; exit 2 ;;
+esac
+
+wait_webhooks() {
+  for _ in $(seq 30); do kubectl apply --dry-run=server "$@" >/dev/null 2>&1 && return 0; sleep 10; done
+  kubectl apply --dry-run=server "$@"
+}
+
+# CAAPH may create the namespace of a chart at the same moment: a create that finds it already
+# there is not an error.
+namespace() {
+  kubectl get namespace "$1" >/dev/null 2>&1 && return 0
+  kubectl create namespace "$1" 2>/dev/null || kubectl get namespace "$1" >/dev/null
+}
+
+# 1. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
+#    cloud controller manager and Cinder CSI (from the credential, when it is here), the right of
+#    the cloud controller to delete nodes, the default storage class, the Gateway API CRDs, and,
+#    in demonstration mode (without certificates), a self-signed certificate.
+if [[ -f clouds.yaml ]]; then
+  cloud_conf=$(./cloud-conf)
+  kubectl -n kube-system create secret generic cloud-config \
+    --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl apply -f -
+fi
+kubectl apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
+%{ for name, i in ingresses ~}
+namespace ${i.namespace}
+%{ if certificates == null ~}
+if ! kubectl -n ${i.namespace} get secret ${i.tls_secret} >/dev/null 2>&1; then
+  tls=$(mktemp -d)
+  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=${i.domains[0]}" \
+    -addext "subjectAltName=${join(",", [for d in i.domains : "DNS:${d}"])}" -keyout "$tls/tls.key" -out "$tls/tls.crt"
+  kubectl -n ${i.namespace} create secret tls ${i.tls_secret} --cert="$tls/tls.crt" --key="$tls/tls.key"
+  shred -u "$tls/tls.key"; rm -f "$tls/tls.crt"; rmdir "$tls"
+fi
+%{ endif ~}
+%{ endfor ~}
+%{ if length(services) > 0 ~}
+kubectl apply -f manifests/services.yaml
+%{ endif ~}
+$workload_only && exit 0
+
+# The steps below need the cluster to manage itself.
+kubectl --request-timeout=15s -n platform get cluster/${cluster.name} >/dev/null 2>&1 \
+  || { echo "cluster ${cluster.name} not found in its own API: it does not manage itself yet (create-cluster.sh)" >&2; exit 1; }
+
+# 2. Providers: Cluster API and its providers at the versions of this release, ORC with them.
+wanted="cluster-api:${versions.cluster_api} kubeadm:${versions.cluster_api} openstack:${versions.capo} helm:${versions.caaph}"
+installed=$(kubectl get providers -A -o jsonpath='{range .items[*]}{.providerName}:{.version} {end}')
+missing=$(for p in $wanted; do grep -qw -- "$p" <<<"$installed" || echo "$p"; done)
+if [[ -n "$missing" ]]; then
+  echo "providers to upgrade: $missing"
+  # clusterctl renders every provider again from the environment: without it, the ClusterClass
+  # feature gate (ClusterTopology) goes back to false and the cluster's topology can no longer
+  # change, as create-cluster.sh sets it.
+  export CLUSTER_TOPOLOGY=true
+  clusterctl upgrade apply --core cluster-api:${versions.cluster_api} --bootstrap kubeadm:${versions.cluster_api} \
+    --control-plane kubeadm:${versions.cluster_api} --infrastructure openstack:${versions.capo} --addon helm:${versions.caaph} --wait-providers
+fi
+kubectl apply --server-side -f https://github.com/k-orc/openstack-resource-controller/releases/download/${versions.orc}/install.yaml
+
+# 3. The cluster's credential, the ClusterClass, the add-ons and the ORC Image (clusterctl move
+#    does not carry it). A ClusterClass whose machine templates change gives templates of a new
+#    name: Cluster API replaces the machines one by one.
+if [[ -f clouds.yaml ]]; then
+  ca_args=()
+  [[ -f cacert.pem ]] && ca_args=(--from-file=cacert=cacert.pem)
+  kubectl -n platform create secret generic ${prefix}-cloud-config --from-file=clouds.yaml "$${ca_args[@]}" \
+    --dry-run=client -o yaml | kubectl label --local -f - clusterctl.cluster.x-k8s.io/move= -o yaml | kubectl apply -f -
+fi
+wait_webhooks -f manifests/cluster-class.yaml -f manifests/addons.yaml
+kubectl apply -f manifests/cluster-class.yaml -f manifests/addons.yaml
+python3 -c 'import sys, yaml; print(yaml.safe_dump_all([d for d in yaml.safe_load_all(open("manifests/cluster-class.yaml")) if d and d["kind"] == "Image"]))' \
+  | kubectl apply -f -
+%{ if certificates != null ~}
+
+# 4. Certificates of the domains (ADR-0008), once cert-manager runs.
+%{ if length(certificates.dns.resolvers) > 0 ~}
+#    cert-manager checks the TXT record on the given name servers only.
+args=$(kubectl -n cert-manager get deployment cert-manager -o jsonpath='{.spec.template.spec.containers[0].args}')
+if [[ "$args" != *dns01-recursive-nameservers-only* ]]; then
+  kubectl -n cert-manager patch deployment cert-manager --type=json -p '[
+    {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--dns01-recursive-nameservers-only"},
+    {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--dns01-recursive-nameservers=${join(",", certificates.dns.resolvers)}"}]'
+  kubectl -n cert-manager rollout status deployment cert-manager --timeout=5m
+fi
+%{ endif ~}
+kubectl wait --for=condition=Available -n cert-manager deployment --all --timeout=10m
+kubectl apply -f manifests/certificates.yaml
+%{ for name, i in ingresses ~}
+kubectl -n ${i.namespace} wait certificate/${i.tls_secret} --for=condition=Ready --timeout=15m
+%{ endfor ~}
+%{ endif ~}
+
+# 5. One release proxy per chart: a duplicate blocks every later change of the add-ons.
+duplicates=$(kubectl --request-timeout=15s -n platform get helmreleaseproxy \
+  -o jsonpath='{range .items[*]}{.spec.namespace}/{.spec.releaseName}{"\n"}{end}' | sort | uniq -d)
+[[ -z "$duplicates" ]] || { echo "duplicate Helm release proxies: $duplicates" >&2; exit 1; }
+
+# 6. The cluster, last: its API admits the administration sources only, no bootstrap instance.
+sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl apply -f -
+$from_bootstrap && { echo "Cluster ${cluster.name} updated; this instance no longer reaches its API."; exit 0; }
+kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.conditions[?(@.type=="Available")].status}'=True --timeout=30m
+echo "Cluster ${cluster.name} updated."
