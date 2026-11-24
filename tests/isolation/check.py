@@ -33,6 +33,11 @@ With --acme, the rows of the certificates are added (ADR-0008): each published d
 through the entry point, presents a certificate for its name issued by the test authority, and
 a tenant's TSIG key can change its own _acme-challenge records only (nsupdate on the web
 instance; the record it adds is deleted at once).
+
+With --zone, the rows of name resolution are added (ADR-0016, D3): every instance resolves the
+zone of the landing zone and a public name (--public-name) through the resolvers of its subnet;
+with --resolver (tests/fixtures/resolver), the private tenant uses that resolver, behind the
+internal services plane.
 """
 
 import argparse
@@ -111,6 +116,9 @@ def main():
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
     ap.add_argument("--shared-kubeconfig", help="kubeconfig of the shared cluster (stacks/shared/kubernetes)")
+    ap.add_argument("--zone", help="zone of the landing zone, which every instance must resolve")
+    ap.add_argument("--public-name", default="openstack.org", help="a public name every instance must resolve")
+    ap.add_argument("--resolver", help="directory of the test resolver (tests/fixtures/resolver), used by the private tenant")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
@@ -204,6 +212,35 @@ def main():
     for name, jump, host in ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
                              (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"])):
         rows.append((name, "routed IPv6 (global address, default route)", "-", "none", lambda j=jump, h=host: ipv6(j, h)))
+
+    # Name resolution (ADR-0016, D3): the resolvers of each subnet answer the zone of the landing
+    # zone and public names; the private tenant, without egress, through the resolver behind the
+    # internal services plane.
+    def resolves(jump, host, name, rtype="A"):
+        out = p.run(jump, host, f"resolvectl query --legend=no -t {rtype} {shlex.quote(name)} 2>&1 | head -1")
+        if out.startswith("error"):
+            return out
+        return "yes" if out and "resolve call failed" not in out and "not found" not in out.lower() else "no: " + out[:50]
+
+    def resolvers(jump, host):
+        return p.run(jump, host, "resolvectl dns 2>/dev/null | awk -F': ' 'NF>1 {print $2}' | tr '\\n' ' '").strip()
+
+    if args.zone:
+        instances = ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
+                     (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"]))
+        for name, jump, host in instances:
+            rows.append((name, f"resolves the zone {args.zone} (SOA)", 53, "yes",
+                         lambda j=jump, h=host: resolves(j, h, args.zone, "SOA")))
+            rows.append((name, f"resolves {args.public_name}", 53, "yes",
+                         lambda j=jump, h=host: resolves(j, h, args.public_name)))
+    if args.resolver:
+        resolver = outputs(args.tool, args.resolver)["resolver"]
+
+        def uses_resolver():
+            out = resolvers(prv["bastion"], prv_vm[1])
+            return "yes" if resolver in out.split() else "no: " + (out or "none")[:50]
+
+        rows.append((f"private {prv_vm[0]}", f"resolver in use {resolver}", "-", "yes", uses_resolver))
 
     probe_pod = None
     if args.published_kubeconfig:
