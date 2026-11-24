@@ -15,6 +15,7 @@ The release campaign of v0.5.1 (2026-11-20, hub planes; the interface column giv
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
 | Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
 | Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows; 58 since 2026-11-24, with the private tenant, IPv6 and name resolution) | ✅ 47/47; 58/58 on 2026-11-24 | ✅ 47/47; 58/58 on 2026-11-24 |
+| Shared egress | the tenant with `egress = "shared"` installs its packages through the proxies, reaches a declared name and is refused another, has no direct way out; the tenants not declared do not reach the proxies (2026-11-24) | ✅ | ✅ |
 | Name resolution | public names from every instance, the zone of the landing zone from the tenants, the private tenant through the test resolver behind the internal services plane (2026-11-24) | ✅ | ✅ |
 | Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run yet | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
@@ -45,6 +46,12 @@ The isolation matrix of the earlier designs had 44 to 46 rows; the counts are no
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: the shared egress (2026-11-24)
+
+The scenario without the shared cluster (`tests/campaign/run.py private-cloud --mode <mode> --record foundation published end`), in both plane modes, from empty projects, with [`stacks/shared/egress`](../../stacks/shared/egress/README.md) in a project of its own and a `vm` tenant with `egress = "shared"` in another ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1). The egress is applied with no tenant; the tenant is applied, its instance waits at first boot until the proxies admit it, then the tenant is declared on the egress with its address on the internal services plane, and its instance installs its packages through the proxies. In both modes: isolation 63/63 with the published cluster, the four rows of the shared egress included (a declared name reached through the proxy, another refused with a 403, no direct way out, the web and private tenants refused by the load balancer); HTTPS 12/12 on each domain; publication under load 22 ok and 34 ok, 0 failed; hostile route closed (interface); empty plans (11 stacks); teardown without leftovers.
+
+One failure in interface mode, at the egress step: the proxies' metrics agent, restarted by cloud-init while the receiver could not be reached yet (on a hub plane, before the transit routes), waited a minute for its pending samples before stopping, and its start failed; cloud-init ended in error. The agent now stops after 5 seconds (`--storage.remote.flush-deadline`), for every stack; the run was then repeated from empty projects. Two campaign details found on the way: the refused HTTPS name makes `curl` exit with an error, so the isolation test reads the proxy's answer code instead of the exit status; and a load balancer of the web tenant went to ERROR once in gateway mode (the Octavia failure seen before), deleted and created again.
 
 ## Detailed results: name resolution (2026-11-24)
 
