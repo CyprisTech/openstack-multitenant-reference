@@ -77,7 +77,8 @@ module "cloudinit" {
     # systemd-resolved's stub listener holds port 53 on the loopback: Unbound answers there instead.
     "mkdir -p /etc/systemd/resolved.conf.d && printf '[Resolve]\\nDNSStubListener=no\\n' > /etc/systemd/resolved.conf.d/no-stub.conf",
     "ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf && systemctl restart systemd-resolved",
-    "systemctl restart unbound",
+    # The package started Unbound while the stub held the port: its failures hit the start limit.
+    "systemctl reset-failed unbound && systemctl restart unbound",
   ]
 }
 
