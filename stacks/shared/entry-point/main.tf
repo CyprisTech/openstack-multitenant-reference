@@ -55,6 +55,12 @@ module "bastion" {
 # How the stack joins the planes (ADR-0004), from its entry of the attachments output of
 # shared/planes. The Traefik instances have no address on the planes: they connect to the
 # tenants' service addresses (ADR-0006).
+# Records of the public names (ADR-0016, D2): written in Designate with dns = "designate", given as
+# the dns_records output in both cases, for a DNS outside the cloud.
+locals {
+  write_dns = var.public_dns != null && var.dns == "designate"
+}
+
 module "planes" {
   source = "../../../modules/plane-attachment"
 
@@ -126,7 +132,7 @@ module "edge" {
         publication   = module.planes.networks.publication
         observability = module.planes.networks.observability
       }, module.bastion.existing_networks)
-      dns_zones = var.public_dns == null ? {} : { public = { name = var.public_dns.zone } }
+      dns_zones = local.write_dns ? { public = { name = var.public_dns.zone } } : {}
     }
 
     networks = merge({
@@ -184,7 +190,7 @@ module "edge" {
         flavor_id = var.octavia_flavor_id
         floating_ip = {
           pool = "public"
-          dns  = var.public_dns == null ? [] : [for n in var.public_dns.names : { name = n, zone = "public" }]
+          dns  = local.write_dns ? [for n in var.public_dns.names : { name = n, zone = "public" }] : []
         }
         listeners = {
           # Both listeners forward raw TCP with a PROXY header: Traefik sees the client address
@@ -207,7 +213,7 @@ module "edge" {
       }
     }
 
-    defaults = var.public_dns == null ? {} : { ttl = var.public_dns.ttl }
+    defaults = local.write_dns ? { ttl = var.public_dns.ttl } : {}
   }
 }
 

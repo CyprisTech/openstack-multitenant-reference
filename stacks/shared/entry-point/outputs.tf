@@ -27,3 +27,16 @@ output "bastion" {
   value       = var.bastion != null ? module.edge.instances[local.bastion_name].ports[module.bastion.floating_ip_port].floating_ip : null
 }
 
+
+output "dns_records" {
+  description = "The records of public_dns (ADR-0016, D2), keyed \"<name> <type>\", each { zone, name, type, ttl, records }: written in Designate with dns = \"designate\", to publish with your DNS provider otherwise (a for_each of its record resource)."
+  value = var.public_dns == null ? {} : {
+    for n in var.public_dns.names : "${n == "" ? trimsuffix(var.public_dns.zone, ".") : "${n}.${trimsuffix(var.public_dns.zone, ".")}"} A" => {
+      zone    = var.public_dns.zone
+      name    = n
+      type    = "A"
+      ttl     = var.public_dns.ttl
+      records = [module.edge.load_balancers[local.prefix].floating_ip]
+    }
+  }
+}

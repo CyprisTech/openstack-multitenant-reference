@@ -165,13 +165,24 @@ variable "admin" {
 }
 
 variable "public_dns" {
-  description = "Optional A records on the public floating IP: an existing zone (name with its trailing dot) and relative names (\"\" for the apex)."
+  description = "Optional A records on the public floating IP: a zone (name with its trailing dot) and relative names (\"\" for the apex). Written in that existing Designate zone with dns = \"designate\"; given as the dns_records output in both cases."
   type = object({
     zone  = string
     names = list(string)
     ttl   = optional(number, 300)
   })
   default = null
+}
+
+variable "dns" {
+  description = "Where the records of public_dns go (ADR-0016, D2): \"designate\", written in the cloud's Designate, or \"output\", written nowhere, for your DNS provider. The dns_records output gives them in both cases."
+  type        = string
+  default     = "designate"
+
+  validation {
+    condition     = contains(["designate", "output"], var.dns)
+    error_message = "dns is \"designate\" or \"output\"."
+  }
 }
 
 variable "bastion" {
