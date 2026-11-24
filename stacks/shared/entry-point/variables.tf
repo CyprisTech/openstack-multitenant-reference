@@ -52,7 +52,7 @@ variable "edge_cidr" {
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers pushed by DHCP on the edge network. They must be reachable through the edge routes (public network or a plane), and resolve the backend names used in routes. Without them, the first boot cannot install Podman nor pull the Traefik image."
+  description = "DNS resolvers pushed by DHCP on the edge network; empty (the default), those of Neutron's DHCP (ADR-0016, D3). They must be reachable through the edge routes (public network or a plane), and resolve the backend names used in routes and public names: the first boot installs Podman and pulls the Traefik image."
   type        = list(string)
   default     = []
 }

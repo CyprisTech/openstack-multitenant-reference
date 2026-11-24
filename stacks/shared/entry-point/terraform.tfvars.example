@@ -10,7 +10,7 @@ boot_volume_size = 10 # null with a flavor that has a local disk
 public_network = { network = "public", subnet = "public-subnet" }
 
 
-dns_nameservers   = ["192.0.2.53"]
+# dns_nameservers = ["192.0.2.53"]  # empty (the default): the resolvers of Neutron's DHCP (ADR-0016, D3)
 network_mtu       = 1362 # smallest of the tenant overlay MTU and the plane MTUs
 octavia_flavor_id = null # an active/standby flavor if the cloud offers one
 

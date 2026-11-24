@@ -229,6 +229,7 @@ What every tenant needs from the network, split by level ([ADR-0016](../adr/0016
 |---|---|
 | Name resolution | Not run by the reference. The resolvers come from Neutron's DHCP (the operator's), through the tenant's egress, or from a resolver behind a plane the tenant joins (the operator's, the organisation's DNS, a platform team's), given as `dns_nameservers` ([planes contract](../reference/planes-contract.md)) |
 | Internal names | Each stack writes its records in Designate, and gives them as an output (`dns_records`) to publish in another DNS, on a cloud without Designate |
+| Name resolution in the clusters | CoreDNS forwards to the resolvers of the nodes, those of the subnet; no stub zone by default. A private zone that the cloud's resolvers do not resolve is a setting of the platform team's CoreDNS (level 3), not delivered |
 | Time | From the cloud: instances on KVM follow the hypervisor's clock (kvm-clock). A workload that needs NTP-grade accuracy brings its own time servers |
 | Packages and images | An [integration point](../reference/integration-points.md#name-resolution-time-and-package-mirrors): mirrors and registry caches of the platform teams, reachable on a plane by tenants without Internet access, such as a private tenant |
 | Egress to the Internet | Declared per tenant: `none`, `router` (a router to an egress network in the tenant's own project) or `shared` (a shared egress of the landing zone that restricts and logs); never by default |

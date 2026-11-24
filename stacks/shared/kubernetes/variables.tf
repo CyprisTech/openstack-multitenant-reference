@@ -52,7 +52,7 @@ variable "cluster_cidr" {
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers of the cluster network, reachable through its routes. They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images."
+  description = "DNS resolvers of the cluster network, reachable through its routes; empty (the default), those of Neutron's DHCP (ADR-0016, D3). They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images."
   type        = list(string)
   default     = []
 }

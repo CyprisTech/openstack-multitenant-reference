@@ -63,7 +63,7 @@ variable "web_cidr" {
 }
 
 variable "dns_nameservers" {
-  description = "DNS resolvers of the tenant network, reachable through its routes."
+  description = "DNS resolvers of the tenant network, reachable through its routes; empty (the default), those of Neutron's DHCP. A tenant without egress takes a resolver behind one of its planes (ADR-0016, D3)."
   type        = list(string)
   default     = []
 }

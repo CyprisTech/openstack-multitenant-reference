@@ -15,7 +15,7 @@ egress_network = { network = "public", subnet = "public-subnet" }
 
 
 # Resolvers reachable through the egress network.
-dns_nameservers = ["9.9.9.9", "1.1.1.1"]
+# dns_nameservers = ["192.0.2.53"]  # empty (the default): the resolvers of Neutron's DHCP (ADR-0016, D3)
 
 # Smallest of the tenant overlay MTU and the plane MTUs (planes contract).
 network_mtu = 1362

@@ -32,6 +32,8 @@ Every flow of the reference scenario between the Internet, the planes, the share
 | a tenant, with its TSIG key | the `_acme-challenge` records of its own names | 53 | allowed | DNS server ACL: key, record type TXT, owner names, sources |
 | a tenant, with its TSIG key | the `_acme-challenge` records of another tenant's names | 53 | denied | DNS server ACL: each key covers its tenant's names only |
 | administrators | bastions, Kubernetes API | 22, 6443 | allowed | administration network; named administrator addresses only |
+| every instance: entry point, tenants, receiver | the zone of the landing zone (SOA) and a public name | 53 | resolved | the resolvers of its subnet: Neutron's DHCP, or `dns_nameservers` ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D3) |
+| the private tenant | its resolver, behind the internal services plane | 53 | in use | `dns_nameservers` of the tenant; the resolver admits the sources of the plane only |
 | the private tenant (`egress = "none"`) | the Internet | any | denied | no egress router and no default route on its transit router ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1): it reaches the destinations of its planes and nothing more |
 
 The rows between shared services, and from a tenant to a shared service beyond its port, bound what a compromised shared service or tenant can reach ([lateral movement](../concepts/security.md#lateral-movement)).
