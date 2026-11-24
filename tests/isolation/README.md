@@ -18,6 +18,6 @@ python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/recei
   [--zone example.org [--public-name openstack.org]] [--resolver tests/fixtures/resolver]
 ```
 
-With `--zone`, every instance must resolve the zone of the landing zone (its SOA) and a public name through the resolvers of its subnet ([ADR-0016](../../docs/adr/0016-network-services-and-edge-by-level.md), D3). With `--resolver`, the private tenant must use the [test resolver](../fixtures/resolver/README.md), behind the internal services plane. There is no row for time: it is a requirement on the cloud, and a wrong clock fails the HTTPS checks, which verify certificates.
+With `--zone`, every instance must resolve a public name through the resolvers of its subnet, and the tenants also the zone of the landing zone (its SOA), whose names they use ([ADR-0016](../../docs/adr/0016-network-services-and-edge-by-level.md), D3). With `--resolver`, the private tenant must use the [test resolver](../fixtures/resolver/README.md), behind the internal services plane. There is no row for time: it is a requirement on the cloud, and a wrong clock fails the HTTPS checks, which verify certificates.
 
 Each row prints the source, the destination, the port, the expected and the actual result. A probe that cannot run (SSH failure) is reported as an error, never as `closed`.

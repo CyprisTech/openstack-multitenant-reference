@@ -34,8 +34,10 @@ through the entry point, presents a certificate for its name issued by the test 
 a tenant's TSIG key can change its own _acme-challenge records only (nsupdate on the web
 instance; the record it adds is deleted at once).
 
-With --zone, the rows of name resolution are added (ADR-0016, D3): every instance resolves the
-zone of the landing zone and a public name (--public-name) through the resolvers of its subnet;
+With --zone, the rows of name resolution are added (ADR-0016, D3): every instance resolves a
+public name (--public-name) through the resolvers of its subnet, and the tenants also resolve the
+zone of the landing zone, whose names they use (the entry point and the receiver reach the
+tenants by address);
 with --resolver (tests/fixtures/resolver), the private tenant uses that resolver, behind the
 internal services plane.
 """
@@ -229,8 +231,9 @@ def main():
         instances = ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
                      (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"]))
         for name, jump, host in instances:
-            rows.append((name, f"resolves the zone {args.zone} (SOA)", 53, "yes",
-                         lambda j=jump, h=host: resolves(j, h, args.zone, "SOA")))
+            if name.startswith(("web", "private")):
+                rows.append((name, f"resolves the zone {args.zone} (SOA)", 53, "yes",
+                             lambda j=jump, h=host: resolves(j, h, args.zone, "SOA")))
             rows.append((name, f"resolves {args.public_name}", 53, "yes",
                          lambda j=jump, h=host: resolves(j, h, args.public_name)))
     if args.resolver:
