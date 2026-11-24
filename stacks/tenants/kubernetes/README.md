@@ -1,6 +1,6 @@
 # Tenant type `kubernetes`
 
-The published cluster, a Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on the publication plane behind the entry point (`exposure = "entry-point"`, the default) or exposed with its own public floating IP (`exposure = "public"`), pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
+The published cluster, a Kubernetes cluster created by Cluster API with the OpenStack provider (CAPO), published on the publication plane behind the entry point (`exposure = "entry-point"`, the default) exposed with its own public floating IP (`exposure = "public"`), or private, with no ingress (`exposure = "none"`, [ADR-0016](../../../docs/adr/0016-network-services-and-edge-by-level.md), D1), pushing its metrics to your receiver, administered from the administration network only. Design: [ADR-0002](../../../docs/adr/0002-platform-kubernetes.md).
 
 | Created by | What |
 |---|---|
@@ -139,6 +139,8 @@ kubectl --kubeconfig <cluster>.kubeconfig -n traefik get svc traefik   # the add
 
 The apply replaces the address of the ingress (a floating IP of another network) and releases the old one: the ingress is unreachable until the add-ons are applied. Then update the routes: `scripts/publish-domains.sh` when the cluster goes back to the entry point, your DNS when it leaves it.
 
+A private cluster (`exposure = "none"`) serves nobody: every connection starts from it, to the Internet through its egress or to the internal services it consumes. Typical uses: CI runners, batch jobs, message queue consumers, scheduled operations (backups, scans, synchronisations). It is chosen at creation. Making an existing cluster private, or publishing a private one, changes its add-ons beyond a `kubectl apply` (the ingress is removed or installed): it comes with the update of a cluster through its API ([ADR-0017](../../../docs/adr/0017-upgrades-between-releases.md), D3).
+
 ### Who reaches what
 
 - The ingress admits the entry point only, by the `edge_sources` input (output `publication_sources` of the entry point); with `exposure = "public"`, any source.
@@ -236,7 +238,7 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | cluster\_cidr | Range of the cluster network (nodes, load balancer VIPs, bootstrap instance). | `string` | `"10.24.0.0/24"` | no |
 | dns\_nameservers | DNS resolvers of the cluster network, reachable through its routes. They must resolve the endpoints of the cloud APIs (Cluster API, the cloud controller manager and Cinder CSI call them from the cluster), and public names for the images. | `list(string)` | `[]` | no |
 | edge\_sources | Ranges the entry point connects from on publication: output publication\_sources of stack<br/>shared/entry-point. Only they may reach the ingress and send a PROXY protocol header.<br/>Required with exposure = "entry-point". | `list(string)` | `[]` | no |
-| exposure | How the service address, the ingress, is published (ADR-0006, D2):<br/>- "entry-point": through the shared entry point (output published\_domains), reachable from<br/>  the entry point only, which sends a PROXY protocol header;<br/>- "public": a floating IP of egress\_network, reachable from anywhere; the shared entry point<br/>  is not used and the cluster does not join the publication plane. | `string` | `"entry-point"` | no |
+| exposure | How the service address, the ingress, is published (ADR-0006, D2):<br/>- "entry-point": through the shared entry point (output published\_domains), reachable from<br/>  the entry point only, which sends a PROXY protocol header;<br/>- "public": a floating IP of egress\_network, reachable from anywhere; the shared entry point<br/>  is not used and the cluster does not join the publication plane;<br/>- "none": a private cluster (ADR-0016, D1), with no ingress and no service address; it keeps<br/>  its egress, which brings its container images. | `string` | `"entry-point"` | no |
 | monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |
 | service\_addresses | Host numbers, in the cluster network, of the load balancer of the ingress on an interface<br/>plane. Neutron does not allocate the first addresses of the cluster network to anything else<br/>(reserved below reserved\_hosts), so this address is known before the cluster exists. | <pre>object({<br/>    ingress        = optional(number, 10)<br/>    reserved_hosts = optional(number, 32)<br/>  })</pre> | `{}` | no |
@@ -247,10 +249,10 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | Name | Description |
 | ---- | ----------- |
 | bootstrap | Floating IP of the bootstrap instance on the administration network, or null once it is removed. |
-| edge\_sources | Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = "public". |
+| edge\_sources | Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = "public" or "none". |
 | internal\_sources | Addresses the cluster reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. Empty when the cluster does not join the plane. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
-| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = "public". |
+| published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = "public" or "none". |
 | scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
-| service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = "public". |
+| service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = "public". null with exposure = "none". |
 <!-- END_TF_DOCS -->

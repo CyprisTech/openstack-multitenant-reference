@@ -1,10 +1,11 @@
-# Kubernetes tenant: the published cluster, a Kubernetes cluster created by Cluster API with the
-# OpenStack provider (ADR-0002), in a tenant project, published through the shared entry point or
-# exposed directly with its own public floating IP (ADR-0006, D2). The cluster itself is built by
-# modules/kubernetes-cluster.
+# Kubernetes tenant: a Kubernetes cluster created by Cluster API with the OpenStack provider
+# (ADR-0002), in a tenant project, published through the shared entry point, exposed directly with
+# its own public floating IP (ADR-0006, D2), or private, with no ingress (ADR-0016, D1). The
+# cluster itself is built by modules/kubernetes-cluster.
 
 locals {
-  public = var.exposure == "public"
+  public  = var.exposure == "public"
+  exposed = var.exposure != "none"
 }
 
 module "cluster" {
@@ -13,12 +14,12 @@ module "cluster" {
   name = "${var.site}-published"
   # The publication plane only through the entry point; the internal services plane when the
   # stack's attachment has it.
-  planes = concat(local.public ? [] : ["publication"], ["observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
+  planes = concat(var.exposure == "entry-point" ? ["publication"] : [], ["observability"], contains(keys(var.plane_attachment), "internal") ? ["internal"] : [])
 
   # The tenant's service address (ADR-0006, D1): its public ingress, reached by the entry point
   # only, which sends a PROXY protocol header; or, exposed directly, a floating IP of
-  # egress_network reached from anywhere.
-  ingresses = {
+  # egress_network reached from anywhere. A private cluster has no ingress.
+  ingresses = { for k, v in {
     public = {
       plane          = local.public ? "egress" : "publication"
       sources        = local.public ? ["0.0.0.0/0"] : var.edge_sources
@@ -28,7 +29,7 @@ module "cluster" {
       tls_secret     = "published-tls"
       host           = var.service_addresses.ingress
     }
-  }
+  } : k => v if local.exposed }
   reserved_hosts = var.service_addresses.reserved_hosts
 
   site             = var.site

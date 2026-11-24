@@ -4,13 +4,13 @@ output "bootstrap" {
 }
 
 output "service_address" {
-  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = \"public\"."
-  value       = "${module.cluster.entries.public}:443"
+  description = "The tenant's service address, \"address:443\" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = \"public\". null with exposure = \"none\"."
+  value       = local.exposed ? "${module.cluster.entries.public}:443" : null
 }
 
 output "edge_sources" {
-  description = "Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = \"public\"."
-  value       = local.public ? [] : var.edge_sources
+  description = "Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = \"public\" or \"none\"."
+  value       = var.exposure == "entry-point" ? var.edge_sources : []
 }
 
 output "internal_sources" {
@@ -31,6 +31,6 @@ output "scripts" {
 }
 
 output "published_domains" {
-  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = \"public\"."
-  value       = local.public ? {} : { for d in var.cluster.domains : d => { backends = ["${module.cluster.entries.public}:443"] } }
+  description = "Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = \"public\" or \"none\"."
+  value       = var.exposure == "entry-point" ? { for d in var.cluster.domains : d => { backends = ["${module.cluster.entries.public}:443"] } } : {}
 }

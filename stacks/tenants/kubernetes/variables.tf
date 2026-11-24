@@ -102,14 +102,16 @@ variable "exposure" {
     - "entry-point": through the shared entry point (output published_domains), reachable from
       the entry point only, which sends a PROXY protocol header;
     - "public": a floating IP of egress_network, reachable from anywhere; the shared entry point
-      is not used and the cluster does not join the publication plane.
+      is not used and the cluster does not join the publication plane;
+    - "none": a private cluster (ADR-0016, D1), with no ingress and no service address; it keeps
+      its egress, which brings its container images.
   EOT
   type        = string
   default     = "entry-point"
 
   validation {
-    condition     = contains(["entry-point", "public"], var.exposure)
-    error_message = "exposure must be \"entry-point\" or \"public\"."
+    condition     = contains(["entry-point", "public", "none"], var.exposure)
+    error_message = "exposure must be \"entry-point\", \"public\" or \"none\"."
   }
 }
 

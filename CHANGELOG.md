@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `kubernetes`: `exposure = "none"`, a private cluster ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1): no ingress, no service address, no route to the publication plane; it keeps its egress. Chosen at creation; changing the exposure of an existing cluster to or from `none` comes with the update of a cluster through its API ([ADR-0017](docs/adr/0017-upgrades-between-releases.md)).
 - `vm`: `exposure = "none"` and `egress` (`router`, the default, or `none`), declared per tenant ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1); `name` names the tenant's resources (`<site>-<name>`, default `web`: an existing deployment keeps its resource addresses). With neither exposure nor egress, a private tenant: no service address, no default route, no package, a stand-in workload from the image that pushes `workload_up`.
 - Campaign: several tenants of one stack directory, each in its own workspace with its own inputs file (`{ path, workspace }` in the scenario); the web and private tenants of `stacks/tenants/vm`.
 - CI: ruff lints the Python of the repository (`ruff.toml`).
