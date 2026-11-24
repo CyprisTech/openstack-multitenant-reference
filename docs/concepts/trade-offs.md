@@ -114,7 +114,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** At the network level, every project attached to the publication plane can reach every service address on it: isolation rests on the load balancers' sources and the security groups, without a firewall in between. The sources must match the address the service actually sees: the entry point's router address on a plane with address translation, its own addresses on a routed plane (output `publication_sources`).
 
-**Alternative.** A firewall at the hub, between the plane and the tenants (OVHcloud's landing zone does so), or a dedicated transit network per tenant.
+**Alternative.** A firewall that the projects reach only through it: a segment or a transit network per tenant, joined to the others by the firewall only. A firewall on the shared plane does not isolate, since the projects reach each other on the plane without crossing it ([21](#21-one-network-per-plane)).
 
 **Choose it when** the tenants do not trust each other and you can run a firewall in high availability: a wrong rule on one tenant no longer opens a path.
 
