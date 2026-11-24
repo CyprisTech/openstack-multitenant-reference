@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (git-ignored) and adapt. Example values only.
+cloud          = "my-egress"
+site           = "site-a"
+zones          = ["az-1", "az-2"]
+image          = "ubuntu-24.04"
+flavor         = "m1.small"
+network_mtu    = 1362
+egress_network = { network = "public", subnet = "public-subnet" }
+# dns_nameservers = ["192.0.2.53"]  # empty (the default): the resolvers of Neutron's DHCP (ADR-0016, D3)
+admin   = { users = { ops = ["ssh-ed25519 AAAA..."] }, ssh_cidrs = ["192.0.2.10/32"] }
+bastion = { external_network = { network = "intranet", subnet = "intranet" }, ssh_cidrs = ["192.0.2.10/32"] }
+# The tenants with egress = "shared": their internal_sources output, and the names they may reach.
+tenants = {
+  builds = { sources = ["203.0.113.21/32"], domains = [".ubuntu.com", ".launchpadcontent.net"] }
+}
+monitoring = { receiver = "http://198.51.100.10:9090" }

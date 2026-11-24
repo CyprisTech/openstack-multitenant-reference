@@ -1,0 +1,23 @@
+# Shared egress of the landing zone (ADR-0016, D1): each tenant, known by its source, reaches its
+# declared names only; every request is logged in /var/log/squid/access.log.
+# The load balancer sends a PROXY header, so that the proxy sees the tenant's address.
+acl load_balancer src ${network}
+http_port ${port} require-proxy-header
+proxy_protocol_access allow load_balancer
+proxy_protocol_access deny all
+
+acl SSL_ports port 443
+acl Safe_ports port 80 443
+acl CONNECT method CONNECT
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+
+# The tenants and their names, rendered from the instance metadata by squid-tenants (ADR-0006, D3):
+# a change of tenants replaces no instance.
+include /etc/squid/tenants.conf
+
+http_access deny all
+
+# A forward proxy, not a cache.
+cache deny all
+access_log daemon:/var/log/squid/access.log squid

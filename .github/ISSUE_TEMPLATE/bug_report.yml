@@ -22,6 +22,7 @@ body:
       label: Component
       options:
         - stacks/shared/entry-point
+        - stacks/shared/egress
         - stacks/tenants/vm
         - tests/isolation (matrix)
         - tests/integration

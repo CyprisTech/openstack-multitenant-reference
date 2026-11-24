@@ -20,6 +20,7 @@ env:
     modules/range-overlaps
     stacks/shared/planes
     stacks/shared/entry-point
+    stacks/shared/egress
     stacks/shared/kubernetes
     stacks/tenants/vm
     stacks/tenants/kubernetes
@@ -88,7 +89,7 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in modules/acme-client modules/admission modules/bastion modules/kubernetes-cluster modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/shared/kubernetes stacks/tenants/vm stacks/tenants/kubernetes; do
+          for d in modules/acme-client modules/admission modules/bastion modules/kubernetes-cluster modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/shared/egress stacks/shared/kubernetes stacks/tenants/vm stacks/tenants/kubernetes; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations
@@ -103,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: syntax check
-        run: python3 -m py_compile tests/isolation/check.py stacks/shared/entry-point/files/traefik-routes.py
+        run: python3 -m py_compile tests/isolation/check.py stacks/shared/entry-point/files/traefik-routes.py stacks/shared/egress/files/squid-tenants.py
       - name: lint (ruff)
         uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
         with:

@@ -1,0 +1,6 @@
+[Unit]
+Description=Render the tenants of the shared egress from the instance metadata
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/squid-tenants

@@ -8,6 +8,7 @@ updates:
   - package-ecosystem: terraform
     directories:
       - /stacks/shared/entry-point
+      - /stacks/shared/egress
       - /stacks/tenants/vm
       - /modules/kubernetes-cluster
       - /tests/fixtures/receiver
