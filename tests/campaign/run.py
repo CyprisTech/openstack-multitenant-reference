@@ -4,6 +4,7 @@
     tests/campaign/run.py private-cloud --mode gateway full
     tests/campaign/run.py public-cloud planes edge
     tests/campaign/run.py private-cloud --dry-run full
+    tests/campaign/run.py private-cloud --mode interface --from v0.5.1     # the upgrade
 
 The scenario (scenarios/<name>.toml) names the stacks and the sequences; the maintainers'
 configuration (clouds.yaml entries, administrator addresses) is in campaign.local.toml, not
@@ -20,7 +21,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from campaign import preflight
+from campaign import preflight, previous
 from campaign import scenario as scenarios
 from campaign.context import Context
 from campaign.report import Report
@@ -61,7 +62,7 @@ def record_step(args, scenario, mode, name, ctx, entry):
     casts.mkdir(exist_ok=True)
     cast = casts / f"{time.strftime('%m%d-%H%M', time.gmtime())}-{mode}-{name}.cast"
     inner = [sys.executable, str(Path(__file__).resolve()), scenario.name, name, "--mode", mode,
-             "--config", args.config, "--work", args.work]  # fmt: skip
+             "--config", args.config, "--work", args.work, "--root", str(ctx.root)]  # fmt: skip
     (ctx.work / INNER_REPORT).unlink(missing_ok=True)
     (ctx.work / INNER_OUTPUT).unlink(missing_ok=True)
     subprocess.run(["asciinema", "rec", "-q", "--overwrite", "--cols", "130", "--rows", "40", "--title", name,
@@ -90,7 +91,12 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
     parser.add_argument("--no-preflight", action="store_true", help="skip the check of the credentials")
+    parser.add_argument("--from", dest="previous", metavar="TAG",
+                        help="deploy the release TAG first, then upgrade it to this commit (default steps: from-previous)")
+    parser.add_argument("--root", help=argparse.SUPPRESS)  # the tree of a recorded step
     args = parser.parse_intermixed_args(argv)
+    if args.previous and args.items == ["full"]:
+        args.items = ["from-previous"]
 
     scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
     mode = args.mode or scenario.modes[0]
@@ -117,7 +123,8 @@ def main(argv=None):
 
     # A recorded step prints the full output of the tools: the recording is the story of the run.
     runner = Runner(dry_run=args.dry_run, verbose=bool(os.environ.get(INNER)))
-    ctx = Context(scenario, mode, config, runner, ROOT, Path(args.work) / f"{scenario.name}-{mode}")
+    work = Path(args.work) / f"{scenario.name}-{mode}"
+    ctx = Context(scenario, mode, config, runner, Path(args.root) if args.root else ROOT, work)
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
     steps = load()
     names = scenario.expand(args.items)
@@ -127,6 +134,20 @@ def main(argv=None):
         except Exception as error:  # nothing has run: say why and stop
             ctx.notify(f"campaign {scenario.name} {mode} not started: {error}")
             return 1
+    if args.previous and not os.environ.get(INNER):
+        # The previous release, deployed once in a worktree that then checks out this commit:
+        # the rest of the run applies the new release over its states.
+        steps_before = scenario.options.get("from", {}).get("previous", [])
+        if not steps_before:
+            parser.error(f"scenario {scenario.name} has no options.from.previous")
+        try:
+            root = previous.run(runner, ROOT, work, scenario.name, mode, args.previous, steps_before,
+                                Path(args.config).resolve(), record=args.record,
+                                notify=ctx.notify if config.get("notify_steps", True) and not args.dry_run else None)  # fmt: skip
+        except Exception as error:
+            ctx.notify(f"campaign {scenario.name} {mode}: upgrade from {args.previous} stopped: {error}")
+            return 1
+        ctx = Context(scenario, mode, config, runner, root, work)
 
     outer = not os.environ.get(INNER)  # a recorded step: the outer run tells the operator
     steps_notified = outer and config.get("notify_steps", True) and not args.dry_run

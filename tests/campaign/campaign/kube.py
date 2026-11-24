@@ -1,6 +1,7 @@
 """The Kubernetes clusters of a campaign: kubectl, and the bootstrap instance that creates them."""
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -131,6 +132,23 @@ def create_cluster(ctx, key, credential, kubeconfig):
     return kubectl
 
 
+def update_cluster(ctx, key, kubeconfig):
+    """Runs update-cluster.sh from the campaign host, an administration source (ADR-0017, D3):
+    the stack's scripts and manifests in a directory of the work directory, then the script."""
+    files = ctx.work / f"{key}-files"
+    stack = ctx.stack(key)
+    cmd = ["scripts/cluster-files.sh", stack, str(files), "--tool", ctx.tool]
+    ctx.runner.run(cmd, cwd=ctx.root, env=stack.env(), quiet=True)
+    started = time.monotonic()
+    env = dict(os.environ, KUBECONFIG=str(kubeconfig))
+    result = ctx.runner.run([str(files / "update-cluster.sh")], env=env, check=False, stream=True)
+    write_log(ctx, f"update-cluster-{key}", result)
+    ctx.timing(f"update-cluster {key} {round(time.monotonic() - started)}s")
+    if result.returncode != 0:
+        raise StepFailed(f"update-cluster.sh failed on {key} (log: logs/update-cluster-{key}.log)")
+    return Kubectl(ctx, kubeconfig)
+
+
 def fetch_kubeconfig(ctx, host, kubeconfig):
     """The kubeconfig create-cluster.sh writes on the bootstrap instance, named after the cluster."""
     command = 'sudo sh -c "ls /opt/platform/*.kubeconfig | grep -v /bootstrap.kubeconfig | head -1 | xargs cat"'
@@ -161,12 +179,27 @@ def delete_cluster(ctx, key, kubeconfig):
         for name in clusters.stdout.split():
             kubectl("-n", "platform", "patch", name, "--type=json", "-p", patch)
         ctx.sleep(60)
+    refresh_bootstrap(ctx, key, host)
     started = time.monotonic()
     result = remote(ctx, host, "sudo /opt/platform/delete-cluster.sh", check=False, stream=True)
     write_log(ctx, f"delete-cluster-{key}", result)
     ctx.timing(f"delete-cluster {key} {round(time.monotonic() - started)}s")
     if result.returncode != 0:
         raise StepFailed(f"delete-cluster.sh failed on {key} (log: logs/delete-cluster-{key}.log)")
+
+
+def refresh_bootstrap(ctx, key, host):
+    """The scripts and manifests of the stack as it is now, on the bootstrap instance: cloud-init
+    wrote them once, when the instance was created, possibly by an earlier release."""
+    files = ctx.work / f"{key}-files"
+    stack = ctx.stack(key)
+    ctx.runner.run(["scripts/cluster-files.sh", stack, str(files), "--tool", ctx.tool], cwd=ctx.root, env=stack.env(), quiet=True)
+    archive = ctx.work / f"{key}-files.tar.gz"
+    ctx.runner.run(["tar", "-czf", str(archive), "-C", str(files), "."], quiet=True)
+    copy(ctx, archive, f"{host}:/tmp/cluster-files.tar.gz")
+    unpack = "sudo tar -xzf /tmp/cluster-files.tar.gz -C /opt/platform --no-same-owner; rm -f /tmp/cluster-files.tar.gz"
+    remote(ctx, host, unpack, quiet=True)
+    ctx.runner.echo(f"{key}: scripts and manifests of the stack copied to the bootstrap instance")
 
 
 def write_log(ctx, name, result):

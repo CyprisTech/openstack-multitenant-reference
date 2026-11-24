@@ -5,7 +5,7 @@ import importlib
 STEPS = {}
 
 # The modules of steps, one per family; importing them registers their steps.
-FAMILIES = ["foundation", "shared", "published", "end"]
+FAMILIES = ["foundation", "shared", "published", "end", "upgrade"]
 
 
 def step(name):

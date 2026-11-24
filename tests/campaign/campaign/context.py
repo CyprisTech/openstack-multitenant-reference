@@ -30,6 +30,7 @@ class Context:
         self.tofu = Tofu(runner, tool=self.tool, root=self.root)
         self.openstack = OpenStack(runner, ca_cert=config.get("ca_cert") or None)
         self._projects = {}
+        self.migration = None  # during the upgrade from the previous release (previous.Migration)
         self.durations = []  # applies and destroys: {stack, action, seconds}, for the report
 
     @property
@@ -135,6 +136,11 @@ class Context:
         """
         started = time.monotonic()
         self.tofu.init(self.stack(key))
+        # The upgrade from the previous release: the plan of a deployed stack is kept, with what
+        # it replaces and destroys, before the apply.
+        migrating = self.migration is not None and self.tofu.deployed(self.stack(key))
+        if migrating:
+            self.migration.plan(key, self.stack(key))
         status = self._apply(key)
         hook, repairs = self.config.get("repair_hook"), int(self.config.get("repairs", 1))
         attempt = 0
@@ -146,6 +152,8 @@ class Context:
                 break
             status = self._apply(key, repair.stdout.split())
             self.timing(f"{key} repaired ({attempt}), apply status={status}")
+        if migrating:
+            self.migration.applied(key)
         if status != 0:
             raise StepFailed(f"apply failed: {key}")
         if not empty_plan:

@@ -8,7 +8,7 @@ import time
 
 from ..checks import isolation_test, kubeconfig, record
 from ..context import StepFailed
-from ..kube import Kubectl, copy, create_cluster, delete_cluster, demo_manifest, remote, wait_for_bootstrap
+from ..kube import Kubectl, copy, create_cluster, delete_cluster, demo_manifest, remote, update_cluster, wait_for_bootstrap
 from . import step
 from .foundation import attachment, cluster_credential, monitoring, test_zone
 
@@ -122,6 +122,17 @@ def k8s_shared(ctx, report):
 @step("cluster-shared")
 def cluster_shared(ctx, report):
     k = create_cluster(ctx, STACK, ctx.work / "shared-clouds.yaml", kubeconfig(ctx, STACK))
+    deploy_demos(ctx, k)
+
+
+@step("update-shared")
+def update_shared(ctx, report):
+    """The shared cluster after an apply of its stack: update-cluster.sh from the campaign host,
+    then the demonstration services of this release."""
+    deploy_demos(ctx, update_cluster(ctx, STACK, kubeconfig(ctx, STACK)))
+
+
+def deploy_demos(ctx, k):
     k.apply(demo_manifest(ctx, f"{ctx.stack(STACK)}/demo/whoami.yaml"))
     k("apply", "-f", ctx.root / ctx.stack(STACK) / "demo/echo.yaml")
     k("-n", "whoami", "rollout", "status", "deploy/whoami", "--timeout=10m")
@@ -366,6 +377,8 @@ def wait_for_revocation(ctx, cloud, attempts=90, delay=20):
 
 class ConsumerLoad:
     """Requests from a tenant instance to the shared service, every 2 s, until stopped."""
+
+    label = "shared service"
 
     def __init__(self, ctx, bastion, instance, address):
         self.args = (ctx, bastion, instance, address)

@@ -11,6 +11,7 @@ tests/campaign/run.py private-cloud --mode gateway full
 tests/campaign/run.py private-cloud --mode interface planes edge   # or a few steps
 tests/campaign/run.py public-cloud full
 tests/campaign/run.py private-cloud --dry-run full                 # the commands, without a cloud
+tests/campaign/run.py private-cloud --mode interface --from v0.5.1 # the upgrade from a release
 python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
 ```
 
@@ -25,6 +26,17 @@ With a `notify_hook`, the operator is told when the campaign starts and ends, wh
 The campaign stops at the first failure: a command that fails, a request that fails, a plan that is not empty, an instance that does not come up. The teardown goes on after a failure, to remove as much as it can, and reports it. The two Kubernetes clusters are deployed one after the other, so that it fits a small test cloud ([sizing](#sizing)).
 
 Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures — HTTPS counts, time to a steady answer, loads — and the duration of each apply and destroy), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
+
+## Upgrade from the previous release
+
+`--from <tag>` tests the upgrade of a deployment ([spec](../../docs/specs/upgrades.md), [ADR-0017](../../docs/adr/0017-upgrades-between-releases.md)). The release campaign runs it in one of its two modes; the other mode deploys from empty.
+
+1. A git worktree at the tag, `work/<scenario>-<mode>-tree`, deploys the previous release with its own `run.py`: the steps of `options.from.previous` of the scenario (the foundation and the shared cluster, without acceptance). Done once: a run started again skips it.
+2. The worktree checks out the commit under test: the states and the inputs, outside git, stay where they are, as for a user who pulls a new release. The commit must be committed: the worktree only sees commits.
+3. Step `migrate` applies the new release over them, with the steps of `options.from.apply`: each deployed stack is planned (the plan kept in `plans/`), then applied; the stacks the release adds are created; the shared cluster is updated with `update-cluster.sh` from the campaign host. Requests run during all the applies: a published domain through the entry point, and the shared cluster's internal service from a tenant instance.
+4. The rest of the scenario, unchanged (sequence `from-previous`): acceptance, rotation, Kubernetes upgrade, the published cluster, the end.
+
+`migration.json` lists, per stack, the resources the upgrade replaced and destroyed and the requests that failed during its apply: the draft of the migration notes of the release. The previous release's own report is kept as `report-previous.json`. After the run, remove the worktree with `git worktree remove`.
 
 ## Sizing
 
@@ -48,7 +60,8 @@ A smaller cloud can also run the shared cluster with one control plane node: the
 | `scenarios/` | `private-cloud.toml`, `public-cloud.toml`: the stacks, the sequences and the settings of the steps of each profile |
 | `campaign/` | Scenario loading, the context of a step (stacks, inputs, scenes, apply), the tools (`tofu`, `openstack`, a runner with a dry run), retries, the report |
 | `campaign/kube.py`, `campaign/checks.py` | The clusters and their bootstrap instance; the isolation test and the HTTPS checks |
-| `campaign/steps/` | The steps, one module per family: `foundation`, `shared` (the shared cluster), `published` (the published cluster and the scenes), `end` |
+| `campaign/previous.py` | The upgrade from the previous release: its worktree, its deployment, what each plan replaces and destroys |
+| `campaign/steps/` | The steps, one module per family: `foundation`, `shared` (the shared cluster), `published` (the published cluster and the scenes), `end`, `upgrade` (step `migrate`) |
 | `tests/` | Unit tests, no cloud |
 
 A step that changes a stack and restores it (direct exposure, a consumer, the hostile route) is a scene: it keeps the stack's inputs first and restores them even when it fails; run again after a failure, it starts from the inputs it kept. An instance whose cloud-init ends in error stops the campaign, it is not retried.
