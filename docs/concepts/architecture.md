@@ -35,7 +35,7 @@ The source of this picture is the SVG next to the PNG in [`docs/images`](../imag
 |---|---|---|
 | entry point | publication (shared), observability | Octavia load balancer with a public floating IP, two Traefik instances in anti-affinity |
 | `vm` tenant | publication, observability, internal services (optional) | instances behind a load balancer, the tenant's service address |
-| `kubernetes` tenant | publication, observability, internal services | a cluster created with Cluster API; its ingress load balancer is the service address |
+| `kubernetes` tenant | publication (through the entry point), observability, internal services (optional) | a cluster created with Cluster API; its ingress load balancer is the service address; private (`exposure = "none"`): no ingress, reached through the administration path only |
 | `vm` tenant, private | observability; internal services when it consumes them | one workload from its image, no exposure, no egress ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) |
 | shared services | the planes they serve (`shared`) | the receiver, internal services; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) |
 
@@ -89,7 +89,7 @@ For each stack of the scenario:
 |---|---|---|---|
 | entry point | public router | publication, observability | public floating IP of its load balancer |
 | `vm` | egress | publication (through the entry point only), observability, internal services (optional) | its service address on the publication plane, or a public floating IP with `exposure = "public"` (then no router on the publication plane) |
-| `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane); API: floating IP of the administration network |
+| `kubernetes` | egress | publication (through the entry point only), observability, internal services (optional) | ingress: its service address on the publication plane, or a floating IP of `egress_network` with `exposure = "public"` (then no router on the publication plane), or none with `exposure = "none"`; API: floating IP of the administration network |
 | `vm`, private (`exposure = "none"`, `egress = "none"`) | none: unknown destinations are dropped | observability, internal services (optional) | nothing |
 | bastions | on its own network: its router on the administration network, which is the gateway; on the stack's network (`bastion_placement = "stack-network"`, [ADR-0014](../adr/0014-profiles.md), D2, when the administration network is the egress): the stack's transit router | — (second port on the tenant network), or none | floating IP of the administration network |
 

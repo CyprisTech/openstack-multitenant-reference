@@ -102,7 +102,7 @@ The [Scope](../../README.md#scope) section of the README shows these levels and 
 | Certificates of the published domains | ○ | ● | | ACME DNS-01 in each tenant |
 | Observability across tenants | ● | ● | ○ | integration point: metrics, logs and audit pushed to your receivers |
 | Availability zones, regions, recovery of the architecture | ● | ● | ○ | spread over hosts and zones, an entry point per region, rebuild from code; the failover is yours |
-| Egress, DNS, time, mirrors | ● | ● | ● | shared services on the planes, declared egress; IPv4, IPv6 after `v1.0` ([ADR-0015](../adr/0015-ipv6.md)) |
+| Egress, DNS, time, mirrors | ● | ● | ● | declared egress, with an optional shared egress; resolvers and time from the cloud; mirrors as an integration point (`v0.8`) ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)); IPv4, IPv6 after `v1.0` ([ADR-0015](../adr/0015-ipv6.md)) |
 | Backups of tenant data, secrets | ● | ● | ○ | integration points |
 | Single sign-on, quotas, cost, self-service | ● | ● | ● | not covered: the cloud's foundation |
 
