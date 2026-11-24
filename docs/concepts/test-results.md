@@ -14,7 +14,8 @@ The release campaign of v0.5.1 (2026-11-20, hub planes; the interface column giv
 | Upgrade from v0.4.0 | the v0.4.0 stacks applied, then the v0.5 stacks applied over them (2026-11-20) | ❌ the planes upgrade in place; every tenant with an egress fails (known issue: redeploy the tenant stacks) | not run |
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
 | Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
-| Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
+| Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows; 58 since 2026-11-24, with the private tenant, IPv6 and name resolution) | ✅ 47/47; 58/58 on 2026-11-24 | ✅ 47/47; 58/58 on 2026-11-24 |
+| Name resolution | public names from every instance, the zone of the landing zone from the tenants, the private tenant through the test resolver behind the internal services plane (2026-11-24) | ✅ | ✅ |
 | Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run yet | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
@@ -44,6 +45,12 @@ The isolation matrix of the earlier designs had 44 to 46 rows; the counts are no
 ## Environment
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+
+## Detailed results: name resolution (2026-11-24)
+
+The scenario without the shared cluster (`tests/campaign/run.py private-cloud --mode <mode> --record foundation published end`), in both plane modes, from empty projects, with the test resolver of [ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D3 ([`tests/fixtures/resolver`](../../tests/fixtures/resolver/README.md)), in the project of the shared services. Three sources of resolvers at once: the entry point and the receiver use public resolvers through their egress; the web tenant uses the organisation's DNS through the internal services plane; the private tenant, without egress, joins that plane and uses the test resolver, which forwards the test zone to the organisation's DNS and resolves public names through its own egress. In both modes: isolation 58/58 with the published cluster, every instance resolving a public name, the two tenants the test zone (SOA), the private tenant using the test resolver; HTTPS 12/12 on each domain; publication under load 19 ok and 117 ok, 0 failed; hostile route closed (interface); empty plans; teardown without leftovers. About 45 minutes per mode.
+
+Two failures at the first run, both at the resolver's step. Neutron refused a router of the shared services project as over quota (13 in use, limit 15) while the stack created four at once; the same apply passed on a second attempt. Then Unbound did not start: its package starts it at installation, while systemd-resolved's stub listener still holds port 53, and the failed starts reached systemd's start limit, so the restart after the stub was disabled was refused; the fixture now resets the failures before the restart. The shared services project of the tests now uses 14 routers.
 
 ## Detailed results: the private tenant as a vm stack (2026-11-23)
 
