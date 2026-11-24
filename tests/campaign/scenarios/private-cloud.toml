@@ -10,14 +10,16 @@ receiver         = "tests/fixtures/receiver"
 acme             = "tests/fixtures/acme"
 internal-service = "tests/fixtures/internal-service"
 resolver         = "tests/fixtures/resolver"
+egress           = "stacks/shared/egress"
 entry-point      = "stacks/shared/entry-point"
 vm               = { path = "stacks/tenants/vm", workspace = "web" }
 private          = { path = "stacks/tenants/vm", workspace = "private" }
+egress-shared    = { path = "stacks/tenants/vm", workspace = "egress-shared" }
 shared           = "stacks/shared/kubernetes"
 published        = "stacks/tenants/kubernetes"
 
 [sequences]
-foundation = ["prep", "planes", "receiver", "acme", "internal", "resolver", "edge", "web", "private", "transit", "publish"]
+foundation = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egress", "edge", "web", "private", "egress-tenant", "transit", "publish"]
 shared     = ["k8s-shared", "transit", "cluster-shared", "tour-shared", "accept-shared", "consumer", "volume", "rotate", "upgrade", "shared-down"]
 published  = ["k8s", "cluster", "internal-open", "transit", "tour", "publish", "accept", "direct", "direct-k8s", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
@@ -34,13 +36,15 @@ receiver         = { stack = "receiver", cidr = "10.34.0.0/28", planes = { obser
 internal-service = { stack = "internal-service", cidr = "10.35.0.0/28", planes = { internal = "shared" } }
 acme             = { stack = "acme", cidr = "10.37.0.0/28", planes = { internal = "shared" } }
 resolver         = { stack = "resolver", cidr = "10.38.0.0/28", planes = { internal = "shared" } }
+egress           = { stack = "egress", cidr = "10.39.0.0/27", planes = { internal = "shared", observability = "tenant" } }
 edge             = { stack = "entry-point", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
 web              = { stack = "vm", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
 private          = { stack = "private", cidr = "10.22.0.0/24", planes = { observability = "tenant", internal = "tenant" } }
+egress-shared    = { stack = "egress-shared", cidr = "10.23.0.0/24", planes = { observability = "tenant", internal = "tenant" } }
 published        = { stack = "published", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
 k8s-shared       = { stack = "shared", cidr = "10.36.0.0/24", planes = { internal = "shared", observability = "tenant" } }
 
 [options.planes.tenant_ranges]
 publication   = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
-observability = ["10.20.0.0/14", "10.24.0.0/14", "10.36.0.0/24"]
+observability = ["10.20.0.0/14", "10.24.0.0/14", "10.36.0.0/24", "10.39.0.0/27"]
 internal      = ["10.20.0.0/14", "10.24.0.0/14"]

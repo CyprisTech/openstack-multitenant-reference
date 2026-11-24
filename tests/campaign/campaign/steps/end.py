@@ -9,7 +9,8 @@ from . import step
 # consumers before what they consume.
 CLUSTERS = ["shared", "published"]
 DESTROY_ORDER = [
-    "shared", "internal-service", "published", "private", "resolver", "vm", "entry-point", "receiver", "acme", "planes",
+    "shared", "internal-service", "published", "private", "egress-shared", "resolver", "egress", "vm",
+    "entry-point", "receiver", "acme", "planes",
 ]
 
 # Listings of the leftover check: a kind of object and the column holding its ID. The Octavia

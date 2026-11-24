@@ -144,6 +144,42 @@ class ResolverTest(unittest.TestCase):
         self.assertEqual(written["egress"], "none")
 
 
+class SharedEgressTest(unittest.TestCase):
+    def outputs(self, cmd):
+        values = {
+            ("stacks/shared/egress", "proxy"): "http://203.0.113.39:3128",
+            ("stacks/shared/egress", "bastion"): "192.0.2.30",
+            ("stacks/shared/egress", "instances"): {"t1-egress-1": "10.39.0.11", "t1-egress-2": "10.39.0.12"},
+            ("stacks/tenants/vm", "internal_sources"): ["203.0.113.23/32"],
+            ("stacks/shared/planes", "attachments"): {
+                "egress": {"planes": {"internal": {"routes": []}}},
+                "egress-shared": {"planes": {"observability": {"routes": []}, "internal": {"routes": []}}},
+            },
+        }
+        if cmd[0] == "tofu" and cmd[2] == "output":
+            key = (cmd[1].removeprefix("-chdir="), cmd[4])
+            if key in values:
+                return Result(0, json.dumps(values[key]))
+        return None
+
+    def test_the_tenant_is_applied_then_declared_on_the_shared_egress(self):
+        stacks = dict(STACKS, egress="stacks/shared/egress", **{"egress-shared": "stacks/tenants/vm"})
+        config = {"clouds": {"planes": "hub", "receiver": "shared", "egress": "egress", "entry-point": "edge",
+                             "vm": "web", "egress-shared": "builds"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
+        ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
+                      workspaces={"vm": "web", "egress-shared": "egress-shared"})  # fmt: skip
+        load()["egress"](ctx, StepReport("egress"))
+        self.assertEqual(inputs(ctx, "egress")["tenants"], {})
+        load()["egress-tenant"](ctx, StepReport("egress-tenant"))
+        tenant = json.loads((ctx.root / "stacks/tenants/vm/mode.egress-shared.tfvars.json").read_text())
+        self.assertEqual(tenant["egress"], "shared")
+        self.assertEqual(tenant["shared_egress"], {"proxy": "http://203.0.113.39:3128"})
+        declared = inputs(ctx, "egress")["tenants"]["egress-shared"]
+        self.assertEqual(declared["sources"], ["203.0.113.23/32"])
+        applies = [c for c, _ in ctx.runner.commands if "apply" in c]
+        self.assertEqual([c[1] for c in applies][-2:], ["-chdir=stacks/tenants/vm", "-chdir=stacks/shared/egress"])
+
+
 class ApplyTest(unittest.TestCase):
     def test_the_repair_hook_runs_then_the_plan_must_be_empty(self):
         applies = []

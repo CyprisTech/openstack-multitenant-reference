@@ -33,6 +33,10 @@ def isolation_test(ctx, report, cluster=None):
         cmd += ["--zone", ctx.config["test_zone"]]
     if ctx.has("resolver"):
         cmd += ["--resolver", ctx.stack("resolver")]
+    # The shared egress (ADR-0016, D1) and its tenant, in a workspace of the vm stack.
+    if ctx.has("egress") and ctx.has("egress-shared"):
+        tenant = ctx.stack("egress-shared")
+        cmd += ["--egress", ctx.stack("egress"), "--egress-tenant", tenant, "--egress-workspace", tenant.workspace or ""]
     if cluster == "shared":
         cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
     elif cluster == "published":
