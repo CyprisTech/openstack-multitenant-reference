@@ -33,15 +33,15 @@ Either type can be exposed directly on the Internet, published behind the centra
 
 Public clouds call it a *landing zone*: the structure an organisation puts in place before running workloads — how resources are divided, how networks connect, how services are exposed, observed and administered, and how isolation is enforced. AWS, Azure and Google Cloud provide one, and the design areas they cover are well established.
 
-OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — but no organising layer above them:
+OpenStack provides the building blocks — projects, Neutron networks and routers, Octavia, Designate, Keystone — and leaves their assembly to each organisation:
 
-- no transit gateway or peering between projects;
-- no shared ingress;
-- no conventions spanning the projects of an organisation.
+- projects reach each other through networks shared by RBAC and routers, with no managed equivalent of a transit gateway or peering;
+- each project publishes its own load balancers, with no entry shared between projects;
+- no convention spans the projects of an organisation: names, address ranges, admission rules, and what one project must hand to another (its sources, its service address), usually copied by hand.
 
-Each deployment reinvents them, usually as a few shared networks and hand-written rules whose effect nobody can verify.
+Each organisation assembles them its own way, often as a few shared networks and hand-written rules, and the isolation they give is rarely tested.
 
-Some providers publish a landing zone for their own cloud, built on their account model and network services. For the other OpenStack clouds, public or private, and for teams that hold a member role only, this repository proposes that layer as a reference: decisions, reusable code and a tested scenario. Next to a provider's landing zone, it organises the projects inside; the provider's keeps accounts, identity and central inspection.
+Some providers publish a landing zone for their own cloud, built on their account model and network services. For the other OpenStack clouds, public or private, and for teams that hold a member role only, this repository proposes that layer as a reference: decisions, stacks that pass what each needs through explicit contracts, and a tested scenario. Next to a provider's landing zone, it organises the projects inside; the provider's keeps accounts, identity and central inspection.
 
 ## Terms
 
