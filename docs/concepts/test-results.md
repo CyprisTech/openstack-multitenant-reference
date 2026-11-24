@@ -15,7 +15,7 @@ The release campaign of v0.5.1 (2026-11-20, hub planes; the interface column giv
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
 | Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
 | Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows) | ✅ 47/47 | ✅ 47/47 |
-| Hostile route | a tenant routing to another through the transit router | n/a (no transit router) | ✅ closed |
+| Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run yet | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
 | Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0 | ✅ 28 / 0 |

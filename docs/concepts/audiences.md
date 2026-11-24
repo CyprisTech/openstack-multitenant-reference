@@ -6,6 +6,8 @@ Below, for each profile: what it needs, what is hard for it, what the reference 
 
 ## Profiles
 
+These are profiles of audience, A to D; they are not the test profiles `private-cloud` and `public-cloud` of [ADR-0014](../adr/0014-profiles.md).
+
 The whole architecture works with a member role only (profiles A and B); a cloud operator (profile C) also provides planes as external networks; a platform services team (profile D) runs its services on the planes.
 
 ### A. Platform team on a public or sovereign cloud
