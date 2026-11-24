@@ -12,8 +12,21 @@ output "services" {
 }
 
 output "domains" {
-  description = "Names of the HTTP services and the address they resolve to: written in internal_zone when it is set, to write with your DNS provider otherwise."
+  description = "Names of the HTTP services and the address they resolve to; as records, in dns_records."
   value       = { for d in var.cluster.domains : d => module.cluster.entries.internal }
+}
+
+output "dns_records" {
+  description = "The records of cluster.domains in internal_zone (ADR-0016, D2), keyed \"<name> <type>\", each { zone, name, type, ttl, records }: written in Designate with dns = \"designate\", to publish with your DNS provider otherwise (a for_each of its record resource). Empty without internal_zone."
+  value = var.internal_zone == null ? {} : {
+    for d in var.cluster.domains : "${d} A" => {
+      zone    = var.internal_zone.name
+      name    = trimsuffix(d, ".${trimsuffix(var.internal_zone.name, ".")}")
+      type    = "A"
+      ttl     = var.internal_zone.ttl
+      records = [module.cluster.entries.internal]
+    }
+  }
 }
 
 output "sources" {

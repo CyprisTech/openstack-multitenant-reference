@@ -258,19 +258,36 @@ variable "service_addresses" {
   default = {}
 }
 
+variable "dns" {
+  description = "Where the records of internal_zone go (ADR-0016, D2): \"designate\", written in the cloud's Designate, or \"output\", written nowhere, for your DNS provider. The dns_records output gives them in both cases."
+  type        = string
+  default     = "designate"
+
+  validation {
+    condition     = contains(["designate", "output"], var.dns)
+    error_message = "dns is \"designate\" or \"output\"."
+  }
+}
+
 variable "internal_zone" {
   description = <<-EOT
-    Designate zone of the internal names, owned by or shared with this project: the stack writes
-    the records of cluster.domains in it. null: write them yourself from the domains output.
-    - id, name (with its trailing dot): the zone.
+    Zone of the internal names: the records of cluster.domains, in the dns_records output. With
+    dns = "designate", the stack writes them in this Designate zone, owned by or shared with this
+    project. null: no records, the domains output gives the names and their address.
+    - name (with its trailing dot): the zone; id: its Designate ID, needed with dns = "designate".
     - ttl: of the records.
   EOT
   type = object({
-    id   = string
+    id   = optional(string)
     name = string
     ttl  = optional(number, 300)
   })
   default = null
+
+  validation {
+    condition     = var.internal_zone == null || var.dns != "designate" || try(var.internal_zone.id != null, false)
+    error_message = "internal_zone.id is needed to write the records in Designate (dns = \"designate\")."
+  }
 
   validation {
     condition = var.internal_zone == null || alltrue([

@@ -60,10 +60,10 @@ module "cluster" {
 }
 
 # The names of the HTTP services, in the zone of the internal names, when the cloud has Designate
-# and the zone is owned by or shared with this project (ADR-0010, D3). Otherwise the domains output
-# gives the records to write with your DNS provider.
+# and the zone is owned by or shared with this project (ADR-0010, D3): dns = "designate". With
+# dns = "output", none is written; the dns_records output gives them in both cases (ADR-0016, D2).
 module "names" {
-  count  = var.internal_zone == null ? 0 : 1
+  count  = var.internal_zone != null && var.dns == "designate" ? 1 : 0
   source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns?ref=v0.1.6"
 
   records = {
