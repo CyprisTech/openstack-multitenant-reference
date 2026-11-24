@@ -11,7 +11,12 @@
 
 A landing zone for OpenStack: a reference architecture, with deployable OpenTofu and Terraform code, for organising the projects of an organisation on an OpenStack cloud. Each tenant and each shared service has its own project. They meet on shared networks by role (planes), joined through a hub or provided by the cloud operator, and are published either behind a shared HTTPS entry point or directly on their own public address. Isolation rules are stated as a matrix and checked by a test you run on your own deployment.
 
-It covers VM and Kubernetes tenants (Cluster API), shared services such as an internal cluster and push-based monitoring, certificates, availability zones and the rebuild of the architecture. It needs a member role only, on a public, sovereign or private cloud.
+The reference deploys two types of tenant, each in its own project:
+
+- **Virtual machines** behind their own load balancer, spread over hosts and availability zones. The certificates of their domains are obtained and renewed at the tenant's entry, and every inbound and outbound flow is declared and filtered.
+- **Kubernetes clusters** created with Cluster API. The cloud controller manager drives their OpenStack load balancers, and applications are published through the Gateway API, with their certificates managed in the cluster.
+
+Either type can be exposed directly on the Internet, published behind the central entry point, or kept private, with no exposure at all. The internal services plane belongs to the shared services, such as a Kubernetes cluster for internal services that admits declared consumers only. The reference needs a member role only, on a public, sovereign or private cloud.
 
 ![Architecture overview: shared services and tenants, each in its own project, meet on shared networks (planes); arrows show who opens each connection](docs/images/architecture-overview.png)
 
