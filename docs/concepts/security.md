@@ -52,7 +52,7 @@ The shared services are the only points that several tenants reach, and the entr
 There is no central point that inspects or logs the traffic between projects: each target filters for itself. Two answers keep the design:
 
 - **Flow logs:** the Neutron *network log* extension records what the security groups accept and drop, with the OVN driver. It is enabled by the cloud operator, and the logs are written on the compute hosts.
-- **Central inspection:** a firewall as the next hop of a plane, which ADR-0004 allows, on top of the security groups of the targets, not instead of them ([trade-offs](trade-offs.md#7-isolation-on-the-publication-plane)).
+- **Central inspection:** a firewall in the path, on top of the security groups of the targets, not instead of them. It isolates only what cannot go around it: between segments of the operator (`v0.7`), or between projects that reach each other through it alone; on a shared plane, the projects reach each other without crossing it ([trade-offs](trade-offs.md#7-isolation-on-the-publication-plane)).
 
 Two more choices that an architect may discuss are argued in the trade-offs: the [hub planes as shared segments](trade-offs.md#19-hub-planes-are-shared-segments) and the [bastion per stack](trade-offs.md#20-a-bastion-per-stack).
 

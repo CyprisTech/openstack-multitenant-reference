@@ -1,6 +1,6 @@
 # How a tenant joins a plane
 
-A plane is a network shared by several projects, any number of them, each with its own purpose; in the reference scenario, publication, observability and internal services. This page explains the two ways a tenant joins a plane, what each means for addresses, routing and isolation, and why a third way — ports of the instances directly on the planes — is not used. The decision is [ADR-0004](../adr/0004-planes-and-isolation.md).
+A plane is a network shared by several projects, any number of them, each with its own purpose; in the reference scenario, publication, observability and internal services. This page explains how a cloud gives networks to its projects, the two ways a tenant joins a plane today (a router's gateway on a network of the operator, an interface on a network of a hub), what each means for addresses, routing and isolation, and why ports of the instances directly on the planes are not used. A third way, adopting a segment of the operator, comes in `v0.7`. The decision is [ADR-0004](../adr/0004-planes-and-isolation.md).
 
 ## How your cloud gives you networks
 
@@ -10,7 +10,7 @@ There is no single way an OpenStack cloud gives networks to its projects. Three 
 |---|---|---|
 | **Segments of the operator**: one segment (VLAN) per project, its gateway on the operator's firewall, no router in the project; the classic design of private clouds built on provider networks | `segment`: the tenant adopts its segment and creates no router; the planes are ranges routed by the operator ([spec](../specs/operator-segments.md)) | `v0.7` |
 | **Self-service with translation**: tenant routers, the operator's external networks, source NAT and floating IPs; OpenStack's default design | `gateway`, `nat = true` (mode 1 below) | delivered |
-| **Self-service routed**: tenant routers without translation, prefixes from an address scope, advertised by BGP to the operator's network | `gateway`, `nat = false` (mode 1 below) | `v0.7` |
+| **Self-service routed**: tenant routers without translation, prefixes from an address scope, advertised by BGP to the operator's network | `gateway`, `nat = false` (mode 1 below) | `v0.7`, tested on a DevStack bench where static routes stand in for the BGP session |
 | **No network from the operator**: a member role only, on a public cloud or on a private one that gives nothing more | `interface`: the planes are built in a hub project (mode 2 below) | delivered |
 
 Not covered, by choice: **one provider network shared flat by every project**, the instances directly on it and no router. It gives no boundary between projects; it is [the alternative not used](#the-alternative-not-used-ports-of-the-instances-on-the-planes) below. Technically, it is the `segment` mode with one segment for several projects, the isolation then resting on the security groups alone.
@@ -90,7 +90,7 @@ There is no route between two tenants, but a tenant may serve another: the provi
 
 ## What isolates tenants, in both modes
 
-The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the administrators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports.
+The absence of a route is not a security boundary: a tenant controls its own router and could add a route towards another tenant's range. What blocks it is the **security groups of the target**, which admit only the entry point (on service addresses), their own load balancer, their bastion or the administrators. The isolation test checks it in both modes: a row "tenant → other tenant: closed" must stay closed whatever routes a tenant adds. Verified on the reference cloud: a tenant that routes to another through the transit router still reaches none of its ports. On a cloud of segments (`v0.7`), the operator's topology and firewall come first, and the security groups stay as a second line.
 
 ## The alternative not used: ports of the instances on the planes
 
@@ -109,11 +109,14 @@ Use it when the tenants trust each other (teams of one organisation) and the pla
 
 ## Which mode where
 
-| Cloud | Planes are | Mode |
-|---|---|---|
-| Private or sovereign, planes provided by the operator | external networks | 1 — gateway, floating IPs for service addresses |
-| Public, planes built with a member role | private networks shared by RBAC | 2 — interface, through the hub's transit router |
-| Private, operator coordinates the addressing (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) |
+| How the cloud gives networks | Planes are | Mode | Status |
+|---|---|---|---|
+| Segments of the operator | ranges routed by the operator's gateway | `segment`: the tenant adopts its segment, no router ([spec](../specs/operator-segments.md)) | `v0.7` |
+| Self-service with translation | the operator's external networks | 1 — gateway, floating IPs for service addresses | delivered |
+| Self-service routed (address scopes, BGP) | external networks in a shared address scope | 1 without translation: real addresses, routes advertised on the plane side; with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) ([ADR-0004](../adr/0004-planes-and-isolation.md), D1) | `v0.7` |
+| A member role only | private networks of a hub project, shared by RBAC | 2 — interface, through the hub's transit router | delivered |
+
+The mode follows what the cloud gives, not whether it is public or private: a private cloud that gives no plane uses a hub, and the `private-cloud` profile accepts hub planes ([ADR-0014](../adr/0014-profiles.md)). Planes of the two delivered modes can be mixed in one deployment.
 
 How the tenant's router joins each kind of plane, and how the tenant is seen there:
 
@@ -122,3 +125,4 @@ How the tenant's router joins each kind of plane, and how the tenant is seen the
 | operator plane, with NAT | its gateway (source NAT) | the router's gateway address; a floating IP for an address others must reach | a floating IP of the plane on the load balancer |
 | operator plane, routed (no NAT) | its gateway, without source NAT, in a shared address scope | its own addresses: the cloud routes the tenant's range | the load balancer's own address |
 | shared private plane (hub) | an interface, routes through the transit router | its own addresses | the load balancer's own address |
+| segment of the operator (`v0.7`) | no router: the default route is the operator's gateway | its own addresses, or the gateway's when it translates | the load balancer's address on its segment |

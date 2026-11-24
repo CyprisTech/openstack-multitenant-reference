@@ -6,7 +6,7 @@ What the stacks expect from planes **provided by the cloud operator** as externa
 
 | Object | Requirement |
 |---|---|
-| A network per plane declared in `shared/planes` (in the scenario `publication`, `observability`, `internal`) | External networks visible to the projects that join them, each with one subnet usable as a router gateway; joined with source NAT (the default) or, in a shared address scope, routed (with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline)) |
+| A network per plane declared in `shared/planes` (in the scenario `publication`, `observability`, `internal`) | External networks visible to the projects that join them, each with one subnet usable as a router gateway; joined with source NAT (the default) or, in `v0.7`, routed in a shared address scope (with [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline)) |
 | Plane ranges | The range reached through each plane (`cidr` in `shared/planes`), a route of each tenant's transit router ([ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)). Two planes must not route the same destination: a router holds one route per destination, and the transit router refuses the second |
 | Address family | IPv4: the planes, the tenant networks and the shared services are IPv4, and the reference creates no IPv6 subnet ([ADR-0015](../adr/0015-ipv6.md)) |
 | MTU | The MTU of each plane, and the largest MTU the cloud carries for tenant networks (lower when the tenant overlay itself runs over a tunnel). Tenant networks that join a plane use the smallest of these values (`network_mtu`): OVN routers do not send "fragmentation needed" by default, so a larger MTU silently drops large packets |

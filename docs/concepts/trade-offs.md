@@ -13,7 +13,7 @@ Every choice of this architecture has a cost. This document states each one: wha
 | 7 | [Isolation on the publication plane](#7-isolation-on-the-publication-plane) | Shared plane, service addresses admitting the entry point only |
 | 8 | [Security groups ownership](#8-tenant-owned-security-groups-or-a-central-catalogue) | Owned by each tenant |
 | 9 | [Kubernetes lifecycle](#9-kubernetes-with-cluster-api) | Cluster API Provider OpenStack |
-| 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router, or routed operator planes |
+| 10 | [Where the planes come from](#10-where-the-planes-come-from) | Operator planes with NAT, or hub planes with a transit router; routed operator planes and segments of the operator in `v0.7` |
 | 11 | [Administration and internal services](#11-one-network-for-administration-and-internal-services) | Two roles; one network accepted with specific sources |
 | 12 | [Add-ons and GitOps](#12-add-ons-declared-with-cluster-api-not-gitops) | CAAPH next to the cluster; GitOps-ready |
 | 13 | [Kubelet certificates](#13-kubelet-serving-certificates-from-the-cluster-ca) | Signed by the cluster CA, approved per node |
@@ -150,9 +150,9 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 ## 10. Where the planes come from
 
-**Choice.** A plane is described by two properties, how a tenant router joins it and whether addresses are translated ([ADR-0004](../adr/0004-planes-and-isolation.md)). Three cases follow: external networks of the cloud operator joined with source NAT, the same routed in a shared address scope, and networks of a hub project shared by RBAC and joined through a transit router.
+**Choice.** A plane is described by two properties, how a tenant router joins it and whether addresses are translated ([ADR-0004](../adr/0004-planes-and-isolation.md)). Three cases follow: external networks of the cloud operator joined with source NAT, the same routed in a shared address scope, and networks of a hub project shared by RBAC and joined through a transit router. The routed case comes in `v0.7`, with a fourth: segments given by the operator to each project, with no router in the projects ([How a tenant joins a plane](plane-attachment.md#how-your-cloud-gives-you-networks)).
 
-| | Operator planes, NAT | Hub planes, routed | Operator planes, routed |
+| | Operator planes, NAT | Hub planes, routed | Operator planes, routed (`v0.7`) |
 |---|---|---|---|
 | Rights | the operator creates them | member role | the operator, with address scopes |
 | Tenant ranges | may overlap | unique (checked) | unique, from subnet pools |
@@ -164,7 +164,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** Two cases to test, and a stack (`shared/planes`) applied twice when a tenant joins a hub plane (sharing, then routes).
 
-**Choose routed operator planes when** you run the cloud, coordinate the addressing and advertise the tenant ranges: no translation, no static routes.
+**Choose routed operator planes (`v0.7`) when** you run the cloud, coordinate the addressing and advertise the tenant ranges: no translation, no static routes.
 
 ## 11. One network for administration and internal services
 
@@ -252,7 +252,7 @@ The Kubernetes case adds two costs: a second header breaks the TLS handshake wit
 
 **Cost.** The projects share a layer 2 segment, and port security does not apply to router ports: a project allowed by the cloud's policy to disable port security on its own ports can send packets with another project's address. They are blind (the answer goes to the real owner), the isolation test and the test procedure check it, and every service of the scenario listens on TCP; UDP services allow reflection.
 
-**Close it when** the tenants do not trust each other: a policy of the operator that forbids disabling port security, or routed operator planes (`v0.7`, with cloud-baseline), where the cloud routes each project's range and no segment is shared.
+**Close it when** the tenants do not trust each other: a policy of the operator that forbids disabling port security, or segments of the operator (`v0.7`), where each project has a segment of its own and the operator's firewall stands between them. Routed operator planes do not close it on their own: the tenant routers still share the operator's external network, and the operator's routing domains decide.
 
 ## 20. A bastion per stack
 
@@ -284,7 +284,8 @@ What keeps the planes apart depends on where they come from:
 |---|---|---|
 | hub planes (`interface`) | the hub's networks and the router per plane | is the separation |
 | operator planes with NAT | the operator's distinct external networks | is required: a router has one gateway |
-| operator planes, routed | the operator's routing policy (routing domains, a firewall between them) | is required: a router has one gateway |
+| operator planes, routed (`v0.7`) | the operator's routing policy (routing domains, a firewall between them) | is required: a router has one gateway |
+| segments of the operator (`v0.7`) | the operator's firewall, which applies the roles of each plane | does not exist: the projects have no router |
 
 **Cost.** A router per plane and tenant, on top of the transit router and the egress router: a tenant exposed through the entry point, consuming internal services and with an egress, has five. Plan the router quota of each project ([planes contract](../reference/planes-contract.md)); on the public cloud profile, which allows four by default, ask the provider for more, or join only the planes a tenant needs.
 

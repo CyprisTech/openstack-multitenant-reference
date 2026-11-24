@@ -6,9 +6,9 @@ The single description of the shared planes, read by every other stack whatever 
 - **With which credentials:** those of the **hub** project when it builds planes; those of any project, such as the shared services', when it only adopts the operator's.
 - **What the hub project holds:** the network only — the planes, their RBAC policies and their transit routers. Shared services (entry point, receivers, internal services) run in their own projects, attached with the role `shared`.
 
-## Two kinds of plane
+## Kinds of plane
 
-A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. `nat` in the attachments output follows the mode for now: an operator plane (`gateway`) translates addresses, a hub plane (`interface`) does not. A third kind, the operator plane routed without translation, is adopted like any operator plane: an input of this stack, built by the operator by any means ([`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) is one). Declaring it (an operator plane with `nat = false`) comes in `v0.6`; it is shown here for comparison.
+A plane comes from the cloud operator or from your hub project; that is its `mode` in `planes`. `nat` in the attachments output follows the mode for now: an operator plane (`gateway`) translates addresses, a hub plane (`interface`) does not. A third kind, the operator plane routed without translation, is adopted like any operator plane: an input of this stack, built by the operator by any means ([`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) is one). Declaring it (an operator plane with `nat = false`) comes in `v0.7`; it is shown here for comparison. In `v0.7` too, segments of the operator (`mode = "segment"`, [spec](../../../docs/specs/operator-segments.md)): no plane network to join, the planes are ranges behind the operator's gateway.
 
 
 ```mermaid
