@@ -148,7 +148,7 @@ Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintaine
 | Profile | For | Inputs that differ | Tested by |
 |---|---|---|---|
 | `private-cloud` | a cloud you or your operator run | planes of the operator or of a hub project ([`examples/planes`](examples/planes/README.md)); the defaults otherwise; `internal_zone` of the shared cluster when the cloud has Designate | [`scenarios/private-cloud.toml`](tests/campaign/scenarios/private-cloud.toml), both plane modes |
-| `public-cloud` | a public cloud, with the member role only | hub planes ([`hub.tfvars.example`](examples/planes/hub.tfvars.example)); `bastion_placement = "stack-network"` in `entry-point` and `vm`: the bastion on the stack's network, its floating IP on the egress router, 4 routers per project at most; security groups allowed in each project (some providers require a request) | [`scenarios/public-cloud.toml`](tests/campaign/scenarios/public-cloud.toml) |
+| `public-cloud` | a public cloud, with the member role only | hub planes ([`hub.tfvars.example`](examples/planes/hub.tfvars.example)); `bastion_placement = "stack-network"` in `entry-point` and `vm`: the bastion on the stack's network, its floating IP on the egress router, 4 routers per project at most; security groups allowed in each project (some providers require a request); `dns = "output"` on a cloud without Designate, the records published from `dns_records` | [`scenarios/public-cloud.toml`](tests/campaign/scenarios/public-cloud.toml) |
 
 <details>
 <summary>Output of a real run: HTTPS through the entry point, then the isolation test (interface mode, one project per stack, 2026-11-23)</summary>
