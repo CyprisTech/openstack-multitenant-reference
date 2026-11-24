@@ -41,7 +41,7 @@ output "manifests" {
 }
 
 output "scripts" {
-  description = "Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change)."
+  description = "Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory)."
   sensitive   = true
   value       = module.cluster.scripts
 }

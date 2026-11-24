@@ -122,7 +122,7 @@ jobs:
           python3 tests/campaign/run.py private-cloud --dry-run --mode interface full
           python3 tests/campaign/run.py public-cloud --dry-run full
       - name: shell scripts syntax
-        run: bash -n scripts/publish-domains.sh scripts/request-domains.sh images/kubernetes-node/build.sh
+        run: bash -n scripts/publish-domains.sh scripts/request-domains.sh scripts/cluster-files.sh images/kubernetes-node/build.sh
       - name: documentation links
         run: python3 tests/docs/check_links.py
       - name: inputs and outputs tables (terraform-docs)

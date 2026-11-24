@@ -2,7 +2,7 @@
 
 Order matters: what depends on another stack goes first.
 
-1. **Kubernetes clusters** (the published cluster, and the shared cluster): set `bootstrap = true` and apply (the bootstrap instance is needed again), admit it on the API, then run `delete-cluster.sh` on it — see [its README](../../stacks/tenants/kubernetes/README.md#teardown).
+1. **Kubernetes clusters** (the published cluster, and the shared cluster): set `bootstrap = true` and apply (the bootstrap instance is needed again), admit it on the API, then run `delete-cluster.sh` on it — see [its README](../../stacks/tenants/kubernetes/README.md#teardown). A bootstrap instance kept since an earlier release still has that release's scripts, written by cloud-init when it was created: copy the current ones to its `/opt/platform` first (`scripts/cluster-files.sh`).
 2. **Services that admit named consumers**: the internal service (shared services project).
 3. **Tenants**: `tofu destroy` in each tenant stack.
 4. **Entry point**: `tofu destroy` in `stacks/shared/entry-point`.

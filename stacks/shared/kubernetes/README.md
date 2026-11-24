@@ -81,14 +81,7 @@ The consumers need two things the cluster does not give them.
 
 ## Add a consumer
 
-The sources are written in the manifests, which `create-cluster.sh` applies once. A consumer is a tenant, once it has joined the internal services plane, or a range of users ([how they reach the plane](../../../docs/reference/integration-points.md#users-of-internal-services)):
-
-```bash
-# Add its internal_sources output, or the users' range, to consumers in terraform.tfvars, then:
-tofu apply
-tofu output -json manifests | jq -r '."addons.yaml"'   | kubectl --kubeconfig shared.kubeconfig apply -f -
-tofu output -json manifests | jq -r '."services.yaml"' | kubectl --kubeconfig shared.kubeconfig apply -f -
-```
+The sources are written in the manifests. A consumer is a tenant, once it has joined the internal services plane, or a range of users ([how they reach the plane](../../../docs/reference/integration-points.md#users-of-internal-services)). Add its `internal_sources` output, or the users' range, to `consumers` in `terraform.tfvars`, apply the stack and [update the cluster](../../../docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply).
 
 The load balancers then admit the new sources; their addresses do not change.
 
@@ -144,7 +137,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | dns\_records | The records of cluster.domains in internal\_zone (ADR-0016, D2), keyed "<name> <type>", each { zone, name, type, ttl, records }: written in Designate with dns = "designate", to publish with your DNS provider otherwise (a for\_each of its record resource). Empty without internal\_zone. |
 | domains | Names of the HTTP services and the address they resolve to; as records, in dns\_records. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
-| scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
+| scripts | Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory). |
 | services | What the consumers reach, on the internal services plane: the internal ingress (HTTPS, names of cluster.domains) and the TCP echo, at a floating IP of the plane with NAT, at their address in the cluster network otherwise. The consumers admit nothing from the cluster for them. |
 | sources | Addresses the cluster connects from on each plane it joins, for the admission rules of what it calls (allowed\_sources). |
 <!-- END_TF_DOCS -->

@@ -82,7 +82,7 @@ The settings of the cluster:
 | Credentials | application credential dedicated to the cluster (`member` and `load-balancer_member`), created by an administrator and copied to the bootstrap instance; never in the state |
 | Add-ons after the move | one Helm release proxy per chart: CAAPH v0.6.6 no longer duplicates them after `clusterctl move` (kubernetes-sigs/cluster-api-addon-provider-helm#606); `create-cluster.sh` stops if a duplicate appears |
 
-`create-cluster.sh`, `delete-cluster.sh` and the manifests reach the bootstrap instance through cloud-init, when the instance is created. An apply that changes them does not update an existing bootstrap instance: replace it (`bootstrap = false`, then `true`, and copy the cluster credential again) to run the new version. The scripts can be run again after a failure; a run after `clusterctl move` continues on the cluster itself.
+The scripts and the manifests reach the bootstrap instance through cloud-init, when the instance is created. After `clusterctl move`, an apply that changes them reaches the cluster through its API: `update-cluster.sh`, from an administration source ([update a cluster after an apply](../../../docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply)). The bootstrap instance only creates, deletes or repairs the cluster. The scripts can be run again after a failure; a run of `create-cluster.sh` after `clusterctl move` continues on the cluster itself.
 
 ## Prerequisites
 
@@ -129,17 +129,11 @@ With `exposure = "public"`, `published_domains` is empty: point the domains to t
 
 ### Change the exposure of an existing cluster
 
-The ingress settings live in the cluster's add-ons, which the bootstrap instance applied at creation. After changing `exposure`:
-
-```bash
-tofu apply                       # the new address of the ingress, the routers of the planes
-tofu output -json manifests | jq -r '."addons.yaml"' | kubectl --kubeconfig <cluster>.kubeconfig apply -f -
-kubectl --kubeconfig <cluster>.kubeconfig -n traefik get svc traefik   # the address of tofu output service_address
-```
+The ingress settings live in the cluster's add-ons. After changing `exposure`, apply the stack (the new address of the ingress, the routers of the planes) and [update the cluster](../../../docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply), then check that `kubectl -n traefik get svc traefik` shows the address of `tofu output service_address`.
 
 The apply replaces the address of the ingress (a floating IP of another network) and releases the old one: the ingress is unreachable until the add-ons are applied. Then update the routes: `scripts/publish-domains.sh` when the cluster goes back to the entry point, your DNS when it leaves it.
 
-A private cluster (`exposure = "none"`) serves nobody: every connection starts from it, to the Internet through its egress or to the internal services it consumes. Typical uses: CI runners, batch jobs, message queue consumers, scheduled operations (backups, scans, synchronisations). It is chosen at creation. Making an existing cluster private, or publishing a private one, changes its add-ons beyond a `kubectl apply` (the ingress is removed or installed): it comes with the update of a cluster through its API ([ADR-0017](../../../docs/adr/0017-upgrades-between-releases.md), D3).
+A private cluster (`exposure = "none"`) serves nobody: every connection starts from it, to the Internet through its egress or to the internal services it consumes. Typical uses: CI runners, batch jobs, message queue consumers, scheduled operations (backups, scans, synchronisations). It is chosen at creation. Making an existing cluster private, or publishing a private one, removes or installs the ingress, which applying the add-ons does not do: create the cluster again.
 
 ### Who reaches what
 
@@ -253,6 +247,6 @@ If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command 
 | internal\_sources | Addresses the cluster reaches the internal services plane from, for the services of that plane (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. Empty when the cluster does not join the plane. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
 | published\_domains | Domains to publish through the entry point and the tenant's service address, its ingress (ADR-0006, D1): a floating IP of publication when the plane translates addresses, the load balancer address otherwise. For the domains input of the entry point (scripts/request-domains.sh). Empty with exposure = "public" or "none". |
-| scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
+| scripts | Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory). |
 | service\_address | The tenant's service address, "address:443" (ADR-0006, D1): its ingress. On publication through the entry point (a floating IP of the plane when it translates addresses, the load balancer address otherwise), or a public floating IP with exposure = "public". null with exposure = "none". |
 <!-- END_TF_DOCS -->

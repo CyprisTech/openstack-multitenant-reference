@@ -76,6 +76,6 @@ What the module owns of the cluster's lifecycle, and what it leaves to Cluster A
 | bootstrap | Floating IP of the bootstrap instance on the administration network, or null once it is removed. |
 | entries | Address of each entry, keyed like the ingresses and the services inputs: a floating IP of its plane with NAT, its address in the cluster network otherwise. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
-| scripts | Rendered create and delete scripts, as written on the bootstrap instance (cloud-init writes them once: copy them again after a change). |
+| scripts | Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory). |
 | sources | Addresses the cluster connects from on each plane it joins, for the admission rules of what it calls there (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. |
 <!-- END_TF_DOCS -->
