@@ -112,6 +112,38 @@ class TenantInputsTest(unittest.TestCase):
         self.assertIn("ops@192.0.2.10", ssh[0])
 
 
+class ResolverTest(unittest.TestCase):
+    def outputs(self, cmd):
+        values = {
+            ("tests/fixtures/resolver", "resolver"): "203.0.113.53",
+            ("tests/fixtures/resolver", "bastion"): "192.0.2.20",
+            ("tests/fixtures/resolver", "address"): "10.38.0.5",
+            ("stacks/shared/planes", "attachments"): {
+                "resolver": {"planes": {"internal": {"routes": []}}},
+                "private": {"planes": {"observability": {"routes": []}, "internal": {"routes": []}}},
+            },
+        }
+        if cmd[0] == "tofu" and cmd[2] == "output":
+            key = (cmd[1].removeprefix("-chdir="), cmd[4])
+            if key in values:
+                return Result(0, json.dumps(values[key]))
+        return None
+
+    def test_the_resolver_forwards_the_test_zone_and_the_private_tenant_uses_it(self):
+        stacks = dict(STACKS, resolver="tests/fixtures/resolver", private="stacks/tenants/vm")
+        config = {"clouds": {"planes": "hub", "receiver": "shared", "resolver": "shared", "entry-point": "edge",
+                             "vm": "web", "private": "private"},
+                  "site": "t1", "ssh_user": "ops", "test_zone": "example.org", "name_server": "192.0.2.53"}  # fmt: skip
+        ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
+                      workspaces={"vm": "web", "private": "private"})  # fmt: skip
+        load()["resolver"](ctx, StepReport("resolver"))
+        self.assertEqual(inputs(ctx, "resolver")["forward_zones"], {"example.org": ["192.0.2.53"]})
+        load()["private"](ctx, StepReport("private"))
+        written = json.loads((ctx.root / "stacks/tenants/vm/mode.private.tfvars.json").read_text())
+        self.assertEqual(written["dns_nameservers"], ["203.0.113.53"])
+        self.assertEqual(written["egress"], "none")
+
+
 class ApplyTest(unittest.TestCase):
     def test_the_repair_hook_runs_then_the_plan_must_be_empty(self):
         applies = []

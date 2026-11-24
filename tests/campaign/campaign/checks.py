@@ -27,6 +27,12 @@ def isolation_test(ctx, report, cluster=None):
     if ctx.has("private"):
         private = ctx.stack("private")
         cmd += ["--private", private, "--private-workspace", private.workspace or ""]
+    # Name resolution (ADR-0016, D3): every instance resolves the test zone; the private tenant
+    # through the test resolver.
+    if ctx.config.get("test_zone"):
+        cmd += ["--zone", ctx.config["test_zone"]]
+    if ctx.has("resolver"):
+        cmd += ["--resolver", ctx.stack("resolver")]
     if cluster == "shared":
         cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
     elif cluster == "published":

@@ -8,7 +8,9 @@ from . import step
 # The clusters first (Cluster API deletes their servers and load balancers), then the stacks,
 # consumers before what they consume.
 CLUSTERS = ["shared", "published"]
-DESTROY_ORDER = ["shared", "internal-service", "published", "private", "vm", "entry-point", "receiver", "acme", "planes"]
+DESTROY_ORDER = [
+    "shared", "internal-service", "published", "private", "resolver", "vm", "entry-point", "receiver", "acme", "planes",
+]
 
 # Listings of the leftover check: a kind of object and the column holding its ID. The Octavia
 # plugin names its columns in lower case. Images are kept (the Kubernetes node image).

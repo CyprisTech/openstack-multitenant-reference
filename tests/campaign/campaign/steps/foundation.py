@@ -135,6 +135,20 @@ def internal(ctx, report):
     ctx.apply("internal-service")
 
 
+@step("resolver")
+def resolver(ctx, report):
+    """The resolver behind the internal services plane (ADR-0016, D3), for the private tenant:
+    the test zone forwarded to the DNS that serves it, public names resolved through its egress."""
+    ctx.set_inputs(
+        "resolver",
+        cloud=ctx.cloud("resolver"),
+        plane_attachment=attachment(ctx, "resolver"),
+        forward_zones={test_zone(ctx): [ctx.setting("name_server")]},
+    )
+    ctx.apply("resolver")
+    ctx.wait_for_instances(ctx.value("resolver", "bastion"), [ctx.value("resolver", "address")])
+
+
 @step("edge")
 def edge(ctx, report):
     """The entry point, with no domain yet (step publish publishes them)."""
@@ -167,10 +181,10 @@ def web(ctx, report):
 @step("private")
 def private(ctx, report):
     """A private tenant (ADR-0016, D1): the vm stack in its own workspace, with neither exposure
-    nor egress; its workload pushes its metric, nothing else."""
+    nor egress; its workload pushes its metric, nothing else. It resolves names through the test
+    resolver when the scenario has one."""
     cidr = ctx.options.get("planes", {}).get("attachments", {}).get("private", {}).get("cidr", "10.22.0.0/24")
-    ctx.set_inputs(
-        "private",
+    inputs = dict(
         cloud=ctx.cloud("private"),
         name="private",
         exposure="none",
@@ -180,6 +194,10 @@ def private(ctx, report):
         plane_attachment=attachment(ctx, "private"),
         monitoring=monitoring(ctx),
     )
+    # Without egress, its resolver is behind a plane it joins (ADR-0016, D3).
+    if ctx.has("resolver"):
+        inputs["dns_nameservers"] = [ctx.value("resolver", "resolver")]
+    ctx.set_inputs("private", **inputs)
     ctx.apply("private")
     ctx.wait_for_instances(ctx.value("private", "bastion"), ctx.instances("private"))
 
