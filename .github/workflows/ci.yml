@@ -26,6 +26,7 @@ env:
     tests/fixtures/receiver
     tests/fixtures/internal-service
     tests/fixtures/acme
+    tests/fixtures/resolver
 
 jobs:
   validate:
