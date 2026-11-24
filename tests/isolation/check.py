@@ -80,6 +80,16 @@ class Prober:
         out = r.stdout.strip().splitlines()
         return out[-1] if out and out[-1] in ("open", "closed") else "error: " + (r.stderr.strip() or "kubectl failed")
 
+    def pod_ipv6(self, kubectl):
+        """Global IPv6 addresses and IPv6 default route of the probe pod: none, or what is found."""
+        r = subprocess.run(kubectl + ["-n", "default", "exec", "isolation-probe", "--", "sh", "-c",
+                                      "ip -6 -o addr show scope global; ip -6 route show default; echo done"],
+                           capture_output=True, text=True, timeout=60)
+        out = r.stdout.strip().splitlines()
+        if not out or out[-1] != "done":
+            return "error: " + (r.stderr.strip() or "kubectl failed")[:60]
+        return "none" if len(out) == 1 else "present: " + out[0][:60]
+
     def remote(self, jump, host, target, port):
         """TCP probe run on `host` (reached through the bastion `jump`, or directly if host is None)."""
         probe = f"timeout 5 bash -c '</dev/tcp/{target}/{port}' 2>/dev/null && echo open || echo closed"
@@ -286,6 +296,8 @@ def main():
                      from_web(proxy_host, int(proxy_port))))
         rows.append((f"private {prv_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
                      from_private(proxy_host, int(proxy_port))))
+        rows.append((f"egress {eg_vm[0]}", "routed IPv6 (global address, default route)", "-", "none",
+                     lambda: ipv6(egt["bastion"], eg_vm[1])))
 
     probe_pod = None
     if args.published_kubeconfig:
@@ -321,6 +333,7 @@ def main():
         rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
         rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
         rows.append(("receiver", f"published ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
+        rows.append(("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(probe_pod)))
 
     if args.shared_kubeconfig:
         # The shared cluster (spec: a Kubernetes cluster for shared services): the web
@@ -354,6 +367,7 @@ def main():
         rows.append(("shared pod (default)", f"whoami backend {whoami_pod}", 80, "closed", lambda: p.pod(sk, whoami_pod, 80)))
         rows.append(("shared pod (default)", f"echo backend {echo_pod}", 7000, "closed", lambda: p.pod(sk, echo_pod, 7000)))
         rows.append(("receiver", "series pushed by shared", "-", "yes", lambda: pushed("shared")))
+        rows.append(("shared pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(sk)))
 
     if args.acme:
         acme = outputs(args.tool, args.acme)
