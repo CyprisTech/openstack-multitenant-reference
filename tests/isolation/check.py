@@ -40,6 +40,11 @@ zone of the landing zone, whose names they use (the entry point and the receiver
 tenants by address);
 with --resolver (tests/fixtures/resolver), the private tenant uses that resolver, behind the
 internal services plane.
+
+With --egress (stacks/shared/egress) and --egress-tenant (a vm tenant with egress = "shared",
+--egress-workspace), the rows of the shared egress are added (ADR-0016, D1): through the proxy,
+that tenant reaches a declared name (--egress-allowed) and not another (--egress-refused); it has
+no direct way to the Internet; the web and private tenants, not declared, do not reach the proxy.
 """
 
 import argparse
@@ -121,6 +126,11 @@ def main():
     ap.add_argument("--zone", help="zone of the landing zone, which every instance must resolve")
     ap.add_argument("--public-name", default="openstack.org", help="a public name every instance must resolve")
     ap.add_argument("--resolver", help="directory of the test resolver (tests/fixtures/resolver), used by the private tenant")
+    ap.add_argument("--egress", help="directory of the shared egress (stacks/shared/egress)")
+    ap.add_argument("--egress-tenant", help="directory of the tenant with egress = shared (default: <stacks>/tenants/vm)")
+    ap.add_argument("--egress-workspace", default="egress-shared", help="its workspace (default: egress-shared)")
+    ap.add_argument("--egress-allowed", default="http://archive.ubuntu.com/ubuntu/", help="URL of a declared name")
+    ap.add_argument("--egress-refused", default="https://openstack.org/", help="a URL of a name not declared")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
@@ -244,6 +254,38 @@ def main():
             return "yes" if resolver in out.split() else "no: " + (out or "none")[:50]
 
         rows.append((f"private {prv_vm[0]}", f"resolver in use {resolver}", "-", "yes", uses_resolver))
+
+    if args.egress:
+        proxy = outputs(args.tool, args.egress)["proxy"]
+        proxy_host, proxy_port = proxy.split("//")[1].rsplit(":", 1)
+        egt = outputs(args.tool, args.egress_tenant or os.path.join(args.stacks, "tenants", "vm"), args.egress_workspace or None)
+        eg_vm = sorted(egt["instances"].items())[0]
+
+        def through_proxy(url):
+            """HTTP status of a request through the proxy, from the tenant with the shared egress:
+            open when the name is declared, refused (403 from the proxy) otherwise."""
+            # A refused HTTPS name fails the CONNECT (curl exits 56, http_connect 403); a refused HTTP
+            # name answers 403. Both are read from the codes, whatever curl's exit status.
+            out = p.run(egt["bastion"], eg_vm[1],
+                        f"curl -s -o /dev/null -w '%{{http_code}} %{{http_connect}}' --max-time 15 "
+                        f"-x {shlex.quote(proxy)} {shlex.quote(url)}; true")
+            if out.startswith("error"):
+                return out
+            codes = out.split()
+            if codes and codes[0][:1] in "23":
+                return "open"
+            return "refused" if "403" in codes else f"error: {out.strip()}"
+
+        rows.append((f"egress {eg_vm[0]}", f"{args.egress_allowed} through the proxy", proxy_port, "open",
+                     lambda: through_proxy(args.egress_allowed)))
+        rows.append((f"egress {eg_vm[0]}", f"{args.egress_refused} through the proxy", proxy_port, "refused",
+                     lambda: through_proxy(args.egress_refused)))
+        rows.append((f"egress {eg_vm[0]}", "Internet (1.1.1.1), directly", 443, "closed",
+                     lambda: p.remote(egt["bastion"], eg_vm[1], "1.1.1.1", 443)))
+        rows.append((f"web {web_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
+                     from_web(proxy_host, int(proxy_port))))
+        rows.append((f"private {prv_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
+                     from_private(proxy_host, int(proxy_port))))
 
     probe_pod = None
     if args.published_kubeconfig:
