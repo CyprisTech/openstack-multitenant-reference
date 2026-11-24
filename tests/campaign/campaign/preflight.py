@@ -1,4 +1,5 @@
-"""Checks before the first step: every credential the run will use authenticates.
+"""Checks before the first step: every credential the run will use authenticates, and the entries
+of different stacks open different projects.
 
 A campaign stopped after an hour on a revoked or misspelled credential costs a rerun; the check
 costs a token per credential.
@@ -29,12 +30,22 @@ def problems(ctx, names):
             found.append("cluster_clouds.shared_next is not set: the rotation needs the next credential")
         elif clusters.get("shared_next") == clusters.get("shared"):
             found.append("cluster_clouds.shared_next is the current credential: create the next one")
+    projects = {}
     for entry in credentials(ctx, names):
-        result = ctx.runner.run(ctx.openstack._cmd(entry, "token", "issue", "-f", "value", "-c", "expires"),
+        result = ctx.runner.run(ctx.openstack._cmd(entry, "token", "issue", "-f", "value", "-c", "project_id"),
                                 check=False, quiet=True)  # fmt: skip
         if result.returncode != 0:
             reason = (result.stderr.strip().splitlines() or ["no answer"])[-1]
             found.append(f"{entry} does not authenticate: {reason[:160]}")
+        elif result.stdout.strip():
+            projects.setdefault(result.stdout.strip(), []).append(entry)
+    # Each entry of a stack's project names its own project: two entries in one project mean a
+    # credential created in the wrong project (the stacks that share a project share an entry).
+    stacks = set(ctx.clouds())
+    for project, entries in sorted(projects.items()):
+        shared = sorted(e for e in entries if e in stacks)
+        if len(shared) > 1:
+            found.append(f"{', '.join(shared)} open the same project {project}: one of them was created in the wrong project")
     return found
 
 

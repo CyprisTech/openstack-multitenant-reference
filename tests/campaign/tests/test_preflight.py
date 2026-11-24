@@ -15,12 +15,15 @@ CONFIG = {
 }
 
 
-def refusing(*entries):
-    """A fake openstack client: `token issue` fails for the given clouds.yaml entries."""
+def refusing(*entries, projects=None):
+    """A fake openstack client: `token issue` fails for the given clouds.yaml entries; the others
+    open their own project, or the one `projects` gives them."""
 
     def fake(cmd):
         cloud = cmd[cmd.index("--os-cloud") + 1]
-        return Result(1, "", "The request you have made requires authentication.") if cloud in entries else Result(0, "x")
+        if cloud in entries:
+            return Result(1, "", "The request you have made requires authentication.")
+        return Result(0, (projects or {}).get(cloud, f"project-of-{cloud}"))
 
     return fake
 
@@ -45,6 +48,11 @@ class PreflightTest(unittest.TestCase):
     def test_all_good(self):
         ctx = context(stacks=STACKS, config=CONFIG)
         self.assertEqual(preflight.problems(ctx, ["planes", "rotate"]), [])
+
+    def test_two_stacks_in_one_project_stop_the_run(self):
+        ctx = context(stacks=STACKS, config=CONFIG, fake=refusing(projects={"hub": "p1", "k8s-shared": "p1"}))
+        with self.assertRaisesRegex(StepFailed, "hub, k8s-shared open the same project p1"):
+            preflight.check(ctx, ["planes"])
 
 
 if __name__ == "__main__":
