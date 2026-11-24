@@ -44,7 +44,7 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 | cloud | n/a | `string` | n/a | yes |
 | flavor | n/a | `string` | n/a | yes |
 | image | n/a | `string` | n/a | yes |
-| plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on internal). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
+| plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on internal). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes = optional(list(object({<br/>      destination = string<br/>      next_hop    = string<br/>    })), [])<br/>  }))</pre> | n/a | yes |
 | site | n/a | `string` | n/a | yes |
 | ssh\_cidrs | n/a | `list(string)` | n/a | yes |
 | ssh\_keys | n/a | `list(string)` | n/a | yes |

@@ -32,7 +32,7 @@ The bastion has its own small network, whose only router joins an administration
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
 | admin\_network | Name of the bastion's own network (and key in tenant.networks). | `string` | n/a | yes |
-| bastion | The bastion, or null for none (ADR-0005, D5). Where it lives: var.placement.<br/>- ssh\_cidrs: sources allowed to reach the bastion on port 22. | <pre>object({<br/>    external_network = object({ network = string, subnet = optional(string) })<br/>    cidr             = optional(string)<br/>    flavor           = optional(string)<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
+| bastion | The bastion, or null for none (ADR-0005, D5). Where it lives: var.placement.<br/>- ssh\_cidrs: sources allowed to reach the bastion on port 22. | <pre>object({<br/>    external_network = object({<br/>      network = string<br/>      subnet  = optional(string)<br/>    })<br/>    cidr      = optional(string)<br/>    flavor    = optional(string)<br/>    ssh_cidrs = list(string)<br/>  })</pre> | n/a | yes |
 | default\_cidr | Range of the bastion's network when bastion.cidr is not set. | `string` | n/a | yes |
 | instance | Placement and image of the bastion, as for the stack's instances. | <pre>object({<br/>    az     = string<br/>    image  = string<br/>    flavor = string<br/>    boot   = any<br/>  })</pre> | n/a | yes |
 | name | Name of the bastion instance; its network, router and security group are named after it. | `string` | n/a | yes |

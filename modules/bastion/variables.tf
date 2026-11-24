@@ -9,10 +9,13 @@ variable "bastion" {
     - ssh_cidrs: sources allowed to reach the bastion on port 22.
   EOT
   type = object({
-    external_network = object({ network = string, subnet = optional(string) })
-    cidr             = optional(string)
-    flavor           = optional(string)
-    ssh_cidrs        = list(string)
+    external_network = object({
+      network = string
+      subnet  = optional(string)
+    })
+    cidr      = optional(string)
+    flavor    = optional(string)
+    ssh_cidrs = list(string)
   })
 }
 

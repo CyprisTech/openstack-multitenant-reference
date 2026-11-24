@@ -45,12 +45,12 @@ Like any shared service, it runs in its own project, not in the hub project (whi
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. Where it lives: var.bastion\_placement. | <pre>object({<br/>    external_network = object({ network = string, subnet = optional(string) })<br/>    ssh_cidrs        = list(string)<br/>  })</pre> | n/a | yes |
+| bastion | Administration bastion: floating IP on external\_network, SSH from ssh\_cidrs. Where it lives: var.bastion\_placement. | <pre>object({<br/>    external_network = object({<br/>      network = string<br/>      subnet  = optional(string)<br/>    })<br/>    ssh_cidrs = list(string)<br/>  })</pre> | n/a | yes |
 | cloud | n/a | `string` | n/a | yes |
-| egress\_network | External network giving the default route (package and image download). subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name). | `object({ network = string, subnet = optional(string) })` | n/a | yes |
+| egress\_network | External network giving the default route (package and image download). subnet: optional, the subnet of that network to look up by name; without it, Neutron chooses (a public network with several subnets of the same name). | <pre>object({<br/>    network = string<br/>    subnet  = optional(string)<br/>  })</pre> | n/a | yes |
 | flavor | n/a | `string` | n/a | yes |
 | image | n/a | `string` | n/a | yes |
-| plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on observability). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes       = optional(list(object({ destination = string, next_hop = string })), [])<br/>  }))</pre> | n/a | yes |
+| plane\_attachment | The service's entry of the attachments output of stack shared/planes (role shared on observability). | <pre>map(object({<br/>    mode         = string<br/>    nat          = bool<br/>    cidr         = string<br/>    network_id   = string<br/>    network_name = string<br/>    subnet_id    = string<br/>    routes = optional(list(object({<br/>      destination = string<br/>      next_hop    = string<br/>    })), [])<br/>  }))</pre> | n/a | yes |
 | site | n/a | `string` | n/a | yes |
 | users | SSH users (login => public keys, sudo granted), on the bastion and the receiver. | `map(list(string))` | n/a | yes |
 | zones | Availability zones; the fixture runs in the first one, as the single instances of the stacks. | `list(string)` | n/a | yes |

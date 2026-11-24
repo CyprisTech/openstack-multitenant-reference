@@ -69,7 +69,10 @@ variable "network_mtu" {
 
 variable "egress_network" {
   description = "External network giving the default route (packages, container images). The cluster gets no public address on it, except the ingress with exposure = \"public\" (an entry with plane \"egress\")."
-  type        = object({ network = string, subnet = optional(string) })
+  type = object({
+    network = string
+    subnet  = optional(string)
+  })
 }
 
 variable "plane_attachment" {
@@ -86,7 +89,10 @@ variable "plane_attachment" {
     network_id   = string
     network_name = string
     subnet_id    = string
-    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+    routes = optional(list(object({
+      destination = string
+      next_hop    = string
+    })), [])
   }))
 }
 
@@ -137,8 +143,12 @@ variable "admin_network" {
     operator plane (gateway mode): then admin.sources must be specific addresses, never the range
     of the plane.
   EOT
-  type        = object({ network = string, subnet = optional(string), cidr = string })
-  default     = null
+  type = object({
+    network = string
+    subnet  = optional(string)
+    cidr    = string
+  })
+  default = null
 }
 
 variable "admin" {
@@ -183,18 +193,23 @@ variable "cluster" {
     - pod_cidr, service_cidr: must not overlap the cluster network nor the planes.
   EOT
   type = object({
-    name                           = optional(string, "published")
-    node_image                     = string
-    kubernetes_version             = optional(string, "v1.36.5")
-    control_plane_flavor           = string
-    worker_flavor                  = string
-    control_plane_count            = optional(number, 3)
-    worker_count                   = optional(number, 2)
+    name               = optional(string, "published")
+    node_image         = string
+    kubernetes_version = optional(string, "v1.36.5")
+
+    control_plane_flavor = string
+    control_plane_count  = optional(number, 3)
+    worker_flavor        = string
+    worker_count         = optional(number, 2)
+
     control_plane_root_volume_size = optional(number, 30)
     worker_root_volume_size        = optional(number, 40)
-    domains                        = optional(list(string), ["apps.example.org"])
-    pod_cidr                       = optional(string, "10.244.0.0/16")
-    service_cidr                   = optional(string, "10.96.0.0/12")
+
+    domains = optional(list(string), [
+      "apps.example.org",
+    ])
+    pod_cidr     = optional(string, "10.244.0.0/16")
+    service_cidr = optional(string, "10.96.0.0/12")
   })
 
   validation {

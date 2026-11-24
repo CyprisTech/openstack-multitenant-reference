@@ -12,7 +12,10 @@ variable "attachment" {
     network_id   = string
     network_name = string
     subnet_id    = string
-    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+    routes = optional(list(object({
+      destination = string
+      next_hop    = string
+    })), [])
   }))
 
   validation {

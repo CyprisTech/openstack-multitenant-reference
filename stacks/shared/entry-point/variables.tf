@@ -78,7 +78,10 @@ variable "plane_attachment" {
     network_id   = string
     network_name = string
     subnet_id    = string
-    routes       = optional(list(object({ destination = string, next_hop = string })), [])
+    routes = optional(list(object({
+      destination = string
+      next_hop    = string
+    })), [])
   }))
 }
 
@@ -182,10 +185,13 @@ variable "bastion" {
     The users of var.admin are created on the bastion and on the Traefik instances.
   EOT
   type = object({
-    external_network = object({ network = string, subnet = optional(string) })
-    cidr             = optional(string)
-    flavor           = optional(string)
-    ssh_cidrs        = list(string)
+    external_network = object({
+      network = string
+      subnet  = optional(string)
+    })
+    cidr      = optional(string)
+    flavor    = optional(string)
+    ssh_cidrs = list(string)
   })
   default = null
 }

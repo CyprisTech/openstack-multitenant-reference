@@ -10,5 +10,8 @@ variable "planes" {
 
 variable "attachments" {
   description = "One entry per attachment and plane, keyed as you like: the plane and the attached project."
-  type        = map(object({ plane = string, project_id = string }))
+  type = map(object({
+    plane      = string
+    project_id = string
+  }))
 }
