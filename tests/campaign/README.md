@@ -2,6 +2,10 @@
 
 `run.py` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown. It applies each stack, requires an empty plan, runs the [isolation test](../isolation/README.md) and the HTTPS checks, and keeps the outputs. A scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md)) names the stacks and the steps; the steps themselves are shared.
 
+**What to read.** To use the reference, you do not need this directory: the [isolation test](../isolation/README.md) and the [guides](../../docs/guides) are what you run on your deployment. The campaign is the maintainers' tool: it runs those guides, end to end and upgrades included, before each release.
+
+**Why its own tool.** Terratest and `tofu test` with a real provider test one configuration at a time. A campaign spans several projects and stacks, feeding each stack the outputs of the others, two Kubernetes clusters created and upgraded by Cluster API, loads that must not fail during an apply, and the upgrade from the previous release; and it must resume after an interruption and leave the projects empty. Python's standard library and the `tofu` and `openstack` command lines are enough for that, without a framework to learn.
+
 **What each step runs.** A step names the sections of the documentation it runs, `@step(name, guide=...)`: its section of the [test procedure](../../docs/reference/test-procedure.md) and the guide or README an adopter follows for the same thing. The report gives them for each step that passed (`guide=` in `report.json`). A unit test checks that each named file and heading exists, and that every step names its sections or is listed in `UNDOCUMENTED` with the reason; a change to a procedure updates the step that names it.
 
 ## Usage

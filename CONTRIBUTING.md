@@ -76,6 +76,8 @@ Use a dedicated, disposable project and project-scoped credentials (an applicati
 
 A change that adds or removes a flow must update the matrix in both places: the [isolation matrix](docs/reference/isolation-matrix.md) and the rows of `check.py`.
 
+**The campaign grows with what it proves.** Code added to [`tests/campaign`](tests/campaign/README.md) comes with a claim it tests (a guide it runs, a row it checks, a measure it records); a workaround for one test cloud stays out of the repository.
+
 ## Conventions
 
 These rules come from [ADR-0005](docs/adr/0005-stacks-contracts-and-access.md):
