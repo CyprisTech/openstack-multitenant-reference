@@ -492,9 +492,9 @@ In three waves, consumers before what they consume: the clusters and the tenants
 ```bash
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
-kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --type=json \
-  -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$B"'/32"}]'
-sleep 60   # the API load balancer takes the new sources
+scripts/cluster-files.sh stacks/tenants/kubernetes /tmp/published
+KUBECONFIG=published.kubeconfig /tmp/published/update-cluster.sh --admit "$B/32"
+sleep 60   # the API load balancer takes the new source
 ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
 for s in tests/fixtures/internal-service stacks/tenants/kubernetes; do tofu -chdir=$s destroy -auto-approve; done
 for t in private web; do

@@ -191,12 +191,6 @@ def try_shared_service(ctx, address):
     return result.returncode == 0
 
 
-def apply_manifests(ctx):
-    manifests = ctx.value(STACK, "manifests")
-    text = "" if ctx.runner.dry_run else manifests["addons.yaml"] + "\n---\n" + manifests["services.yaml"]
-    kubectl(ctx).apply(text)
-
-
 @step("consumer")
 def consumer(ctx, report):
     """Closed by default, then a range of users admitted: consumer_cidr, this machine as the
@@ -212,13 +206,13 @@ def consumer(ctx, report):
         if try_shared_service(ctx, address) and not ctx.runner.dry_run:
             raise StepFailed("open to an undeclared consumer")
 
-        ctx.runner.echo("# Add a consumer: one line of configuration, apply, the two manifests")
+        ctx.runner.echo("# Add a consumer, as the stack's README says: one line of configuration, apply, update-cluster.sh")
         if not ctx.runner.dry_run:
             values = json.loads(inputs.read_text())
             values["consumers"] = list(values.get("consumers", [])) + [cidr]
             inputs.write_text(json.dumps(values, indent=2) + "\n")
         ctx.apply(STACK)
-        apply_manifests(ctx)
+        update_cluster(ctx, STACK, kubeconfig(ctx, STACK))
         # The source reaches the chart, the Service, then the Octavia listeners: a minute or two.
         opened = None
         for attempt in range(1, 19):
@@ -231,7 +225,7 @@ def consumer(ctx, report):
             raise StepFailed("the declared consumer is still refused after 3 minutes")
     ctx.runner.echo("# Back to the declared consumers")
     ctx.apply(STACK)
-    apply_manifests(ctx)
+    update_cluster(ctx, STACK, kubeconfig(ctx, STACK))
     ctx.scene_done(STACK)
 
 

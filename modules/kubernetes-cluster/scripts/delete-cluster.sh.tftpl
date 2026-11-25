@@ -23,9 +23,9 @@ fi
 # removes its address). It cannot admit itself: an operator must do it from an administration
 # source, then run this script again.
 if [[ -z "$not_moved" ]] && ! kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
-  echo "The Kubernetes API does not admit this instance. From an administration source, run:" >&2
-  echo "  kubectl --kubeconfig <cluster kubeconfig> -n platform patch cluster ${cluster.name} --type=json \\" >&2
-  echo "    -p '[{\"op\": \"add\", \"path\": \"/spec/topology/variables/0/value/-\", \"value\": \"$(./bootstrap-source)\"}]'" >&2
+  echo "The Kubernetes API does not admit this instance. From an administration source, with the" >&2
+  echo "stack's files (scripts/cluster-files.sh), run:" >&2
+  echo "  KUBECONFIG=<cluster kubeconfig> <directory>/update-cluster.sh --admit $(./bootstrap-source)" >&2
   echo "wait about a minute, then run this script again." >&2
   exit 1
 fi

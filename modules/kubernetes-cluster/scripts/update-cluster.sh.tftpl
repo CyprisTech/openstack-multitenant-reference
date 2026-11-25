@@ -11,16 +11,30 @@
 # and cacert.pem that create-cluster.sh took. create-cluster.sh runs it too: --workload-only before
 # the move, --from-bootstrap at the end (the last apply cuts the bootstrap instance off the API, so
 # the script does not wait for the cluster). The script can be run again.
+#
+#     KUBECONFIG=<cluster>.kubeconfig ./update-cluster.sh --admit <address>/32
+#
+# admits the bootstrap instance on the cluster's API again, before delete-cluster.sh runs on it
+# (the cluster no longer admits it after the move, and it cannot admit itself): the cluster of
+# the stack's manifests, with that address among the API sources, nothing else.
 set -euo pipefail
 cd "$(dirname "$0")"
 : "$${KUBECONFIG:?set KUBECONFIG to the kubeconfig of the cluster}"
-workload_only=false from_bootstrap=false
+workload_only=false from_bootstrap=false admit=""
 case "$${1:-}" in
   --workload-only) workload_only=true ;;
   --from-bootstrap) from_bootstrap=true ;;
+  --admit) admit="$${2:?--admit needs the address of the bootstrap instance, <address>/32}" ;;
   "") ;;
-  *) echo "usage: $0 [--workload-only | --from-bootstrap]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--workload-only | --from-bootstrap | --admit <address>/32]" >&2; exit 2 ;;
 esac
+
+if [[ -n "$admit" ]]; then
+  kubectl --request-timeout=15s -n platform get cluster/${cluster.name} >/dev/null
+  sed "s|BOOTSTRAP_SOURCE|$admit|" manifests/cluster.yaml | kubectl apply -f -
+  echo "$admit admitted on the API of ${cluster.name}: the load balancer takes it in about a minute."
+  exit 0
+fi
 
 wait_webhooks() {
   for _ in $(seq 30); do kubectl apply --dry-run=server "$@" >/dev/null 2>&1 && return 0; sleep 10; done

@@ -132,7 +132,7 @@ def create_cluster(ctx, key, credential, kubeconfig):
     return kubectl
 
 
-def update_cluster(ctx, key, kubeconfig, credential=None):
+def update_cluster(ctx, key, kubeconfig, credential=None, admit=None):
     """Runs update-cluster.sh from the campaign host, an administration source (ADR-0017, D3):
     the stack's scripts and manifests in a directory of the work directory, then the script. With
     a credential, as the guide says to rotate it: its clouds.yaml (and the authority's
@@ -153,7 +153,8 @@ def update_cluster(ctx, key, kubeconfig, credential=None):
     started = time.monotonic()
     env = dict(os.environ, KUBECONFIG=str(kubeconfig))
     try:
-        result = ctx.runner.run([str(files / "update-cluster.sh")], env=env, check=False, stream=True)
+        args = ["--admit", admit] if admit else []
+        result = ctx.runner.run([str(files / "update-cluster.sh"), *args], env=env, check=False, stream=True)
     finally:
         for path in placed:
             path.unlink(missing_ok=True)
@@ -176,12 +177,13 @@ def fetch_kubeconfig(ctx, host, kubeconfig):
 
 
 def delete_cluster(ctx, key, kubeconfig):
-    """Admits the bootstrap instance on the API again, then deletes the cluster from it.
+    """Admits the bootstrap instance on the API again, then deletes the cluster from it, as the
+    teardown of the Kubernetes stacks says.
 
     Does nothing if the stack has no bootstrap instance. Once moved, the cluster manages itself:
-    the bootstrap instance is admitted on its API first, with a patch of the API sources only
-    (after an upgrade, cluster.yaml describes an older version). A creation that stopped before
-    the move left Cluster API on the bootstrap instance: delete-cluster.sh deletes it from there.
+    the bootstrap instance is admitted on its API first (update-cluster.sh --admit). A creation
+    that stopped before the move left Cluster API on the bootstrap instance: delete-cluster.sh
+    deletes it from there.
     """
     host = bootstrap_address(ctx, key)
     if not host:
@@ -190,9 +192,7 @@ def delete_cluster(ctx, key, kubeconfig):
     kubectl = Kubectl(ctx, kubeconfig)
     clusters = kubectl("--request-timeout=15s", "-n", "platform", "get", "cluster", "-o", "name", check=False, quiet=True)
     if clusters.returncode == 0 and clusters.stdout.strip():
-        patch = json.dumps([{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": f"{host}/32"}])
-        for name in clusters.stdout.split():
-            kubectl("-n", "platform", "patch", name, "--type=json", "-p", patch)
+        update_cluster(ctx, key, kubeconfig, admit=f"{host}/32")
         ctx.sleep(60)
     refresh_bootstrap(ctx, key, host)
     started = time.monotonic()

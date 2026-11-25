@@ -4,7 +4,7 @@ import json
 
 from ..checks import https_probe, isolation_test, kubeconfig, record, wait_https
 from ..context import StepFailed
-from ..kube import Kubectl, create_cluster, demo_manifest, wait_for_bootstrap
+from ..kube import Kubectl, create_cluster, demo_manifest, update_cluster, wait_for_bootstrap
 from . import step
 from .foundation import attachment, edge_sources, monitoring, publish, test_zone, transit
 
@@ -183,12 +183,11 @@ def back_to_entry_point(ctx, report, key, names, failures, after_apply=None, loa
 
 
 def apply_addons(ctx):
-    """The ingress settings are in the cluster's add-ons: applied again after a change of the
-    stack, then the Service must get the address of the stack."""
-    k = kubectl(ctx)
+    """The ingress settings are in the cluster's add-ons: after a change of the stack, the cluster
+    is updated as the stack's README says (update-cluster.sh), then the Service must get the
+    address of the stack."""
+    k = update_cluster(ctx, STACK, kubeconfig(ctx, STACK))
     address = service_address(ctx, STACK)
-    manifests = ctx.value(STACK, "manifests")
-    k.apply("" if ctx.runner.dry_run else manifests["addons.yaml"])
     for _ in range(60):
         if ctx.runner.dry_run or ingress_address(ctx) == address:
             k.show("-n", "traefik", "get", "svc", "traefik")

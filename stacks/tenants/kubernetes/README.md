@@ -167,10 +167,9 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 ```bash
 # 1. The bootstrap instance must exist (bootstrap = true) and be admitted on the API again:
 #    after the move, the cluster no longer admits it, and it cannot admit itself.
-#    A patch of the API sources only: manifests/cluster.yaml may describe an older version.
-#    The Cluster object is named by cluster.name ("published" by default).
-kubectl --kubeconfig published.kubeconfig -n platform patch cluster published --type=json \
-  -p '[{"op": "add", "path": "/spec/topology/variables/0/value/-", "value": "'"$(tofu output -raw bootstrap)"'/32"}]'
+scripts/cluster-files.sh stacks/tenants/kubernetes ~/published   # from the root of the repository
+KUBECONFIG=published.kubeconfig ~/published/update-cluster.sh --admit "$(tofu output -raw bootstrap)/32"
+sleep 60   # the API load balancer takes the new source
 
 #    If the creation stopped before the move, Cluster API still runs on the bootstrap instance:
 #    skip this step, delete-cluster.sh deletes the cluster from there.
