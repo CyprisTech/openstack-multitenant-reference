@@ -33,10 +33,13 @@ class FakeRunner(Runner):
     def __init__(self, answer):
         super().__init__(dry_run=False, echo=lambda line: None)
         self.answer = answer
+        self.inputs = []  # what each command received on its standard input
 
     def run(self, cmd, cwd=None, env=None, check=True, quiet=False, input=None, timeout=None, stream=False):
         cmd = [str(c) for c in cmd]
         self.commands.append((cmd, env))
+        if input:
+            self.inputs.append(input)
         result = self.answer(cmd)
         if check and result.returncode != 0:
             raise RuntimeError(f"failed: {cmd}")

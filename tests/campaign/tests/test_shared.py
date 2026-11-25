@@ -56,6 +56,8 @@ class RotateTest(unittest.TestCase):
                 return Result(0, "abc  /data/marker")
             if "token" in cmd:
                 return Result(1)
+            if "console" in cmd:  # the stack's cluster_cidr, as tofu evaluates it
+                return Result(0, json.dumps(json.dumps("10.36.0.0/24")))
             return Result(0)
 
         ctx = context(answer, stacks=STACKS)
@@ -77,6 +79,9 @@ class RotateTest(unittest.TestCase):
         self.assertTrue(any(c[0] == "scripts/cluster-files.sh" for c in commands))
         self.assertTrue(any(c[0].endswith("shared-files/update-cluster.sh") for c in commands))
         self.assertFalse([c for c in commands if "cloud-config" in c])
+        # The check's load balancer is internal, its sources within the cluster network (the
+        # admission policy of the cluster refuses any other).
+        self.assertTrue(any('"loadBalancerSourceRanges": ["10.36.0.0/24"]' in i for i in ctx.runner.inputs))
 
 
 class UpgradeTest(unittest.TestCase):

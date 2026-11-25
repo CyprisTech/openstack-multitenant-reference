@@ -42,6 +42,6 @@ The cluster holds its application credential in two secrets: one for Cluster API
 
 1. Have a new application credential created, with the same roles.
 2. Write it as the entry `openstack` of a `clouds.yaml` in the directory of the cluster's files (with `cacert.pem` for a private certificate authority), and run `update-cluster.sh` ([update a cluster](#update-a-cluster-after-an-apply)): it replaces both secrets, then restarts the cloud controller manager and Cinder CSI, which read the second one.
-3. Check it works: create a Service of type `LoadBalancer`, wait for its address, delete it. Then revoke the old credential.
+3. Check it works: create an internal Service of type `LoadBalancer` (annotation `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"`, `loadBalancerSourceRanges` within the cluster network: outside its entries, the cluster admits no other load balancer), wait for its address, delete it. Then revoke the old credential.
 
 Then delete the `clouds.yaml` of the directory. Also replace `/opt/platform/clouds.yaml` on the bootstrap instance, if there is one, before using it to delete the cluster.

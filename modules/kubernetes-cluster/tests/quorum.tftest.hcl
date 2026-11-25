@@ -1,5 +1,6 @@
 # The zones of the Kubernetes module, with a mocked provider (no cloud is needed): the quorum
-# warning of the control plane (ADR-0012) and the storage of the persistent volumes.
+# warning of the control plane (ADR-0012), the storage of the persistent volumes and the admission
+# policy of the LoadBalancer Services.
 
 mock_provider "openstack" {
   mock_resource "openstack_networking_port_v2" {
@@ -121,4 +122,27 @@ run "storage_zones_unsupported" {
   }
 
   expect_failures = [check.volume_zones]
+}
+
+# The admission policy of the LoadBalancer Services admits the entries, in their namespace at
+# the address the stack prepared, and internal load balancers within the cluster network.
+run "load_balancer_policy" {
+  command = plan
+
+  variables {
+    zones        = ["az-1"]
+    cluster_cidr = "10.36.0.0/24"
+    ingresses    = { internal = { plane = "internal", sources = ["192.0.2.0/24"], domains = ["services.example.org"], host = 10 } }
+    services     = { echo = { plane = "internal", namespace = "echo", selector = { app = "echo" }, ports = [7000], sources = ["192.0.2.0/24"], host = 11 } }
+  }
+
+  assert {
+    condition     = strcontains(nonsensitive(output.manifests["load-balancer-policy.yaml"]), "'{\"echo\":[\"10.36.0.11\"],\"traefik-internal\":[\"10.36.0.10\"]}'")
+    error_message = "The policy admits each entry in its namespace, at its address."
+  }
+
+  assert {
+    condition     = strcontains(nonsensitive(output.manifests["load-balancer-policy.yaml"]), "cidr('10.36.0.0/24').containsCIDR(r)")
+    error_message = "Internal load balancers are admitted with sources within the cluster network only."
+  }
 }

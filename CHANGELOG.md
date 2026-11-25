@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Kubernetes clusters (published and shared): an admission policy (`load-balancer-entries`, ValidatingAdmissionPolicy) admits as Services of type `LoadBalancer` only the entries of the stack and internal load balancers whose sources are within the cluster network; two rows per cluster in the isolation test. **Migration:** run `update-cluster.sh` after the apply, as after each apply; a Service of type `LoadBalancer` you created outside the entries keeps running, but is refused at its next change.
 - Stack `shared/egress`: the shared egress of the landing zone ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md), D1), Squid forward proxies behind an Octavia load balancer on the internal services plane; each tenant reaches the names it declares, every request is logged; the tenants delivered as instance metadata, a change replaces no instance.
 - `vm`: `egress = "shared"` (input `shared_egress`): no egress router, no default route, the proxy for apt, the shells and the system services; the instance waits for its admission at first boot.
 - Isolation test: the rows of the shared egress (`--egress`, `--egress-tenant`).

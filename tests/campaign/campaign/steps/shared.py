@@ -320,13 +320,14 @@ def rotate(ctx, report):
         remote(ctx, host, "sudo install -m 600 /tmp/clouds.yaml /opt/platform/clouds.yaml; rm -f /tmp/clouds.yaml", quiet=True)
 
     ctx.runner.echo("# A load balancer created with the new credential")
-    # Internal: without an annotation, the cloud controller picks an external network for the
-    # floating IP by itself, which the cluster may not reach.
+    # Internal, reached from the cluster network only: the cluster admits no other load balancer
+    # than its entries (load-balancer-policy.yaml).
+    cluster_cidr = "10.0.0.0/22" if ctx.runner.dry_run else ctx.variable(STACK, "cluster_cidr")
     k.apply(json.dumps({
         "apiVersion": "v1", "kind": "Service",
         "metadata": {"name": "rotation-check", "namespace": "default",
                      "annotations": {"service.beta.kubernetes.io/openstack-internal-load-balancer": "true"}},
-        "spec": {"type": "LoadBalancer", "selector": {"app": "rotation-check"},
+        "spec": {"type": "LoadBalancer", "selector": {"app": "rotation-check"}, "loadBalancerSourceRanges": [cluster_cidr],
                  "ports": [{"name": "80-80", "port": 80, "targetPort": 80, "protocol": "TCP"}]},
     }))  # fmt: skip
     k("-n", "default", "wait", "service/rotation-check", "--for=jsonpath={.status.loadBalancer.ingress[0].ip}", "--timeout=10m")

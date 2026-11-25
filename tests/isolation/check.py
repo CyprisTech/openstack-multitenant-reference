@@ -228,6 +228,33 @@ def kget(kubectl, *a):
     return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
 
 
+def load_balancer(kubectl, annotations=None, ranges=None):
+    """Whether the cluster admits a LoadBalancer Service that is not one of its entries, in the
+    default namespace (a server-side dry run: nothing is created)."""
+    service = {"apiVersion": "v1", "kind": "Service",
+               "metadata": {"name": "isolation-load-balancer", "namespace": "default", "annotations": annotations or {}},
+               "spec": {"type": "LoadBalancer", "ports": [{"port": 80}], "loadBalancerSourceRanges": ranges or []}}  # fmt: skip
+    r = subprocess.run(kubectl + ["create", "--dry-run=server", "-f", "-"], input=json.dumps(service),
+                       capture_output=True, text=True, timeout=60)  # fmt: skip
+    if r.returncode == 0:
+        return "admitted"
+    return "refused" if "load-balancer-entries" in r.stderr else "error: " + r.stderr.strip()[:60]
+
+
+INTERNAL = {"service.beta.kubernetes.io/openstack-internal-load-balancer": "true"}
+
+
+def load_balancer_rows(name, kubectl):
+    """A LoadBalancer Service outside the entries of the stack is refused (no floating IP on a
+    network the cloud controller picks), and so is an internal one open to every source."""
+    return [
+        (f"{name} API (administrator)", "LoadBalancer Service, not an entry", "-", "refused",
+         lambda: load_balancer(kubectl)),
+        (f"{name} API (administrator)", "internal LoadBalancer Service, sources 0.0.0.0/0", "-", "refused",
+         lambda: load_balancer(kubectl, INTERNAL, ["0.0.0.0/0"])),
+    ]  # fmt: skip
+
+
 # --- the rows, by family: (from, to, port, expected, probe) ---------------------------------------
 
 
@@ -387,7 +414,7 @@ def published_cluster_rows(d, args):
         ("receiver", f"published ingress {ingress}", 443, "closed", d.from_receiver(ingress, 443)),
         ("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(pod)),
     ]
-    return rows
+    return rows + load_balancer_rows("published", kubectl)
 
 
 def shared_cluster_rows(d, args):
@@ -432,7 +459,7 @@ def shared_cluster_rows(d, args):
         ("receiver", "series pushed by shared", "-", "yes", lambda: d.pushed("shared")),
         ("shared pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(sk)),
     ]
-    return rows
+    return rows + load_balancer_rows("shared", sk)
 
 
 def certificate_rows(d, args):

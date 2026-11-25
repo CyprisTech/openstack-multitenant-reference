@@ -57,7 +57,12 @@ The entry point is not a prerequisite: this cluster is not published.
 
 ## Load balancers of your own Services
 
-Annotate every Service of type `LoadBalancer`, as the entries of the stack do: `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"` for a load balancer reachable from the cluster network only; `loadbalancer.openstack.org/floating-network-id` and `service.beta.kubernetes.io/openstack-internal-load-balancer: "false"` for a floating IP on a plane, with its sources admitted (`loadBalancerSourceRanges`). Without annotation, the cloud controller gives it a floating IP of an external network it picks by itself, which the cluster may not reach. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
+The cluster admits two kinds of Services of type `LoadBalancer` (a ValidatingAdmissionPolicy, `load-balancer-entries`, applied by `update-cluster.sh`):
+
+- the entries of the stack (the internal ingress and the layer 4 services), in their namespace and at the address the stack prepared (`loadBalancerIP`);
+- internal load balancers, reached from the cluster network only: the annotation `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"` and `loadBalancerSourceRanges` within `cluster_cidr`.
+
+Any other is refused: without annotation, the cloud controller would give it a floating IP of an external network it picks by itself; with `loadbalancer.openstack.org/floating-network-id`, a floating IP on a plane the landing zone does not account for; an internal load balancer without source ranges is reached by every source of a routed plane, which reaches the cluster network. A new address on a plane is an entry of the stack, declared with the others. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
 
 ## Usage
 

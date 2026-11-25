@@ -1,0 +1,50 @@
+# A Service of type LoadBalancer is an Octavia load balancer: without annotations, the cloud
+# controller manager gives it a floating IP on an external network it picks, an exposure outside
+# the declared entries of the landing zone. Only two kinds are admitted:
+# - the entries of the stack (inputs ingresses and services): their namespace, at the address
+#   the stack prepared;
+# - internal load balancers, reached from the cluster network only: the internal annotation, and
+#   loadBalancerSourceRanges within the cluster network (on a routed plane, the plane reaches the
+#   cluster network: without source ranges, any source of the plane would reach the load balancer).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: load-balancer-entries
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: [v1]
+      operations: [CREATE, UPDATE]
+      resources: [services]
+  variables:
+  - name: entries
+    expression: '${jsonencode(entries)}'
+  - name: entry
+    expression: >-
+      object.metadata.namespace in variables.entries &&
+      has(object.spec.loadBalancerIP) &&
+      object.spec.loadBalancerIP in variables.entries[object.metadata.namespace]
+  - name: internal
+    expression: >-
+      has(object.metadata.annotations) &&
+      'service.beta.kubernetes.io/openstack-internal-load-balancer' in object.metadata.annotations &&
+      object.metadata.annotations['service.beta.kubernetes.io/openstack-internal-load-balancer'] == 'true' &&
+      has(object.spec.loadBalancerSourceRanges) && size(object.spec.loadBalancerSourceRanges) > 0 &&
+      object.spec.loadBalancerSourceRanges.all(r, isCIDR(r) && cidr('${cluster_cidr}').containsCIDR(r))
+  validations:
+  - expression: "object.spec.type != 'LoadBalancer' || variables.entry || variables.internal"
+    reason: Forbidden
+    message: >-
+      a LoadBalancer Service is an entry of the stack (inputs ingresses and services), or internal:
+      annotation service.beta.kubernetes.io/openstack-internal-load-balancer "true" and
+      loadBalancerSourceRanges within the cluster network ${cluster_cidr}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: load-balancer-entries
+spec:
+  policyName: load-balancer-entries
+  validationActions: [Deny]

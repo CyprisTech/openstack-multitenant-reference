@@ -67,7 +67,7 @@ if [[ -f clouds.yaml ]]; then
     for r in $readers; do kubectl -n kube-system rollout status "$r" --timeout=10m; done
   fi
 fi
-kubectl apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml
+kubectl apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml -f manifests/load-balancer-policy.yaml
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
 %{ for name, i in ingresses ~}
 namespace ${i.namespace}

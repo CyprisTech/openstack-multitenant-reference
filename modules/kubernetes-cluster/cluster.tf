@@ -92,6 +92,16 @@ locals {
     "addons.yaml"        = templatefile("${path.module}/manifests/addons.yaml.tftpl", local.manifest_vars)
     "storage-class.yaml" = templatefile("${path.module}/manifests/storage-class.yaml.tftpl", local.manifest_vars)
     "node-deletion.yaml" = file("${path.module}/manifests/node-deletion.yaml")
+    # The LoadBalancer Services the cluster admits: its entries, at their addresses, and internal
+    # load balancers reached from the cluster network only.
+    "load-balancer-policy.yaml" = templatefile("${path.module}/manifests/load-balancer-policy.yaml.tftpl", {
+      cluster_cidr = var.cluster_cidr
+      entries = { for ns in distinct(concat([for k, i in local.ingresses : i.namespace], [for k, sv in var.services : sv.namespace])) :
+        ns => concat(
+          [for k, i in local.ingresses : local.entry_address[k] if i.namespace == ns],
+          [for k, sv in var.services : local.entry_address["service-${k}"] if sv.namespace == ns],
+      ) }
+    })
     }, length(var.services) == 0 ? {} : {
     "services.yaml" = templatefile("${path.module}/manifests/services.yaml.tftpl", local.manifest_vars)
     }, var.certificates == null ? {} : {
