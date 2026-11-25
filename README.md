@@ -75,12 +75,13 @@ The design areas of a landing zone, and the answer of this reference to each. Th
 
 ## Principles
 
-- **The project is the unit of isolation.** Every tenant and every shared service has its own credentials, quotas and networks.
-- **Everything that crosses projects goes through a declared shared network.** Nothing is reached through an undeclared path; tenants never reach each other.
-- **Isolation is enforced at each target and verified.** Routes are not a security boundary; security groups are, and a test probes every flow after each change.
-- **Flows are initiated by the side that holds the route back.** Tenants expose one address per service and push what they send; nothing opens a way into a tenant for someone else's convenience.
-- **The reference owns the architecture, not the tools.** Platform services (metrics, logs, internal services) plug into documented integration points with the tools you choose ([integration points](docs/reference/integration-points.md)).
-- **Works with a member role.** Nothing requires administrator rights on the cloud, so it applies to public and sovereign clouds as well as private ones.
+- **The project is the unit of isolation.** Each tenant has its own project, credentials and networks; shared services run in projects of their own.
+- **Everything that crosses projects goes through a declared shared network.** Nothing is reached through an undeclared path. Tenants never reach each other's private addresses; a tenant published on the Internet is reached as anyone reaches it.
+- **What a tenant exposes and reaches is declared.** Its published domains are a reviewed change of the entry point, its egress is a list of names, and a service opens to the consumers listed in its inputs.
+- **Isolation is enforced at each target and verified.** Routes and address translation are not a security boundary; security groups are. An executable test probes the [isolation matrix](docs/reference/isolation-matrix.md), allowed and refused flows, a hostile route included: run it after each change.
+- **Connections go one way.** The entry point connects to a tenant's service address; tenants connect to the shared services they use (egress, resolvers, internal services) and push their metrics. Nothing else connects into a tenant, except the administration sources, to its bastion and its Kubernetes API.
+- **The reference deploys what the landing zone needs, not the platform.** The entry point, the shared egress and the agents that push metrics are part of it. Platform services (metrics and log receivers, secrets, backups, GitOps) plug into documented [integration points](docs/reference/integration-points.md), with the tools you choose.
+- **Works inside its projects with the `member` and `load-balancer_member` roles.** The projects, and the operator planes of the gateway mode, come from the cloud operator or from [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline). Designed for private, public and sovereign clouds; the public cloud profile is tested from `v0.7`.
 
 ## How it fits together
 
