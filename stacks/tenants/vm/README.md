@@ -52,6 +52,8 @@ Arrows show who opens the connection. With `exposure = "public"`, the service ad
 
 `exposure = "none"` and `egress = "none"`: a tenant connected to its planes only, the equivalent of the landing zones' workloads connected to the hub and not exposed to the Internet.
 
+Set both inputs: their defaults (`exposure = "entry-point"`, `egress = "router"`) are those of the earlier releases, kept so that an upgrade changes nothing, and a tenant that leaves them out joins the publication plane and gets a way out to the Internet.
+
 - no service address, no router on the publication plane, an empty `published_domains`;
 - no egress router and no default route on the transit router: unknown destinations are dropped; the tenant reaches the destinations of its planes, and nothing else;
 - no package can be installed: the instances run a workload from their image. The stack's stand-in, a Python standard-library service, pushes one metric (`workload_up`, OTLP) to the receiver. A real workload comes in the image, or from a package mirror reached on a plane ([integration points](../../../docs/reference/integration-points.md#name-resolution-time-and-package-mirrors));

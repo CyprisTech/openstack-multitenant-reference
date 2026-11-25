@@ -90,7 +90,7 @@ tofu -chdir=stacks/shared/entry-point output -json publication_sources   # edge_
 
 Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` or `kubernetes` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
 
-The web and private tenants are two tenants of the [`vm`](../../stacks/tenants/vm/README.md) stack: a workspace each (its state), the common values in `terraform.tfvars`, the values of each tenant in its own file.
+The web and private tenants are two tenants of the [`vm`](../../stacks/tenants/vm/README.md) stack: here, to evaluate, a workspace each (its state), the common values in `terraform.tfvars`, the values of each tenant in its own file. Workspaces share the backend and its credentials: in production, give each tenant its own state, a backend key per tenant ([several tenants of one stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)).
 
 ```bash
 s=stacks/tenants/vm

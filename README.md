@@ -16,7 +16,7 @@ The reference deploys two types of tenant, each in its own project:
 - **Virtual machines** behind their own load balancer, spread over hosts and availability zones. The certificates of their domains are obtained and renewed at the tenant's entry, and every inbound and outbound flow is declared and filtered.
 - **Kubernetes clusters** created with Cluster API. The cloud controller manager drives their OpenStack load balancers, and applications are published through the Gateway API, with their certificates managed in the cluster.
 
-Either type can be exposed directly on the Internet, published behind the central entry point, or kept private, with no exposure at all. The internal services plane belongs to the shared services, such as a Kubernetes cluster for internal services that admits declared consumers only. The reference needs a member role only, on a public, sovereign or private cloud.
+A tenant's services have one audience: the Internet directly, the Internet through the central entry point, or nobody (a private tenant). Services for the other tenants are shared services, in projects of their own, with a stack of their own: on the internal services plane they provide (role `shared`) and the tenants consume, the declared consumers only; for example a Kubernetes cluster for shared services. The plane itself belongs to the hub, or to the cloud operator. The reference works inside its projects with the `member` and `load-balancer_member` roles, on a private, public or sovereign cloud.
 
 ![Architecture overview: shared services and tenants, each in its own project, meet on shared networks (planes); arrows show who opens each connection](docs/images/architecture-overview.png)
 
