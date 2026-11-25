@@ -95,6 +95,8 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 | Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent, ACME client, [Kubernetes cluster](modules/kubernetes-cluster/README.md)) | use as they are |
 | Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; the [shared cluster](stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), whose services are demonstrated, not operated; two tenant types: [`vm`](stacks/tenants/vm/README.md), as a web tenant behind the entry point and a private tenant with neither exposure nor egress, and [`kubernetes`](stacks/tenants/kubernetes/README.md); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
 
+`stacks/shared` holds what the landing zone provides to the tenants: the connectivity (`planes`) and the services (`entry-point`, `egress`, `kubernetes`); `stacks/tenants`, the tenants, each in its own project.
+
 The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
 
 | Purpose | Key in `shared/planes` |
@@ -161,7 +163,7 @@ $ for d in site-a.example.org site-b.example.org apps.published.example.org; do
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
 $ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --acme tests/fixtures/acme \
-    --web-workspace web --private-workspace private --published-kubeconfig published.kubeconfig
+    --web web.json --private private.json --published-kubeconfig published.kubeconfig
 from                   to                                                    port  expected actual  
 test runner            entry point (public IP)                                443  open     open     ✅
 test runner            entry point (public IP)                                 80  open     open     ✅

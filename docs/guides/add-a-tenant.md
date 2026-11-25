@@ -27,7 +27,7 @@ Apply `shared/planes`: on hub planes, the plane networks are shared with the new
 
 ## 4. Configure the stack
 
-Each tenant has its own state, under its own key, with its own access rights when the backend is shared: for several tenants of one stack, a backend key per tenant given at init (`-backend-config`), or locally a workspace each; its values in its own file (`-var-file`), and `name` to tell their resources apart ([several tenants of a stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)). Set:
+Each tenant has its own state, under its own key, with its own access rights when the backend is shared: for several tenants of one stack, a backend key per tenant given at init (`-backend-config`), or locally a state file each; its values in its own file (`-var-file`), and `name` to tell their resources apart ([several tenants of a stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)). Set:
 
 | Input | Value |
 |---|---|

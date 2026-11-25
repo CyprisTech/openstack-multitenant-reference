@@ -80,15 +80,18 @@ Each tenant has its own state, under its own key, with its own access rights whe
   tofu apply -var-file=private.tfvars
   ```
 
-- **Locally**, to evaluate, a workspace per tenant. Every workspace shares the backend and its credentials: whoever reads one state reads the others, which does not suit tenants run by different teams.
+- **Locally**, to evaluate, the same with the local backend: a state file per tenant, given at init.
 
   ```bash
-  cp private.tfvars.example private.tfvars   # adapt
-  tofu workspace select -or-create=true web && tofu apply
-  tofu workspace select -or-create=true private && tofu apply -var-file=private.tfvars
+  printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
+  cp private.tfvars.example private.tfvars                     # adapt
+  tofu init -reconfigure -backend-config=path=web.tfstate && tofu apply
+  tofu init -reconfigure -backend-config=path=private.tfstate && tofu apply -var-file=private.tfvars
   ```
 
-The web tenant is the one of `terraform.tfvars.example`; the private tenant, the one of [`private.tfvars.example`](private.tfvars.example). The test campaign uses workspaces (local states on one machine).
+  To keep several tenants initialised at once, give each its own data directory (`TF_DATA_DIR=.terraform/tenant-<name>` on every command): this is what the test campaign does.
+
+The web tenant is the one of `terraform.tfvars.example`; the private tenant, the one of [`private.tfvars.example`](private.tfvars.example). Workspaces are not used: they share the backend and its credentials, so that whoever reads one state reads the others.
 
 ## Publishing the domains on the entry point
 

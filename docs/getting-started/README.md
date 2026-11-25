@@ -90,15 +90,15 @@ tofu -chdir=stacks/shared/entry-point output -json publication_sources   # edge_
 
 Independent of each other, each in its own project, with its `plane_attachment` and `monitoring.receiver`; the tenants published through the entry point (`vm`, `kubernetes`) also take its `edge_sources`. A `vm` or `kubernetes` tenant may instead expose itself with its own public address (`exposure = "public"`). From the root of the repository:
 
-The web and private tenants are two tenants of the [`vm`](../../stacks/tenants/vm/README.md) stack: here, to evaluate, a workspace each (its state), the common values in `terraform.tfvars`, the values of each tenant in its own file. Workspaces share the backend and its credentials: in production, give each tenant its own state, a backend key per tenant ([several tenants of one stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)).
+The web and private tenants are two tenants of the [`vm`](../../stacks/tenants/vm/README.md) stack: a state each, given at init (here a local file; in production a backend key per tenant, [several tenants of one stack](../../stacks/tenants/vm/README.md#several-tenants-of-this-stack)), the common values in `terraform.tfvars`, the values of each tenant in its own file.
 
 ```bash
 s=stacks/tenants/vm
 cp $s/terraform.tfvars.example $s/terraform.tfvars   # common values and the web tenant: adapt
 cp $s/private.tfvars.example $s/private.tfvars       # the private tenant: adapt
-tofu -chdir=$s init
-tofu -chdir=$s workspace select -or-create=true web && tofu -chdir=$s apply
-tofu -chdir=$s workspace select -or-create=true private && tofu -chdir=$s apply -var-file=private.tfvars
+printf 'terraform {\n  backend "local" {}\n}\n' > $s/backend_override.tf   # a state file per tenant
+tofu -chdir=$s init -reconfigure -backend-config=path=web.tfstate && tofu -chdir=$s apply
+tofu -chdir=$s init -reconfigure -backend-config=path=private.tfstate && tofu -chdir=$s apply -var-file=private.tfvars
 ```
 
 Kubernetes tenant: [its README](../../stacks/tenants/kubernetes/README.md). On hub planes the published cluster's ingress gets an internal load balancer at a fixed address; the Kubernetes API and the bootstrap instance need floating IPs on an external network (`admin_network`).
@@ -114,7 +114,8 @@ The hub discovers the address of each attached router and routes to it. Until th
 ## 6. Publish the domains
 
 ```bash
-TF_WORKSPACE=web scripts/request-domains.sh stacks/tenants/vm   # writes the entry point's domains file: review and commit it
+tofu -chdir=$s init -reconfigure -backend-config=path=web.tfstate
+scripts/request-domains.sh stacks/tenants/vm   # writes the entry point's domains file: review and commit it
 OS_CLOUD=<entry of the entry point's project> scripts/publish-domains.sh
 ```
 

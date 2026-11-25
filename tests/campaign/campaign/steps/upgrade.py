@@ -20,21 +20,18 @@ def loads(ctx):
     return found
 
 
-def into_workspace(ctx, key):
-    """A stack the previous release kept in the default workspace of a directory this release
-    shares between tenants: its state moves to the stack's workspace, once. A layout of the
-    campaign, not of a deployment: a user with one tenant per directory has nothing to move."""
+def into_state(ctx, key):
+    """A stack the previous release kept in the default state of a directory this release shares
+    between tenants: that state becomes the stack's own, once. A layout of the campaign: a user
+    with one tenant per state has nothing to move."""
     stack = ctx.stack(key)
     state = ctx.root / stack / "terraform.tfstate"
-    if not stack.workspace or not state.exists() or (ctx.root / stack / "terraform.tfstate.d" / stack.workspace).exists():
+    target = ctx.root / stack / f"{stack.state}.tfstate"
+    if not stack.state or not state.exists() or target.exists():
         return
-    ctx.runner.run(ctx.tofu._cmd(stack, "init", "-input=false", "-no-color"), cwd=ctx.root, quiet=True)
-    # workspace new -state= creates the workspace without copying the state (seen with OpenTofu 1.13): push it.
-    ctx.runner.run(ctx.tofu._cmd(stack, "workspace", "new", stack.workspace), cwd=ctx.root, quiet=True)
-    ctx.runner.run(ctx.tofu._cmd(stack, "state", "push", str(state)), cwd=ctx.root, env=stack.env(), quiet=True)
     if not ctx.runner.dry_run:
-        state.rename(state.with_name("terraform.tfstate.previous"))
-    ctx.runner.echo(f"{key}: state of the default workspace moved to workspace {stack.workspace}")
+        state.rename(target)
+    ctx.runner.echo(f"{key}: the default state of {stack} is now {target.name}")
 
 
 @step("migrate")
@@ -50,7 +47,7 @@ def migrate(ctx, report):
     if unknown:
         raise StepFailed(f"options.from.apply: unknown steps {unknown}")
     for key in ctx.options.get("from", {}).get("default_state", []):
-        into_workspace(ctx, key)
+        into_state(ctx, key)
     running = [] if ctx.runner.dry_run else loads(ctx)
     for load in running:
         load.start()

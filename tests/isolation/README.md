@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Stacks `shared/entry-point` and `tenants/vm`, as the web tenant and the private tenant (two workspaces, `--web-workspace`, `--private-workspace`), applied **with bastions**, and the domains of `vm` published on the entry point (`scripts/publish-domains.sh`).
+- Stacks `shared/entry-point` and `tenants/vm`, as the web tenant and the private tenant (a state each; `--web` and `--private` take a file of each one's outputs, `tofu output -json > web.json`), applied **with bastions**, and the domains of `vm` published on the entry point (`scripts/publish-domains.sh`).
 - The test receiver [`tests/fixtures/receiver`](../fixtures/receiver/README.md) applied, and its `receiver_url` output given to the stacks as `monitoring.receiver`.
 - The same SSH user and key on the bastions, the tenant instances and the receiver (`admin.users` of the stacks, `users` of the receiver).
 
@@ -12,11 +12,11 @@
 
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
-  --user ops --key ~/.ssh/id_ed25519 \
+  --user ops --key ~/.ssh/id_ed25519 --web web.json --private private.json \
   [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
   [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig] \
   [--zone example.org [--public-name openstack.org]] [--resolver tests/fixtures/resolver] \
-  [--egress stacks/shared/egress --egress-tenant stacks/tenants/vm --egress-workspace egress-shared]
+  [--egress stacks/shared/egress --egress-tenant egress-shared.json]
 ```
 
 With `--zone`, every instance must resolve a public name through the resolvers of its subnet, and the tenants also the zone of the landing zone (its SOA), whose names they use ([ADR-0016](../../docs/adr/0016-network-services-and-edge-by-level.md), D3). With `--resolver`, the private tenant must use the [test resolver](../fixtures/resolver/README.md), behind the internal services plane. With `--egress`, the rows of the [shared egress](../../stacks/shared/egress/README.md): through the proxy, the tenant with `egress = "shared"` reaches a declared name (`--egress-allowed`) and is refused another (`--egress-refused`); it has no direct way out; the tenants not declared do not reach the proxy. There is no row for time: it is a requirement on the cloud, and a wrong clock fails the HTTPS checks, which verify certificates.

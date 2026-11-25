@@ -14,6 +14,19 @@ def kubeconfig(ctx, cluster):
     return ctx.work / f"{cluster}.kubeconfig"
 
 
+def tenant_outputs(ctx, key):
+    """The outputs of a tenant in a file (tofu output -json), which the isolation test reads; the
+    stack's directory itself for a stack alone in it."""
+    stack = ctx.stack(key)
+    if not stack.state:
+        return str(stack)
+    path = ctx.work / f"outputs-{key}.json"
+    result = ctx.runner.run(ctx.tofu._cmd(stack, "output", "-json"), cwd=ctx.root, env=stack.env(), quiet=True)
+    if not ctx.runner.dry_run:
+        path.write_text(result.stdout)
+    return str(path)
+
+
 def isolation_test(ctx, report, cluster=None):
     """The executable matrix, with the cluster that is deployed. Its output is kept for the results."""
     cmd = ["python3", "tests/isolation/check.py", "--receiver", ctx.stack("receiver"),
@@ -21,22 +34,20 @@ def isolation_test(ctx, report, cluster=None):
            "--tool", ctx.tool]  # fmt: skip
     if ctx.has("acme"):
         cmd += ["--acme", ctx.stack("acme")]
-    # Tenants sharing the vm stack's directory: one workspace each.
-    if ctx.has("vm") and ctx.stack("vm").workspace:
-        cmd += ["--web-workspace", ctx.stack("vm").workspace]
+    # Tenants sharing the vm stack's directory: each one's outputs, from its own state.
+    if ctx.has("vm"):
+        cmd += ["--web", tenant_outputs(ctx, "vm")]
     if ctx.has("private"):
-        private = ctx.stack("private")
-        cmd += ["--private", private, "--private-workspace", private.workspace or ""]
+        cmd += ["--private", tenant_outputs(ctx, "private")]
     # Name resolution (ADR-0016, D3): every instance resolves the test zone; the private tenant
     # through the test resolver.
     if ctx.config.get("test_zone"):
         cmd += ["--zone", ctx.config["test_zone"]]
     if ctx.has("resolver"):
         cmd += ["--resolver", ctx.stack("resolver")]
-    # The shared egress (ADR-0016, D1) and its tenant, in a workspace of the vm stack.
+    # The shared egress (ADR-0016, D1) and its tenant, another tenant of the vm stack.
     if ctx.has("egress") and ctx.has("egress-shared"):
-        tenant = ctx.stack("egress-shared")
-        cmd += ["--egress", ctx.stack("egress"), "--egress-tenant", tenant, "--egress-workspace", tenant.workspace or ""]
+        cmd += ["--egress", ctx.stack("egress"), "--egress-tenant", tenant_outputs(ctx, "egress-shared")]
     if cluster == "shared":
         cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
     elif cluster == "published":

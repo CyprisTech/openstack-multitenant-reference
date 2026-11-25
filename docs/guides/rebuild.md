@@ -23,7 +23,7 @@ The order of creation, as in the [test procedure](../reference/test-procedure.md
 | 1 | `shared/planes` | the external networks (operator planes) or the hub project |
 | 2 | shared services: receiver, ACME authority, internal services (closed) | the planes |
 | 3 | `shared/entry-point` | the planes, the receiver |
-| 4 | tenants: `vm` (each of its workspaces), `kubernetes` | the planes, the receiver, the entry point's sources, the certificates |
+| 4 | tenants: `vm` (each of its tenants, with its own state), `kubernetes` | the planes, the receiver, the entry point's sources, the certificates |
 | 5 | Kubernetes clusters (`create-cluster.sh`), shared cluster | their stacks |
 | 6 | open the internal services to their consumers (`allowed_sources`, `consumers`), in place | the tenants' sources |
 | 7 | `shared/planes` again (hub planes) | the tenants' attachments, for the transit routes |

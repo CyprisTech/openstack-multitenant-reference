@@ -19,7 +19,7 @@ class Scenario:
     stacks: dict  # key => path from the repository root, in the order they are applied
     sequences: dict = field(default_factory=dict)
     options: dict = field(default_factory=dict)  # settings of the steps, by step name
-    workspaces: dict = field(default_factory=dict)  # key => workspace, for tenants sharing a stack
+    states: dict = field(default_factory=dict)  # key => state name, for tenants sharing a stack
 
     def expand(self, items):
         """The steps of a list of sequences or steps, in order; a sequence may name others."""
@@ -53,13 +53,13 @@ def load(path):
     for name, items in data["sequences"].items():
         if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
             raise ScenarioError(f"{path.name}: sequence {name} must be a list of names")
-    # A stack is a path, or { path, workspace } when several tenants share its directory.
-    stacks, workspaces = {}, {}
+    # A stack is a path, or { path, state } when several tenants share its directory.
+    stacks, states = {}, {}
     for key, value in data["stacks"].items():
         if isinstance(value, dict):
-            if "path" not in value or "workspace" not in value:
-                raise ScenarioError(f"{path.name}: stack {key} needs path and workspace")
-            stacks[key], workspaces[key] = value["path"], value["workspace"]
+            if "path" not in value or "state" not in value:
+                raise ScenarioError(f"{path.name}: stack {key} needs path and state")
+            stacks[key], states[key] = value["path"], value["state"]
         else:
             stacks[key] = value
     return Scenario(
@@ -67,7 +67,7 @@ def load(path):
         profile=data["profile"],
         modes=list(data["modes"]),
         stacks=stacks,
-        workspaces=workspaces,
+        states=states,
         sequences=dict(data["sequences"]),
         options=dict(data.get("options", {})),
     )

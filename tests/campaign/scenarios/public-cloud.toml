@@ -8,8 +8,8 @@ modes   = ["interface"]
 planes      = "stacks/shared/planes"
 receiver    = "tests/fixtures/receiver"
 entry-point = "stacks/shared/entry-point"
-vm          = { path = "stacks/tenants/vm", workspace = "web" }
-private     = { path = "stacks/tenants/vm", workspace = "private" }
+vm          = { path = "stacks/tenants/vm", state = "web" }
+private     = { path = "stacks/tenants/vm", state = "private" }
 
 [sequences]
 foundation = ["prep", "planes", "receiver", "edge", "web", "private", "transit", "publish"]

@@ -11,7 +11,7 @@ from pathlib import Path
 from .retry import Fatal, retry
 from .tools import OpenStack, Stack, Tofu
 
-INPUTS = "mode.auto.tfvars.json"  # loaded by tofu by itself, also by a plain apply (no workspace)
+INPUTS = "mode.auto.tfvars.json"  # loaded by tofu by itself, also by a plain apply
 
 
 class StepFailed(RuntimeError):
@@ -64,11 +64,11 @@ class Context:
     # --- stacks ---------------------------------------------------------------------------------
 
     def stack(self, key):
-        """Path of a stack of the scenario, relative to the repository root, with its workspace
-        when several tenants share the stack's directory."""
+        """Path of a stack of the scenario, relative to the repository root, with the tenant's
+        state name when several tenants share the stack's directory."""
         if key not in self.scenario.stacks:
             raise KeyError(f"stack {key} is not in scenario {self.scenario.name}")
-        return Stack(self.scenario.stacks[key], self.scenario.workspaces.get(key))
+        return Stack(self.scenario.stacks[key], self.scenario.states.get(key))
 
     def has(self, key):
         return key in self.scenario.stacks
@@ -242,11 +242,11 @@ class Context:
         values = {**self.profile_inputs(key), **values}
         stack = self.stack(key)
         path = self.root / stack / stack.inputs
-        # In a directory shared by workspaces, an auto file left by an earlier layout would be read
+        # In a directory shared by tenants, an auto file left by an earlier layout would be read
         # by every tenant of the directory.
         stale = self.root / stack / INPUTS
-        if stack.workspace and stale.exists() and not self.runner.dry_run:
-            self.runner.echo(f"{key}: {stale.name} removed (read by every workspace of {stack})")
+        if stack.state and stale.exists() and not self.runner.dry_run:
+            self.runner.echo(f"{key}: {stale.name} removed (read by every tenant of {stack})")
             stale.unlink()
         self.runner.echo(f"inputs of {key}: {', '.join(values)}")
         if not self.runner.dry_run:

@@ -16,8 +16,8 @@ STACKS = {
     "vm": "stacks/tenants/vm",
     "private": "stacks/tenants/vm",
 }
-# The web and private tenants share the vm stack's directory: one workspace each.
-WORKSPACES = {"vm": "web", "private": "private"}
+# The web and private tenants share the vm stack's directory: a state each.
+STATES = {"vm": "web", "private": "private"}
 OUTPUTS = {
     "load_balancer": {"floating_ip": "192.0.2.80"},
     "service_address": "192.0.2.90:443",
@@ -50,7 +50,7 @@ def with_inputs(ctx, key, values):
 
 class DirectTest(unittest.TestCase):
     def test_exposed_then_back_to_the_entry_point(self):
-        ctx = context(answer(ssh=1), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(ssh=1), stacks=STACKS, states=STATES)
         path = with_inputs(ctx, "vm", {"exposure": "entry-point"})
         entry = StepReport("direct")
         load()["direct"](ctx, entry)
@@ -61,14 +61,14 @@ class DirectTest(unittest.TestCase):
         self.assertFalse((ctx.work / "vm.inputs.bak").exists())
 
     def test_the_inputs_are_restored_when_the_exposed_service_fails(self):
-        ctx = context(answer(ssh=1, curl_out="nothing here\n"), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(ssh=1, curl_out="nothing here\n"), stacks=STACKS, states=STATES)
         path = with_inputs(ctx, "vm", {"exposure": "entry-point"})
         with self.assertRaisesRegex(StepFailed, "requests failed"):
             load()["direct"](ctx, StepReport("direct"))
         self.assertEqual(json.loads(path.read_text()), {"exposure": "entry-point"})
 
     def test_an_entry_point_that_still_reaches_the_instances_fails(self):
-        ctx = context(answer(ssh=0), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(ssh=0), stacks=STACKS, states=STATES)
         with_inputs(ctx, "vm", {"exposure": "entry-point"})
         with self.assertRaisesRegex(StepFailed, "still reaches 10.21.0.11"):
             load()["direct"](ctx, StepReport("direct"))
@@ -80,7 +80,7 @@ class HostileTest(unittest.TestCase):
 
     def test_closed_ports_pass_and_the_route_is_removed(self):
         options = {"planes": {"attachments": {"web": {"cidr": "10.21.0.0/24"}}}}
-        ctx = context(answer(ssh=1), stacks=STACKS, workspaces=WORKSPACES, options=options)
+        ctx = context(answer(ssh=1), stacks=STACKS, states=STATES, options=options)
         ctx.mode = "interface"
         ctx.config["hostile_next_hop"] = "172.31.1.1"
         path = with_inputs(ctx, "private", self.inputs())
@@ -103,7 +103,7 @@ class HostileTest(unittest.TestCase):
         self.assertEqual(entry.measures["hostile"], "closed")
 
     def test_an_open_port_fails(self):
-        ctx = context(answer(ssh=0), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(ssh=0), stacks=STACKS, states=STATES)
         ctx.mode = "interface"
         ctx.config["hostile_next_hop"] = "172.31.1.1"
         with_inputs(ctx, "private", self.inputs())
@@ -111,7 +111,7 @@ class HostileTest(unittest.TestCase):
             load()["hostile"](ctx, StepReport("hostile"))
 
     def test_gateway_mode_skips(self):
-        ctx = context(answer(), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(), stacks=STACKS, states=STATES)
         load()["hostile"](ctx, StepReport("hostile"))
         self.assertFalse(ctx.runner.commands)
 
@@ -120,11 +120,11 @@ class TeardownTest(unittest.TestCase):
     def test_a_failure_stops_before_the_next_wave(self):
         def run(cmd):
             if "destroy" in cmd:
-                # The web tenant only: the private tenant shares its directory, in another workspace.
+                # The web tenant only: the private tenant shares its directory, with another state.
                 return Result(1 if "-var-file=mode.web.tfvars.json" in cmd else 0)
             return answer()(cmd)
 
-        ctx = context(run, stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(run, stacks=STACKS, states=STATES)
         (ctx.work / "published-once").touch()
         entry = StepReport("teardown")
         with self.assertRaisesRegex(StepFailed, "vm: destroy failed"):
@@ -137,7 +137,7 @@ class TeardownTest(unittest.TestCase):
         self.assertEqual(entry.measures["destroyed"], "1/4")
 
     def test_the_waves_destroy_the_planes_last(self):
-        ctx = context(answer(), stacks=STACKS, workspaces=WORKSPACES)
+        ctx = context(answer(), stacks=STACKS, states=STATES)
         entry = StepReport("teardown")
         load()["teardown"](ctx, entry)
         destroyed = [c[1] for c, _ in ctx.runner.commands if "destroy" in c]

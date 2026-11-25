@@ -68,10 +68,10 @@ A step that changes a stack and restores it (direct exposure, a consumer, the ho
 
 The inputs a stack receives from the others are written to its `mode.auto.tfvars.json`, which tofu loads by itself: a plain apply of the stack, or `scripts/publish-domains.sh`, uses them too.
 
-Two tenants of one stack, such as the web and private tenants of `stacks/tenants/vm`, share its directory: each is a workspace (its state key), declared in the scenario as `{ path, workspace }`. Its inputs go to `mode.<workspace>.tfvars.json`, given with `-var-file` (an auto file would be read by every workspace), and its commands run with `TF_WORKSPACE`, as the printed commands show:
+Two tenants of one stack, such as the web and private tenants of `stacks/tenants/vm`, share its directory: each has its own state (`<name>.tfstate`, the local backend of a git-ignored `backend_override.tf`) and its own data directory, declared in the scenario as `{ path, state }`. Its inputs go to `mode.<name>.tfvars.json`, given with `-var-file` (an auto file would be read by every tenant), and its commands run with `TF_DATA_DIR`, as the printed commands show; the isolation test reads each tenant's outputs from a file the campaign writes:
 
 ```console
-$ TF_WORKSPACE=private tofu -chdir=stacks/tenants/vm apply -auto-approve -input=false -no-color -var-file=mode.private.tfvars.json
+$ TF_DATA_DIR=.terraform/tenant-private tofu -chdir=stacks/tenants/vm apply -auto-approve -input=false -no-color -var-file=mode.private.tfvars.json
 ```
 
 `notify_hook` (optional) tells the operator, given a message: when the campaign waits for someone (the revocation of the old credential, in step `rotate`) and when it stops. `repair_hook` (optional) may clean a known failure of your test cloud after a failed apply: given the stack path, it prints extra apply arguments.

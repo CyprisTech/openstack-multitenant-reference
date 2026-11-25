@@ -1,6 +1,6 @@
-# A private tenant (ADR-0016, D1): neither exposure nor egress. Applied in its own workspace,
+# A private tenant (ADR-0016, D1): neither exposure nor egress. Applied with its own state,
 # next to terraform.tfvars (common values):
-#   tofu workspace select -or-create=true private && tofu apply -var-file=private.tfvars
+#   tofu init -reconfigure -backend-config=path=private.tfstate && tofu apply -var-file=private.tfvars
 cloud = "example-private" # the private tenant's own project
 
 name           = "private" # its resources: <site>-private-*

@@ -231,7 +231,7 @@ def web(ctx, report):
 
 @step("private")
 def private(ctx, report):
-    """A private tenant (ADR-0016, D1): the vm stack in its own workspace, with neither exposure
+    """A private tenant (ADR-0016, D1): the vm stack with its own state, with neither exposure
     nor egress; its workload pushes its metric, nothing else. It resolves names through the test
     resolver when the scenario has one."""
     cidr = ctx.options.get("planes", {}).get("attachments", {}).get("private", {}).get("cidr", "10.22.0.0/24")

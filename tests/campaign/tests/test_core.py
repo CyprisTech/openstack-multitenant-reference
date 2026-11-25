@@ -24,7 +24,7 @@ def context(fake=None, dry_run=True, stacks=None, config=None):
     return Context(s, "gateway", config or {}, runner, root, root / "work")
 
 
-class WorkspaceTest(unittest.TestCase):
+class SharedDirectoryTest(unittest.TestCase):
     def test_a_stack_alone_in_its_directory_keeps_the_auto_file(self):
         stack = context().stack("vm")
         self.assertEqual((stack.inputs, stack.env(), stack.var_files()), (INPUTS, None, []))

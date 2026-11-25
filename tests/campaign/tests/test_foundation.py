@@ -56,11 +56,11 @@ def answer_outputs(cmd, extra=None):
     return Result(0, "")
 
 
-def context(answer=answer_outputs, stacks=STACKS, options=None, config=None, workspaces=None):
+def context(answer=answer_outputs, stacks=STACKS, options=None, config=None, states=None):
     root = Path(tempfile.mkdtemp())
     for path in stacks.values():
         (root / path).mkdir(parents=True, exist_ok=True)
-    scenario = Scenario("t", "private-cloud", ["gateway"], stacks, {}, options or {}, workspaces or {})
+    scenario = Scenario("t", "private-cloud", ["gateway"], stacks, {}, options or {}, states or {})
     config = config or {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "vm": "web"},
                         "site": "t1", "ssh_user": "ops", "planes": {"gateway": {"publication": {"mode": "gateway"}}}}  # fmt: skip
     ctx = Context(scenario, "gateway", config, FakeRunner(answer), root, root / "work")
@@ -135,7 +135,7 @@ class ResolverTest(unittest.TestCase):
                              "vm": "web", "private": "private"},
                   "site": "t1", "ssh_user": "ops", "test_zone": "example.org", "name_server": "192.0.2.53"}  # fmt: skip
         ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
-                      workspaces={"vm": "web", "private": "private"})  # fmt: skip
+                      states={"vm": "web", "private": "private"})  # fmt: skip
         load()["resolver"](ctx, StepReport("resolver"))
         self.assertEqual(inputs(ctx, "resolver")["forward_zones"], {"example.org": ["192.0.2.53"]})
         load()["private"](ctx, StepReport("private"))
@@ -167,7 +167,7 @@ class SharedEgressTest(unittest.TestCase):
         config = {"clouds": {"planes": "hub", "receiver": "shared", "egress": "egress", "entry-point": "edge",
                              "vm": "web", "egress-shared": "builds"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
         ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
-                      workspaces={"vm": "web", "egress-shared": "egress-shared"})  # fmt: skip
+                      states={"vm": "web", "egress-shared": "egress-shared"})  # fmt: skip
         load()["egress"](ctx, StepReport("egress"))
         self.assertEqual(inputs(ctx, "egress")["tenants"], {})
         load()["egress-tenant"](ctx, StepReport("egress-tenant"))
@@ -224,12 +224,12 @@ class InstancesTest(unittest.TestCase):
         self.assertEqual(len([c for c, _ in ctx.runner.commands if c[0] == "ssh"]), 1)
 
 
-class WorkspaceTest(unittest.TestCase):
-    """Two tenants of one stack directory: a workspace each, its own inputs file."""
+class TenantStateTest(unittest.TestCase):
+    """Two tenants of one stack directory: a state, a data directory and an inputs file each."""
 
-    def test_a_workspace_has_its_state_and_its_inputs(self):
+    def test_a_tenant_has_its_state_and_its_inputs(self):
         stacks = dict(STACKS, private="stacks/tenants/vm")
-        ctx = context(stacks=stacks, workspaces={"vm": "web", "private": "private"})
+        ctx = context(stacks=stacks, states={"vm": "web", "private": "private"})
         (ctx.root / "stacks/tenants/vm" / INPUTS).write_text("{}")  # left by an earlier layout
         ctx.set_inputs("private", name="private")
         self.assertTrue((ctx.root / "stacks/tenants/vm/mode.private.tfvars.json").exists())
@@ -237,9 +237,9 @@ class WorkspaceTest(unittest.TestCase):
         ctx.apply("private")
         apply, env = next((c, e) for c, e in ctx.runner.commands if "apply" in c)
         self.assertIn("-var-file=mode.private.tfvars.json", apply)
-        self.assertEqual(env["TF_WORKSPACE"], "private")
-        select = [c for c, _ in ctx.runner.commands if "workspace" in c]
-        self.assertEqual(select[0][-2:], ["-or-create=true", "private"])
+        init = next(c for c, _ in ctx.runner.commands if "init" in c)
+        self.assertIn("-backend-config=path=private.tfstate", init)
+        self.assertEqual(ctx.stack("private").env()["TF_DATA_DIR"], ".terraform/tenant-private")
 
 
 class PublishTest(unittest.TestCase):

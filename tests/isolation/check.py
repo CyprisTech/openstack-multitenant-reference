@@ -11,14 +11,15 @@ outputs. Each stack may live in its own project; the test only reads their outpu
 
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
-        [--web-workspace web] [--private stacks/tenants/vm --private-workspace private] \
+        [--web web.json] [--private private.json] \
         [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
         [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 
 Requirements: the stacks shared/entry-point, the web tenant (tenants/vm) and the private tenant
 (tenants/vm with exposure = "none" and egress = "none", ADR-0016 D1) applied with bastions and
-pushing to the test receiver, and the receiver applied. Two tenants of one stack directory are two
-workspaces: give them with --web-workspace and --private-workspace. With
+pushing to the test receiver, and the receiver applied. A tenant is read from its stack's
+directory, or from a file of its outputs (tofu output -json > web.json) when several tenants share
+the directory, each with its own state: --web, --private and --egress-tenant. With
 --published-kubeconfig, the rows of the published cluster are added: probes from the cluster run
 in a short-lived pod, and the internal demonstration service must be applied. Probes only open
 TCP connections and read the receiver; the only object created is the probe pod, deleted after
@@ -41,8 +42,8 @@ tenants by address);
 with --resolver (tests/fixtures/resolver), the private tenant uses that resolver, behind the
 internal services plane.
 
-With --egress (stacks/shared/egress) and --egress-tenant (a vm tenant with egress = "shared",
---egress-workspace), the rows of the shared egress are added (ADR-0016, D1): through the proxy,
+With --egress (stacks/shared/egress) and --egress-tenant (a vm tenant with egress = "shared"),
+the rows of the shared egress are added (ADR-0016, D1): through the proxy,
 that tenant reaches a declared name (--egress-allowed) and not another (--egress-refused); it has
 no direct way to the Internet; the web and private tenants, not declared, do not reach the proxy.
 """
@@ -57,10 +58,13 @@ import subprocess
 import sys
 
 
-def outputs(tool, directory, workspace=None):
-    """The outputs of a stack; of its workspace, for a tenant that shares the stack's directory."""
-    env = dict(os.environ, TF_WORKSPACE=workspace) if workspace else None
-    out = subprocess.run([tool, "output", "-json"], cwd=directory, env=env, check=True, capture_output=True, text=True).stdout
+def outputs(tool, source):
+    """The outputs of a stack: read in its directory, or from a file of tofu output -json (a tenant
+    of a directory shared by several tenants, each with its own state)."""
+    if os.path.isfile(source):
+        with open(source) as f:
+            return {k: v["value"] for k, v in json.load(f).items()}
+    out = subprocess.run([tool, "output", "-json"], cwd=source, check=True, capture_output=True, text=True).stdout
     return {k: v["value"] for k, v in json.loads(out).items()}
 
 
@@ -122,9 +126,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stacks", default="stacks")
     ap.add_argument("--receiver", default="tests/fixtures/receiver")
-    ap.add_argument("--web-workspace", help="workspace of the web tenant in stacks/tenants/vm, if any")
-    ap.add_argument("--private", default=None, help="directory of the private tenant (default: <stacks>/tenants/vm)")
-    ap.add_argument("--private-workspace", default="private", help="its workspace (default: private)")
+    ap.add_argument("--web", help="the web tenant: its directory or a file of its outputs (default: <stacks>/tenants/vm)")
+    ap.add_argument("--private", help="the private tenant: its directory or a file of its outputs (required)")
     ap.add_argument("--user", default="ops")
     ap.add_argument("--published-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
@@ -137,15 +140,16 @@ def main():
     ap.add_argument("--public-name", default="openstack.org", help="a public name every instance must resolve")
     ap.add_argument("--resolver", help="directory of the test resolver (tests/fixtures/resolver), used by the private tenant")
     ap.add_argument("--egress", help="directory of the shared egress (stacks/shared/egress)")
-    ap.add_argument("--egress-tenant", help="directory of the tenant with egress = shared (default: <stacks>/tenants/vm)")
-    ap.add_argument("--egress-workspace", default="egress-shared", help="its workspace (default: egress-shared)")
+    ap.add_argument("--egress-tenant", help="the tenant with egress = shared: its directory or a file of its outputs")
     ap.add_argument("--egress-allowed", default="http://archive.ubuntu.com/ubuntu/", help="URL of a declared name")
     ap.add_argument("--egress-refused", default="https://openstack.org/", help="a URL of a name not declared")
     args = ap.parse_args()
 
     edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
-    web = outputs(args.tool, os.path.join(args.stacks, "tenants", "vm"), args.web_workspace)
-    prv = outputs(args.tool, args.private or os.path.join(args.stacks, "tenants", "vm"), args.private_workspace or None)
+    if not args.private:
+        ap.error("--private is required: the private tenant's directory or a file of its outputs")
+    web = outputs(args.tool, args.web or os.path.join(args.stacks, "tenants", "vm"))
+    prv = outputs(args.tool, args.private)
     rcv = outputs(args.tool, args.receiver)
     p = Prober(args.user, args.key)
 
@@ -268,7 +272,9 @@ def main():
     if args.egress:
         proxy = outputs(args.tool, args.egress)["proxy"]
         proxy_host, proxy_port = proxy.split("//")[1].rsplit(":", 1)
-        egt = outputs(args.tool, args.egress_tenant or os.path.join(args.stacks, "tenants", "vm"), args.egress_workspace or None)
+        if not args.egress_tenant:
+            ap.error("--egress needs --egress-tenant: the tenant's directory or a file of its outputs")
+        egt = outputs(args.tool, args.egress_tenant)
         eg_vm = sorted(egt["instances"].items())[0]
 
         def through_proxy(url):

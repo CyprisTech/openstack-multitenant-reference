@@ -43,9 +43,9 @@ class Runner:
         With `stream`, the output is printed line by line as it comes (long scripts), and kept."""
         cmd = [str(c) for c in cmd]
         if not quiet:
-            # The workspace of a tenant that shares its stack's directory, as a shell would show it.
-            workspace = f"TF_WORKSPACE={env['TF_WORKSPACE']} " if env and env.get("TF_WORKSPACE") else ""
-            self.echo("$ " + workspace + shlex.join(cmd))
+            # The data directory of a tenant that shares its stack's directory, as a shell would show it.
+            data = f"TF_DATA_DIR={env['TF_DATA_DIR']} " if env and env.get("TF_DATA_DIR") else ""
+            self.echo("$ " + data + shlex.join(cmd))
         if self.dry_run:
             self.commands.append((cmd, str(cwd) if cwd else None))
             result = self.fake(cmd)
@@ -78,26 +78,37 @@ class Runner:
 
 class Stack(str):
     """The path of a stack from the repository root and, when several tenants share its
-    directory, the workspace that holds this one's state (its state key) and its inputs file."""
+    directory, the name of this one: its own state (<name>.tfstate, a local backend), its own
+    data directory (.terraform/tenant-<name>, so that several are initialised at once) and its
+    own inputs file, as with a backend key per tenant in production."""
 
-    def __new__(cls, path, workspace=None):
+    def __new__(cls, path, state=None):
         stack = super().__new__(cls, path)
-        stack.workspace = workspace
+        stack.state = state
         return stack
 
     @property
     def inputs(self):
         """The inputs the campaign writes: loaded by tofu by itself, or given with -var-file
-        in a workspace (an auto file would be loaded by every workspace of the directory)."""
-        return f"mode.{self.workspace}.tfvars.json" if self.workspace else "mode.auto.tfvars.json"
+        for a tenant of a shared directory (an auto file would be loaded by every tenant)."""
+        return f"mode.{self.state}.tfvars.json" if self.state else "mode.auto.tfvars.json"
+
+    @property
+    def data_dir(self):
+        """The data directory of the tenant, relative to the stack's directory (-chdir)."""
+        return f".terraform/tenant-{self.state}" if self.state else None
 
     def env(self):
-        """The environment of a command on this stack: its workspace, if any."""
-        return dict(os.environ, TF_WORKSPACE=self.workspace) if self.workspace else None
+        """The environment of a command on this stack: the tenant's data directory, if any."""
+        return dict(os.environ, TF_DATA_DIR=self.data_dir) if self.state else None
 
     def var_files(self):
-        """Arguments of plan, apply and destroy for the inputs of a workspace."""
-        return [f"-var-file={self.inputs}"] if self.workspace else []
+        """Arguments of plan, apply and destroy for the inputs of a tenant of a shared directory."""
+        return [f"-var-file={self.inputs}"] if self.state else []
+
+
+# A tenant of a shared directory keeps its state in a local backend, at a path of its own.
+BACKEND = 'terraform {\n  backend "local" {}\n}\n'
 
 
 def stack_of(stack):
@@ -116,13 +127,17 @@ class Tofu:
         return [self.tool, f"-chdir={stack}", *args]
 
     def init(self, stack):
-        """Init, then the stack's workspace selected, created the first time."""
+        """Init; a tenant of a shared directory with its own state and data directory."""
         stack = stack_of(stack)
-        result = self.runner.run(self._cmd(stack, "init", "-input=false", "-no-color"), cwd=self.root, quiet=True)
-        if stack.workspace:
-            cmd = self._cmd(stack, "workspace", "select", "-or-create=true", stack.workspace)
-            self.runner.run(cmd, cwd=self.root, quiet=True)
-        return result
+        args = []
+        if stack.state:
+            override = os.path.join(self.root, stack, "backend_override.tf")
+            if not self.runner.dry_run and not os.path.exists(override):
+                with open(override, "w") as f:
+                    f.write(BACKEND)
+            args = [f"-backend-config=path={stack.state}.tfstate"]
+        cmd = self._cmd(stack, "init", "-input=false", "-no-color", *args)
+        return self.runner.run(cmd, cwd=self.root, env=stack.env(), quiet=True)
 
     def plan_exitcode(self, stack):
         """0: no change, 2: changes, 1: error (plan -detailed-exitcode)."""
