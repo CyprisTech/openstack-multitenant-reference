@@ -35,15 +35,23 @@ namespace() {
 }
 
 # 1. Objects of the workload cluster that are not Helm charts: the cloud configuration of the
-#    cloud controller manager and Cinder CSI (from the credential, when it is here), the right of
+#    cloud controller manager and Cinder CSI (from the credential, when it is here; they restart
+#    when it changed, so that they read it), the right of
 #    the cloud controller to delete nodes, the default storage class, the Gateway API CRDs, and,
 #    in demonstration mode (without certificates), a self-signed certificate.
 if [[ -f clouds.yaml ]]; then
   cloud_conf=$(./cloud-conf)
   ca_crt=()
   [[ -f cacert.pem ]] && ca_crt=(--from-file=ca.crt=cacert.pem)
+  before=$(kubectl -n kube-system get secret cloud-config -o jsonpath='{.data.cloud\.conf}' 2>/dev/null || true)
   kubectl -n kube-system create secret generic cloud-config \
     --from-literal=cloud.conf="$cloud_conf" "$${ca_crt[@]}" --dry-run=client -o yaml | kubectl apply -f -
+  after=$(kubectl -n kube-system get secret cloud-config -o jsonpath='{.data.cloud\.conf}')
+  if [[ -n "$before" && "$before" != "$after" ]]; then
+    readers=$(kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' || true)
+    for r in $readers; do kubectl -n kube-system rollout restart "$r"; done
+    for r in $readers; do kubectl -n kube-system rollout status "$r" --timeout=10m; done
+  fi
 fi
 kubectl apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml

@@ -236,6 +236,27 @@ class Context:
         ones the README's table of profiles gives (ADR-0014)."""
         return dict(self.options.get("inputs", {}).get(key, {}))
 
+    def change_inputs(self, key, **values):
+        """Changes some of a stack's inputs, the others kept: what an operator writes in the
+        stack's inputs for a change (a version, a credential). Returns the inputs."""
+        stack = self.stack(key)
+        path = self.root / stack / stack.inputs
+        inputs = json.loads(path.read_text()) if path.exists() and not self.runner.dry_run else {}
+        inputs.update(values)
+        self.runner.echo(f"inputs of {key} changed: {', '.join(values)}")
+        if not self.runner.dry_run:
+            path.write_text(json.dumps(inputs, indent=2) + "\n")
+        return inputs
+
+    def variable(self, key, name):
+        """The value of a variable of a stack, as tofu evaluates it (all its inputs files)."""
+        stack = self.stack(key)
+        cmd = self.tofu._cmd(stack, "console", *stack.var_files())
+        result = self.runner.run(cmd, cwd=self.root, env=stack.env(), input=f"jsonencode(var.{name})\n", quiet=True)
+        if self.runner.dry_run:
+            return {}
+        return json.loads(json.loads(result.stdout.strip()))
+
     def set_inputs(self, key, **values):
         """Writes the inputs a stack receives from the others, and those of the profile; they
         become its reference inputs."""

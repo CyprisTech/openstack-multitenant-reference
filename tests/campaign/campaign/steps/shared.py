@@ -1,8 +1,6 @@
 """The shared cluster (a Kubernetes cluster for shared services): created, tested, then removed."""
 
-import base64
 import json
-import re
 import threading
 import time
 
@@ -276,52 +274,19 @@ def volume_moved_intact(ctx, report, when):
     report.measures[f"volume {when}"] = "intact"
 
 
-def credential_of(ctx, path):
-    """The application credential of a cluster credential file (never printed)."""
-    import yaml  # noqa: PLC0415 (PyYAML, installed with the openstack client)
-
-    auth = yaml.safe_load(path.read_text())["clouds"]["openstack"]["auth"]
-    return auth["application_credential_id"], auth["application_credential_secret"]
-
-
-def replace_secret_key(k, namespace, name, key, content):
-    """Replaces a key of a Secret; the content goes through standard input, never printed."""
-    secret = k.json("-n", namespace, "get", "secret", name)
-    secret.setdefault("data", {})[key] = base64.b64encode(content.encode()).decode()
-    for field in ("resourceVersion", "uid", "creationTimestamp", "managedFields"):
-        secret.get("metadata", {}).pop(field, None)
-    k.apply(json.dumps(secret))
-
-
 @step("rotate")
 def rotate(ctx, report):
-    """Moves the cluster to another application credential, as in
-    docs/guides/kubernetes-lifecycle.md, then checks the cloud controller and Cinder CSI with it.
-    Cluster API uses it in the next step, once the old one is revoked."""
+    """Moves the cluster to another application credential with the steps of the guide
+    (docs/guides/kubernetes-lifecycle.md#rotate-the-credential-of-the-cluster), then checks the
+    cloud controller and Cinder CSI with it. Cluster API uses it in the next step, once the old
+    one is revoked."""
     k = kubectl(ctx)
     names = ctx.config.get("cluster_clouds", {})
     following = ctx.work / "next-clouds.yaml"
     cluster_credential(ctx, names.get("shared_next") or ctx.setting("cluster_clouds.shared_next"), following)
-    identity = k.out("-n", "platform", "get", "openstackcluster", "-o", "jsonpath={.items[0].spec.identityRef.name}")
 
-    ctx.runner.echo("# Cluster API: the secret of its identity")
-    if not ctx.runner.dry_run:
-        replace_secret_key(k, "platform", identity, "clouds.yaml", following.read_text())
-
-    ctx.runner.echo("# Cloud controller manager and Cinder CSI: their configuration, then a restart")
-    if not ctx.runner.dry_run:
-        credential_id, secret = credential_of(ctx, following)
-        encoded = k.out("-n", "kube-system", "get", "secret", "cloud-config", "-o", r"jsonpath={.data.cloud\.conf}")
-        conf = base64.b64decode(encoded).decode()
-        conf = re.sub(r"(?m)^application-credential-id=.*$", f"application-credential-id={credential_id}", conf)
-        conf = re.sub(r"(?m)^application-credential-secret=.*$", f"application-credential-secret={secret}", conf)
-        replace_secret_key(k, "kube-system", "cloud-config", "cloud.conf", conf)
-    workloads = [w for w in k.out("-n", "kube-system", "get", "deployment,daemonset", "-o", "name").split()
-                 if re.search("cloud-controller|csi", w)]  # fmt: skip
-    for workload in workloads:
-        k("-n", "kube-system", "rollout", "restart", workload)
-    for workload in workloads:
-        k("-n", "kube-system", "rollout", "status", workload, "--timeout=10m")
+    ctx.runner.echo("# The guide: the new credential in the cluster's directory, update-cluster.sh")
+    update_cluster(ctx, STACK, kubeconfig(ctx, STACK), credential=following)
 
     ctx.runner.echo("# The bootstrap instance deletes the cluster later: it needs the new credential too")
     host = ctx.value(STACK, "bootstrap")
@@ -410,42 +375,30 @@ class ConsumerLoad(Requests):
 
 @step("upgrade")
 def upgrade(ctx, report):
-    """A minor upgrade by Cluster API, with the commands of the guide. The addresses must not
-    change and the service must answer during and after it."""
+    """A minor upgrade by Cluster API, with the steps of the guide
+    (docs/guides/kubernetes-lifecycle.md#upgrade-kubernetes): the version and its image in the
+    stack's inputs, apply, update-cluster.sh. The addresses must not change and the service must
+    answer during and after it."""
     k = kubectl(ctx)
     settings = ctx.config.get("upgrade", {})
     version = settings.get("version") or ctx.setting("upgrade.version")
     image = settings.get("image") or ctx.setting("upgrade.image")
-    cluster = k.cluster_name()
-    image_object = re.sub(r"[.]", "-", image.lower())
     server = "jsonpath={.clusters[0].cluster.server}"
     api = k.out("config", "view", "--minify", "-o", server)
     address = service_address(ctx)
     bastion, instance = consumer_instance(ctx)
     k.show("get", "nodes")
 
-    ctx.runner.echo("# The image of the new version, then the version")
-    images = k.json("-n", "platform", "get", "image.openstack.k-orc.cloud").get("items", [{}])
-    current = images[0] if images else {}
-    spec = json.loads(json.dumps(current.get("spec", {})))
-    spec.setdefault("import", {}).setdefault("filter", {})["name"] = image
-    k.apply(json.dumps({
-        "apiVersion": current.get("apiVersion", "openstack.k-orc.cloud/v1alpha1"), "kind": current.get("kind", "Image"),
-        "metadata": {"name": image_object, "namespace": current.get("metadata", {}).get("namespace", "platform")},
-        "spec": spec,
-    }))  # fmt: skip
-    k("-n", "platform", "wait", "image.openstack.k-orc.cloud", image_object, "--for=condition=Available", "--timeout=10m")
-    patch = json.dumps([
-        {"op": "replace", "path": "/spec/topology/version", "value": version},
-        {"op": "replace", "path": "/spec/topology/variables/1/value", "value": image_object},
-    ])  # fmt: skip
-    k("-n", "platform", "patch", "cluster", cluster, "--type=json", "-p", patch)
-
     # Requests from a consumer during the upgrade: measured, kept for the results.
     load = ConsumerLoad(ctx, bastion, instance, address)
     load.start()
     done = False
     try:
+        ctx.runner.echo("# The guide: the version and its image in the stack's inputs, apply, update-cluster.sh")
+        cluster_input = dict(ctx.variable(STACK, "cluster"), kubernetes_version=version, node_image=image)
+        ctx.change_inputs(STACK, cluster=cluster_input)
+        ctx.apply(STACK)
+        update_cluster(ctx, STACK, kubeconfig(ctx, STACK))
         for _ in range(180 if not ctx.runner.dry_run else 1):
             # The API may time out while a control plane machine is replaced: next round.
             listing = k("get", "nodes", "--no-headers", "--request-timeout=15s", check=False, quiet=True)

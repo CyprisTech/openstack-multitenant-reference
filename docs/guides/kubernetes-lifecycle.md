@@ -41,13 +41,7 @@ A Kubernetes version needs its node image. The service addresses and the address
 The cluster holds its application credential in two secrets: one for Cluster API, in `platform`, one for the cloud controller manager and Cinder CSI, in `kube-system`.
 
 1. Have a new application credential created, with the same roles.
-2. Write it as the entry `openstack` of a `clouds.yaml` in the directory of the cluster's files (with `cacert.pem` for a private certificate authority), and run `update-cluster.sh` ([update a cluster](#update-a-cluster-after-an-apply)): it replaces both secrets.
-3. Restart what reads the secret of `kube-system`:
-
-   ```bash
-   kubectl -n kube-system get deployment,daemonset -o name | grep -E 'cloud-controller|csi' | xargs kubectl -n kube-system rollout restart
-   ```
-
-4. Check it works: create a Service of type `LoadBalancer`, wait for its address, delete it. Then revoke the old credential.
+2. Write it as the entry `openstack` of a `clouds.yaml` in the directory of the cluster's files (with `cacert.pem` for a private certificate authority), and run `update-cluster.sh` ([update a cluster](#update-a-cluster-after-an-apply)): it replaces both secrets, then restarts the cloud controller manager and Cinder CSI, which read the second one.
+3. Check it works: create a Service of type `LoadBalancer`, wait for its address, delete it. Then revoke the old credential.
 
 Then delete the `clouds.yaml` of the directory. Also replace `/opt/platform/clouds.yaml` on the bootstrap instance, if there is one, before using it to delete the cluster.

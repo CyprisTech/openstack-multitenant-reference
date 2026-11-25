@@ -132,16 +132,31 @@ def create_cluster(ctx, key, credential, kubeconfig):
     return kubectl
 
 
-def update_cluster(ctx, key, kubeconfig):
+def update_cluster(ctx, key, kubeconfig, credential=None):
     """Runs update-cluster.sh from the campaign host, an administration source (ADR-0017, D3):
-    the stack's scripts and manifests in a directory of the work directory, then the script."""
+    the stack's scripts and manifests in a directory of the work directory, then the script. With
+    a credential, as the guide says to rotate it: its clouds.yaml (and the authority's
+    certificates) in that directory for the run, removed after."""
     files = ctx.work / f"{key}-files"
     stack = ctx.stack(key)
     cmd = ["scripts/cluster-files.sh", stack, str(files), "--tool", ctx.tool]
     ctx.runner.run(cmd, cwd=ctx.root, env=stack.env(), quiet=True)
+    placed = []
+    if credential and not ctx.runner.dry_run:
+        files.mkdir(parents=True, exist_ok=True)
+        ctx.write_private(files / "clouds.yaml", Path(credential).read_text())
+        placed.append(files / "clouds.yaml")
+        ca_cert = ctx.config.get("ca_cert")
+        if ca_cert:
+            (files / "cacert.pem").write_text(Path(ca_cert).expanduser().read_text())
+            placed.append(files / "cacert.pem")
     started = time.monotonic()
     env = dict(os.environ, KUBECONFIG=str(kubeconfig))
-    result = ctx.runner.run([str(files / "update-cluster.sh")], env=env, check=False, stream=True)
+    try:
+        result = ctx.runner.run([str(files / "update-cluster.sh")], env=env, check=False, stream=True)
+    finally:
+        for path in placed:
+            path.unlink(missing_ok=True)
     write_log(ctx, f"update-cluster-{key}", result)
     ctx.timing(f"update-cluster {key} {round(time.monotonic() - started)}s")
     if result.returncode != 0:

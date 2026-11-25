@@ -1,6 +1,5 @@
 """The shared cluster steps, against a fake cloud and a fake cluster."""
 
-import base64
 import json
 import unittest
 
@@ -41,23 +40,15 @@ class DeleteClusterTest(unittest.TestCase):
 
 
 class RotateTest(unittest.TestCase):
-    def test_the_new_secret_goes_through_standard_input_only(self):
+    def test_the_guide_runs_with_the_new_credential_never_printed(self):
         try:
             import yaml
         except ImportError:
             self.skipTest("PyYAML (installed with the openstack client) is not available")
-        conf = "[Global]\napplication-credential-id=old\napplication-credential-secret=old-secret\n"
-        inputs = []
 
         def answer(cmd):
             if cmd[0] == "tofu" and "output" in cmd:
                 return Result(0, json.dumps("192.0.2.30"))
-            if "secret" in cmd and "cloud-config" in cmd and "jsonpath" in cmd[-1]:
-                return Result(0, base64.b64encode(conf.encode()).decode())
-            if "secret" in cmd and "-o" in cmd and cmd[-1] == "json":
-                return Result(0, json.dumps({"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "x"}, "data": {}}))
-            if "deployment,daemonset" in cmd:
-                return Result(0, "deployment.apps/openstack-cloud-controller-manager\ndaemonset.apps/csi-cinder-nodeplugin\n")
             if "pod" in cmd and "jsonpath={.spec.nodeName}" in cmd:
                 answer.nodes = getattr(answer, "nodes", iter(["n1", "n2"]))
                 return Result(0, next(answer.nodes))
@@ -71,14 +62,6 @@ class RotateTest(unittest.TestCase):
         printed = []
         ctx.runner.echo = printed.append
         ctx.notify = printed.append
-        original = ctx.runner.run
-
-        def run(cmd, **kwargs):
-            if kwargs.get("input"):
-                inputs.append(kwargs["input"])
-            return original(cmd, **kwargs)
-
-        ctx.runner.run = run
         clouds = ctx.work / "clouds.yaml"
         clouds.write_text(yaml.safe_dump({"clouds": {"next": {"auth": {
             "application_credential_id": "new-id", "application_credential_secret": SECRET}}}}))  # fmt: skip
@@ -86,15 +69,14 @@ class RotateTest(unittest.TestCase):
         (ctx.work / "volume.sha256").write_text("abc\n")
         load()["rotate"](ctx, StepReport("rotate"))
 
-        argv = " ".join(" ".join(c) for c, _ in ctx.runner.commands)
+        commands = [c for c, _ in ctx.runner.commands]
+        argv = " ".join(" ".join(c) for c in commands)
         self.assertNotIn(SECRET, argv)
         self.assertNotIn(SECRET, "\n".join(printed))
-        conf_secret = [i for i in inputs if "cloud.conf" in i][0]
-        written = base64.b64decode(json.loads(conf_secret)["data"]["cloud.conf"]).decode()
-        self.assertIn(f"application-credential-secret={SECRET}", written)
-        self.assertIn("application-credential-id=new-id", written)
-        restarted = [c for c, _ in ctx.runner.commands if "restart" in c]
-        self.assertEqual(len(restarted), 2)
+        # The guide's steps: the stack's files, then update-cluster.sh; no secret written by hand.
+        self.assertTrue(any(c[0] == "scripts/cluster-files.sh" for c in commands))
+        self.assertTrue(any(c[0].endswith("shared-files/update-cluster.sh") for c in commands))
+        self.assertFalse([c for c in commands if "cloud-config" in c])
 
 
 class UpgradeTest(unittest.TestCase):
@@ -106,6 +88,8 @@ class UpgradeTest(unittest.TestCase):
         ])  # fmt: skip
 
         def answer(cmd):
+            if "console" in cmd:  # the stack's cluster input, as tofu evaluates it
+                return Result(0, json.dumps(json.dumps({"kubernetes_version": "v1.35.10", "node_image": "old"})))
             if cmd[0] == "tofu" and "output" in cmd:
                 name = cmd[4]
                 values = {"services": {"ingress": "10.36.0.50:443"}, "bastion": "192.0.2.10", "instances": {"a": "10.21.0.11"}}
@@ -135,8 +119,13 @@ class UpgradeTest(unittest.TestCase):
         (ctx.work / "volume.sha256").write_text("abc\n")
         entry = StepReport("upgrade")
         load()["upgrade"](ctx, entry)
-        patch = [c for c, _ in ctx.runner.commands if "patch" in c][0]
-        self.assertIn("ubuntu-2404-kube-v1-36-5", patch[-1])
+        # The guide's steps: the version and its image in the stack's inputs, apply, update-cluster.sh.
+        inputs = json.loads((ctx.root / "stacks/shared/kubernetes/mode.auto.tfvars.json").read_text())
+        self.assertEqual(inputs["cluster"], {"kubernetes_version": "v1.36.5", "node_image": "ubuntu-2404-kube-v1.36.5"})
+        commands = [c for c, _ in ctx.runner.commands]
+        self.assertTrue(any("apply" in c and "-chdir=stacks/shared/kubernetes" in c for c in commands))
+        self.assertTrue(any(c[0].endswith("shared-files/update-cluster.sh") for c in commands))
+        self.assertFalse([c for c in commands if "patch" in c])
         self.assertEqual(entry.measures["https shared"], "6/6")
         self.assertEqual(entry.measures["volume after the upgrade"], "intact")
 
