@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from ..checks import kubeconfig
+from ..contents import project_contents
 from ..context import StepFailed
 from ..kube import delete_cluster
 from . import step
@@ -18,19 +19,6 @@ WAVES = [
     ["internal-service", "resolver", "egress", "entry-point", "receiver", "acme"],
     ["planes"],
 ]
-
-# Listings of the leftover check: a kind of object and the column holding its ID. The Octavia
-# plugin names its columns in lower case. Images are kept (the Kubernetes node image).
-LISTINGS = [
-    (("server", "list"), "ID"),
-    (("loadbalancer", "list"), "id"),
-    (("floating", "ip", "list"), "ID"),
-    (("router", "list"), "ID"),
-    (("volume", "list"), "ID"),
-    (("server", "group", "list"), "ID"),
-]
-PROJECT_LISTINGS = [(("network", "list"), "ID"), (("port", "list"), "ID")]
-
 
 @step("plans", guide="CONTRIBUTING.md#testing-on-a-real-cloud")
 def plans(ctx, report):
@@ -103,31 +91,7 @@ def leftovers(ctx, report):
 
     A listing that fails is a failed check, not zero objects.
     """
-    found, failed = [], []
-    for cloud in ctx.clouds():
-        try:
-            project = ctx.openstack.project_id(cloud)
-        except Exception as error:
-            failed.append(f"{cloud}: token ({error})")
-            continue
-        listings = LISTINGS + [(listing + ("--project", project), column) for listing, column in PROJECT_LISTINGS]
-        for listing, column in listings:
-            what = " ".join(listing[:2])
-            try:
-                ids = ctx.openstack.ids(cloud, *listing, column=column)
-            except Exception:
-                failed.append(f"{cloud}: {what} (the listing itself failed)")
-                continue
-            if ids:
-                found.append(f"{cloud}: {len(ids)} from {what}")
-        try:
-            groups = ctx.openstack.ids(cloud, "security", "group", "list", "--project", project, column="Name")
-        except Exception:
-            failed.append(f"{cloud}: security group list (the listing itself failed)")
-        else:
-            others = [g for g in groups if g != "default"]
-            if others:
-                found.append(f"{cloud}: {len(others)} security groups")
+    found, failed = project_contents(ctx)
     for line in found:
         ctx.runner.echo("LEFTOVER " + line)
     for line in failed:

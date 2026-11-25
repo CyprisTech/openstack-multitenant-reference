@@ -5,6 +5,7 @@ A campaign stopped after an hour on a revoked or misspelled credential costs a r
 costs a token per credential.
 """
 
+from .contents import project_contents
 from .context import StepFailed
 
 
@@ -49,9 +50,25 @@ def problems(ctx, names):
     return found
 
 
-def check(ctx, names):
+def foreign_contents(ctx):
+    """What the projects hold when no state of the scenario holds anything: objects the campaign
+    did not create. A campaign creates then destroys everything: started on the wrong project (a
+    clouds.yaml entry pointing elsewhere), it would destroy what it found there. A run started
+    again finds its own states and is not stopped."""
+    own = [k for k in ctx.scenario.stacks if ctx.tofu.deployed(ctx.stack(k))]
+    if own or ctx.runner.dry_run:
+        return []
+    found, failed = project_contents(ctx)
+    return [f"{line}, not created by this campaign" for line in found] + failed
+
+
+def check(ctx, names, allow_existing=False):
     """Raises with every problem found; prints the credentials checked otherwise."""
     found = problems(ctx, names)
+    if not found and not allow_existing:
+        found = [f"the projects are not empty: {line}" for line in foreign_contents(ctx)]
+        if found:
+            found.append("give the campaign empty test projects (or --allow-existing if they hold its own objects)")
     if found:
         raise StepFailed("preflight: " + "; ".join(found))
     ctx.runner.echo(f"preflight: {len(credentials(ctx, names))} credentials authenticate")

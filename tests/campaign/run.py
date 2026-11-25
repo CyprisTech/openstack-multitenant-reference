@@ -90,7 +90,9 @@ def main(argv=None):
     parser.add_argument("--work", default=str(HERE / "work"), help="outputs of the runs (git-ignored)")
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
-    parser.add_argument("--no-preflight", action="store_true", help="skip the check of the credentials")
+    parser.add_argument("--no-preflight", action="store_true", help="skip the checks before the first step")
+    parser.add_argument("--allow-existing", action="store_true",
+                        help="start although the projects hold objects and no state of the campaign does")
     parser.add_argument("--from", dest="previous", metavar="TAG",
                         help="deploy the release TAG first, then upgrade it to this commit (default steps: from-previous)")
     parser.add_argument("--root", help=argparse.SUPPRESS)  # the tree of a recorded step
@@ -124,13 +126,16 @@ def main(argv=None):
     # A recorded step prints the full output of the tools: the recording is the story of the run.
     runner = Runner(dry_run=args.dry_run, verbose=bool(os.environ.get(INNER)))
     work = Path(args.work) / f"{scenario.name}-{mode}"
-    ctx = Context(scenario, mode, config, runner, Path(args.root) if args.root else ROOT, work)
+    root = Path(args.root) if args.root else ROOT
+    if args.previous and previous.tree(work).exists():
+        root = previous.tree(work)  # an upgrade started again: its states are in its worktree
+    ctx = Context(scenario, mode, config, runner, root, work)
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
     steps = load()
     names = scenario.expand(args.items)
     if not (args.dry_run or args.no_preflight or os.environ.get(INNER)):
         try:
-            preflight.check(ctx, names)
+            preflight.check(ctx, names, allow_existing=args.allow_existing)
         except Exception as error:  # nothing has run: say why and stop
             ctx.notify(f"campaign {scenario.name} {mode} not started: {error}")
             return 1

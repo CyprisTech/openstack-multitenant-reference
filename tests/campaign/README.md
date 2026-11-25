@@ -21,7 +21,7 @@ Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` wit
 
 `campaign.local.toml` (git-ignored) holds what is specific to the maintainers' cloud: the `clouds.yaml` entry of each stack, the planes of each mode, the SSH access, the test zone, the credentials of the clusters, the hooks. Nothing else changes from a cloud to another: the attachments of the planes and their ranges are in the scenario.
 
-Before the first step, the campaign checks that every `clouds.yaml` entry it will use authenticates, those of the clusters included, and, when the rotation runs, that the next credential of the shared cluster exists and is not the current one; `--no-preflight` skips it. A credential revoked or misspelled stops the run before anything is created.
+Before the first step, the campaign checks that every `clouds.yaml` entry it will use authenticates, those of the clusters included, and, when the rotation runs, that the next credential of the shared cluster exists and is not the current one; `--no-preflight` skips it. A credential revoked or misspelled stops the run before anything is created. So do projects that hold objects while no state of the campaign does: the campaign creates then destroys everything, and a `clouds.yaml` entry pointing at the wrong project must not lead it to destroy what it finds there. A run started again finds its own states and goes on; `--allow-existing` starts anyway.
 
 With a `notify_hook`, the operator is told when the campaign starts and ends, when each step starts and ends (with its duration and measures), when an action is needed (marked ⚠️), and why the campaign stopped; `notify_steps = false` keeps the actions and the stops only.
 

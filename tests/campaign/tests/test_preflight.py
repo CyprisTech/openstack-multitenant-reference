@@ -57,3 +57,37 @@ class PreflightTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ForeignContentsTest(unittest.TestCase):
+    """The projects of a scenario hold objects, and no state of the campaign does: stop."""
+
+    def context(self, servers="", states=""):
+        def answer(cmd):
+            if "token" in cmd:
+                return Result(0, "project-of-" + cmd[cmd.index("--os-cloud") + 1])
+            if "state" in cmd and "list" in cmd:
+                return Result(0, states)
+            if "server" in cmd and "list" in cmd and "group" not in cmd:
+                return Result(0, servers)
+            if "security" in cmd:
+                return Result(0, "default\n")
+            return Result(0, "")
+
+        ctx = context(dry_run=False, stacks=STACKS, config=CONFIG)
+        ctx.runner.run = lambda cmd, **options: answer([str(c) for c in cmd])
+        return ctx
+
+    def test_objects_without_a_state_stop_the_run(self):
+        with self.assertRaisesRegex(StepFailed, "not empty: hub: 1 from server list"):
+            preflight.check(self.context(servers="0a1b\n"), ["planes"])
+
+    def test_a_run_started_again_goes_on(self):
+        state = "module.network.openstack_networking_network_v2.this\n"
+        preflight.check(self.context(servers="0a1b\n", states=state), ["planes"])
+
+    def test_allow_existing_starts_anyway(self):
+        preflight.check(self.context(servers="0a1b\n"), ["planes"], allow_existing=True)
+
+    def test_empty_projects_start(self):
+        preflight.check(self.context(), ["planes"])
