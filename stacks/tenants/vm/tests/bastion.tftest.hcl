@@ -20,6 +20,8 @@ mock_provider "openstack" {
 
 variables {
   cloud            = "example"
+  exposure         = "entry-point"
+  egress           = "router"
   site             = "site-a"
   image            = "ubuntu-24.04"
   flavor           = "m1.small"

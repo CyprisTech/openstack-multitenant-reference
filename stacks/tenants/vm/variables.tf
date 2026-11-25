@@ -80,9 +80,9 @@ variable "egress" {
     - "none": no default route, no package: the instances run a workload from the image only, a
       stand-in that pushes one metric (workload_up) to the receiver. With exposure = "none", a
       private tenant.
+    Required: what a tenant reaches is declared (a private tenant sets "none").
   EOT
   type        = string
-  default     = "router"
 
   validation {
     condition     = contains(["router", "shared", "none"], var.egress)
@@ -165,9 +165,9 @@ variable "exposure" {
       is not used;
     - "none": no service address, no route to the publication plane; nothing reaches the
       instances but the bastion.
+    Required: what a tenant exposes is declared.
   EOT
   type        = string
-  default     = "entry-point"
 
   validation {
     condition     = contains(["entry-point", "public", "none"], var.exposure)

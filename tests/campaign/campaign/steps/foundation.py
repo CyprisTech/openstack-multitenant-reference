@@ -253,6 +253,8 @@ def edge(ctx, report):
 )
 def web(ctx, report):
     inputs = dict(
+        exposure="entry-point",
+        egress="router",
         cloud=ctx.cloud("vm"),
         plane_attachment=attachment(ctx, "web"),
         monitoring=monitoring(ctx),

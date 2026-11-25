@@ -105,9 +105,9 @@ variable "exposure" {
       is not used and the cluster does not join the publication plane;
     - "none": a private cluster (ADR-0016, D1), with no ingress and no service address; it keeps
       its egress, which brings its container images.
+    Required: what a tenant exposes is declared.
   EOT
   type        = string
-  default     = "entry-point"
 
   validation {
     condition     = contains(["entry-point", "public", "none"], var.exposure)

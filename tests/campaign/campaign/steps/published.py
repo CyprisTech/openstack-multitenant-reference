@@ -73,6 +73,7 @@ def ingress_address(ctx):
 def k8s(ctx, report):
     ctx.set_inputs(
         STACK,
+        exposure="entry-point",
         cloud=ctx.cloud(STACK),
         plane_attachment=attachment(ctx, "published"),
         monitoring=monitoring(ctx),

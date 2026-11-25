@@ -44,7 +44,7 @@ Out of scope: running a DNS service, time servers, a relay or package repositori
 ## Dependencies and order
 
 1. The routes of the entry point as an input (part 1): it changes the publication, not the tenants.
-2. Declared egress and exposure, `none` and `router` (part 4): the private tenant as a `vm` stack, the `isolated` stack removed; the default of each stack stays what it is today.
+2. Declared egress and exposure, `none` and `router` (part 4): the private tenant as a `vm` stack, the `isolated` stack removed; `exposure` and `egress` are required inputs, with no default (#31).
    Then `exposure = "none"` for the `kubernetes` stack.
 3. Resolvers and time as requirements (part 2), name resolution in the clusters (part 7), and the rows of the isolation test that check them (part 6).
 4. Records in Designate or as an output (part 3), then a campaign on the public cloud profile without Designate.

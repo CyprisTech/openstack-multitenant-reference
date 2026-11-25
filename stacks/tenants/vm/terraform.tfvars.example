@@ -25,6 +25,7 @@ domains = ["site-a.example.org", "site-b.example.org"]
 # Two instances behind a load balancer, the service address, published through the entry point.
 instance_count = 2
 exposure       = "entry-point"
+egress         = "router"
 
 # Ranges the entry point connects from: output publication_sources of stack shared/entry-point.
 edge_sources = ["198.51.100.5/32"]

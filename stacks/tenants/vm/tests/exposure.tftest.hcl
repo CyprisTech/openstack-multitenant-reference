@@ -20,6 +20,8 @@ mock_provider "openstack" {
 
 variables {
   cloud            = "example"
+  exposure         = "entry-point"
+  egress           = "router"
   site             = "site-a"
   image            = "ubuntu-24.04"
   flavor           = "m1.small"
@@ -141,7 +143,7 @@ run "exposed_tenant_unchanged" {
 
   assert {
     condition     = contains(keys(module.planes.routers), "publication") && length([for r in module.planes.routers.transit.routes : r if r.destination == "0.0.0.0/0" && r.next_hop_router == "egress"]) == 1
-    error_message = "By default the tenant is published through the entry point and goes out through its egress router."
+    error_message = "Exposed through the entry point with its egress router, the tenant is published there and goes out through that router."
   }
 }
 

@@ -112,7 +112,7 @@ One public address for every domain published through it: an Octavia load balanc
 
 **Status:** delivered: through the entry point in `v0.1`, direct exposure of both tenant types in `v0.4`.
 
-On both paths, the client address reaches the application, and TLS is terminated by the tenant. A tenant is published through the shared entry point (`exposure = "entry-point"`, the default) or exposes its own public address (`exposure = "public"`, [ADR-0006](../adr/0006-exposure.md), D2).
+On both paths, the client address reaches the application, and TLS is terminated by the tenant. A tenant is published through the shared entry point (`exposure = "entry-point"`) or exposes its own public address (`exposure = "public"`, [ADR-0006](../adr/0006-exposure.md), D2).
 
 ### Through the shared entry point
 
