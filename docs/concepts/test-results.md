@@ -6,28 +6,31 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-The release campaign of v0.5.1 (2026-11-20, hub planes; the interface column gives its results) and the campaigns of 2026-11-19 (the Python campaign tooling, the private cloud profile of [ADR-0014](../adr/0014-profiles.md); the transit router of [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
+The campaign of 2026-11-25 (hub planes upgraded from v0.5.1 with `run.py --from`, operator planes from empty; the dated cells give its results), the release campaign of v0.5.1 (2026-11-20, hub planes; the interface column gives its results) and the campaigns of 2026-11-19 (the Python campaign tooling, the private cloud profile of [ADR-0014](../adr/0014-profiles.md); the transit router of [ADR-0013](../adr/0013-plane-routes-on-a-transit-router.md)), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, in both plane modes, following the [test procedure](../reference/test-procedure.md). Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers.
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
 | Deployment | 9 stacks (with the test ACME authority); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
+| Upgrade from v0.5.1 | v0.5.1 deployed with its own campaign (foundation and shared cluster), then this release applied over its states stack by stack under load, the shared cluster updated with `update-cluster.sh` from the administration sources, then the rest of the scenario (2026-11-25) | from empty | ✅ during the 6 min of applies, 1596 requests to the entry point and 142 to the shared service, none failed; replaced: the 2 egress proxies; destroyed: the share of a renamed attachment |
 | Upgrade from v0.4.0 | the v0.4.0 stacks applied, then the v0.5 stacks applied over them (2026-11-20) | ❌ the planes upgrade in place; every tenant with an egress fails (known issue: redeploy the tenant stacks) | not run |
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
-| Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45 | ✅ 45/45 |
-| Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows; 58 since 2026-11-24, with the private tenant, IPv6 and name resolution) | ✅ 47/47; 58/58 on 2026-11-24 | ✅ 47/47; 58/58 on 2026-11-24 |
+| Isolation, shared cluster | executable matrix with the shared cluster (45 rows) | ✅ 45/45; 63/63 on 2026-11-25 | ✅ 45/45; 63/63 on 2026-11-25 |
+| Isolation, published cluster | executable matrix with the published cluster and the internal service (47 rows; 58 since 2026-11-24, with the private tenant, IPv6 and name resolution) | ✅ 47/47; 58/58 on 2026-11-24; 65/65 on 2026-11-25 | ✅ 47/47; 58/58 on 2026-11-24; 65/65 on 2026-11-25 |
 | Shared egress | the tenant with `egress = "shared"` installs its packages through the proxies, reaches a declared name and is refused another, has no direct way out; the tenants not declared do not reach the proxies (2026-11-24) | ✅ | ✅ |
 | Name resolution | public names from every instance, the zone of the landing zone from the tenants, the private tenant through the test resolver behind the internal services plane (2026-11-24) | ✅ | ✅ |
 | Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run yet | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ | ✅ |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ | ✅ |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0 | ✅ 28 / 0 |
-| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ open after 20 s | ✅ open after 30 s |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 18 / 0; 26 / 0 on 2026-11-25 (6 s) | ✅ 28 / 0; 46 / 0 on 2026-11-25 (10 s) |
+| Opening a service to a consumer | a consumer added, the service opened and closed again | ✅ open after 20 s (20 s on 2026-11-25) | ✅ open after 30 s (40 s on 2026-11-25) |
 | Credential rotation | the cluster's application credential replaced, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 334 / 1 | ✅ 306 / 0 |
+| Kubernetes upgrade | 1.35 to 1.36 under load (requests ok / failed); the replaced nodes removed | ✅ 334 / 1; on 2026-11-25, 1497 / 0 in 62 min (0 %), the upgrade slowed by the test cloud's scheduler | ✅ 306 / 0; on 2026-11-25, 359 / 10 in 20 min (2.8 %) |
 | Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade; shared storage declared (`volume_zones`, one zone) | ✅ | ✅ |
 | Exposure change of the VM tenant | the service address on its own public address, then back behind the entry point: the existing load balancer answers the entry point again (requests ok) | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Exposure change of the published cluster | the ingress on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Teardown | no leftover in any project, load balancers included | ✅ | ✅ |
+
+**Requests under load** are sent at a fixed pace (every 0.2 s through the entry point, every 2 s to the shared service) for as long as the change lasts: their count follows the duration of the step, not a throughput. Compare the failure rates, not the counts.
 
 **Let's Encrypt** takes the same path as the tested internal authority, with another directory URL; it is not tested by the maintainers ([guide](../guides/certificates.md)).
 
