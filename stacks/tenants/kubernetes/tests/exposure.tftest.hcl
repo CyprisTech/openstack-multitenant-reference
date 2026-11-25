@@ -114,3 +114,31 @@ run "published_through_the_entry_point" {
     error_message = "Through the entry point, the cluster deploys its ingress."
   }
 }
+
+# Layer 4 services of the tenant: at a public floating IP of egress_network; none on a private
+# cluster.
+run "declared_services" {
+  command = plan
+
+  variables {
+    exposure     = "entry-point"
+    edge_sources = ["198.51.100.5/32"]
+    services     = { game = { namespace = "game", selector = { app = "game" }, ports = [7777], sources = ["0.0.0.0/0"] } }
+  }
+
+  assert {
+    condition     = contains(keys(module.cluster.entries), "game") && keys(output.services) == ["game"]
+    error_message = "A declared service is an entry of the cluster."
+  }
+}
+
+run "no_service_on_a_private_cluster" {
+  command = plan
+
+  variables {
+    exposure = "none"
+    services = { game = { namespace = "game", selector = { app = "game" }, ports = [7777], sources = ["0.0.0.0/0"] } }
+  }
+
+  expect_failures = [terraform_data.exposure]
+}

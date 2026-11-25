@@ -244,6 +244,36 @@ variable "consumers" {
   }
 }
 
+variable "services" {
+  description = <<-EOT
+    Layer 4 services you offer to the consumers, besides the demonstrated echo: for each, a
+    Service of type LoadBalancer on the internal services plane, at an address the stack prepares,
+    for the workload you deploy in namespace, selected by selector. Keyed by name ("echo" and
+    "internal" are taken). The cluster admits no other load balancer outside the cluster network
+    (admission policy load-balancer-entries).
+    - sources: who may connect; the consumers by default.
+    - host: host number of the address in the cluster network, required on a plane without NAT,
+      below service_addresses.reserved_hosts and distinct from the other entries.
+  EOT
+  type = map(object({
+    namespace = string
+    selector  = map(string)
+    ports     = list(number)
+    sources   = optional(list(string))
+    host      = optional(number)
+  }))
+  default = {}
+
+  validation {
+    condition     = length(setintersection(keys(var.services), ["echo", "internal"])) == 0
+    error_message = "The names echo and internal are taken by the entries of the stack."
+  }
+  validation {
+    condition     = alltrue([for s in var.services : s.sources == null || alltrue([for c in s.sources : can(cidrhost(c, 0)) && !endswith(c, "/0")])])
+    error_message = "services sources are CIDRs, without a default route (/0): the plane is shared."
+  }
+}
+
 variable "service_addresses" {
   description = <<-EOT
     Host numbers, in the cluster network, of the entries on a plane without NAT: the internal

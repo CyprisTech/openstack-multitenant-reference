@@ -125,6 +125,33 @@ variable "edge_sources" {
   default     = []
 }
 
+variable "services" {
+  description = <<-EOT
+    Layer 4 services of the tenant, exposed directly: for each, a Service of type LoadBalancer at
+    a public floating IP of egress_network that the stack creates, for the workload you deploy in
+    namespace, selected by selector. Keyed by name ("public" is taken by the ingress). The
+    cluster admits no other load balancer outside the cluster network (admission policy
+    load-balancer-entries). Not with exposure = "none".
+    - sources: who may connect (loadBalancerSourceRanges); "0.0.0.0/0" for anyone.
+  EOT
+  type = map(object({
+    namespace = string
+    selector  = map(string)
+    ports     = list(number)
+    sources   = list(string)
+  }))
+  default = {}
+
+  validation {
+    condition     = !contains(keys(var.services), "public")
+    error_message = "The name public is taken by the ingress."
+  }
+  validation {
+    condition     = alltrue([for s in var.services : length(s.sources) > 0 && alltrue([for c in s.sources : can(cidrhost(c, 0))])])
+    error_message = "Each service declares its sources, as CIDRs: an empty list would admit every source."
+  }
+}
+
 variable "service_addresses" {
   description = <<-EOT
     Host numbers, in the cluster network, of the load balancer of the ingress on an interface

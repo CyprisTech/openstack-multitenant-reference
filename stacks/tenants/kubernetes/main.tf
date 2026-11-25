@@ -30,6 +30,14 @@ module "cluster" {
       host           = var.service_addresses.ingress
     }
   } : k => v if local.exposed }
+  # The layer 4 services you declare: each one at a public floating IP of egress_network.
+  services = { for k, s in var.services : k => {
+    plane     = "egress"
+    namespace = s.namespace
+    selector  = s.selector
+    ports     = s.ports
+    sources   = s.sources
+  } }
   reserved_hosts = var.service_addresses.reserved_hosts
 
   site             = var.site
@@ -53,6 +61,10 @@ module "cluster" {
 
 resource "terraform_data" "exposure" {
   lifecycle {
+    precondition {
+      condition     = var.exposure != "none" || length(var.services) == 0
+      error_message = "A private cluster (exposure = \"none\") has no entry: services must be empty."
+    }
     precondition {
       condition     = var.exposure != "entry-point" || length(var.edge_sources) > 0
       error_message = "exposure = \"entry-point\" needs edge_sources: output publication_sources of stack shared/entry-point."

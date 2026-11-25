@@ -27,8 +27,9 @@ module "cluster" {
     }
   }
 
-  # The demonstrated layer 4 service (demo/echo.yaml): a TCP echo, selected by its label.
-  services = {
+  # The demonstrated layer 4 service (demo/echo.yaml): a TCP echo, selected by its label; and
+  # the layer 4 services you declare, on the internal services plane too.
+  services = merge({
     echo = {
       plane     = "internal"
       namespace = "echo"
@@ -37,7 +38,14 @@ module "cluster" {
       sources   = local.sources
       host      = var.service_addresses.echo
     }
-  }
+    }, { for k, s in var.services : k => {
+      plane     = "internal"
+      namespace = s.namespace
+      selector  = s.selector
+      ports     = s.ports
+      sources   = s.sources != null ? s.sources : local.sources
+      host      = s.host
+  } })
   reserved_hosts = var.service_addresses.reserved_hosts
 
   site             = var.site
@@ -74,6 +82,17 @@ module "names" {
       type      = "A"
       records   = [module.cluster.entries.internal]
       ttl       = var.internal_zone.ttl
+    }
+  }
+}
+
+# The host numbers of the entries on a plane without NAT are distinct: two load balancers cannot
+# request the same address.
+resource "terraform_data" "service_hosts" {
+  lifecycle {
+    precondition {
+      condition     = length(compact([for h in concat([var.service_addresses.ingress, var.service_addresses.echo], [for s in var.services : s.host]) : h == null ? "" : tostring(h)])) == length(distinct(compact([for h in concat([var.service_addresses.ingress, var.service_addresses.echo], [for s in var.services : s.host]) : h == null ? "" : tostring(h)])))
+      error_message = "The host numbers of the ingress, the echo and the services must be distinct."
     }
   }
 }

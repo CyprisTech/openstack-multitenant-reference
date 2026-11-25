@@ -62,7 +62,7 @@ The cluster admits two kinds of Services of type `LoadBalancer` (a ValidatingAdm
 - the entries of the stack (the internal ingress and the layer 4 services), in their namespace and at the address the stack prepared (`loadBalancerIP`);
 - internal load balancers, reached from the cluster network only: the annotation `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"` and `loadBalancerSourceRanges` within `cluster_cidr`.
 
-Any other is refused: without annotation, the cloud controller would give it a floating IP of an external network it picks by itself; with `loadbalancer.openstack.org/floating-network-id`, a floating IP on a plane the landing zone does not account for; an internal load balancer without source ranges is reached by every source of a routed plane, which reaches the cluster network. A new address on a plane is an entry of the stack, declared with the others. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
+Any other is refused: without annotation, the cloud controller would give it a floating IP of an external network it picks by itself; with `loadbalancer.openstack.org/floating-network-id`, a floating IP on a plane the landing zone does not account for; an internal load balancer without source ranges is reached by every source of a routed plane, which reaches the cluster network. A layer 4 service of your own is declared in the `services` input: the stack prepares its address on the internal services plane, admitted to the consumers by default, and the cluster admits it. The cloud controller does not run with `internal-lb = true`: with it, it ignores the annotation `"false"`.
 
 ## Usage
 
@@ -100,12 +100,24 @@ The load balancers then admit the new sources; their addresses do not change.
 | terraform | >= 1.9 |
 | openstack | ~> 3.2 |
 
+### Providers
+
+| Name | Version |
+| ---- | ------- |
+| terraform | n/a |
+
 ### Modules
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | cluster | ../../../modules/kubernetes-cluster | n/a |
 | names | git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/dns | v0.1.6 |
+
+### Resources
+
+| Name | Type |
+| ---- | ---- |
+| [terraform_data.service_hosts](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 
 ### Inputs
 
@@ -132,6 +144,7 @@ The load balancers then admit the new sources; their addresses do not change.
 | monitoring | Monitoring as a push integration point (ADR-0007): the Prometheus of the cluster pushes to<br/>the receiver through the observability plane (remote write). Nothing connects into the cluster<br/>for its metrics.<br/>- receiver: base URL of the receiver, for example "http://192.0.2.10:9090" (output<br/>  receiver\_url of the receiver); null keeps the metrics in the cluster. | <pre>object({<br/>    receiver = optional(string)<br/>  })</pre> | `{}` | no |
 | network\_mtu | MTU of the cluster network. It must not exceed the MTU the cloud can carry for tenant<br/>networks, nor the MTU of the planes the network joins (planes contract). The pod network<br/>uses this value minus the VXLAN overhead (ADR-0002, D4). null keeps the cloud default. | `number` | `null` | no |
 | service\_addresses | Host numbers, in the cluster network, of the entries on a plane without NAT: the internal<br/>ingress and the demonstrated TCP service. Neutron does not allocate the host numbers below<br/>reserved\_hosts to anything else, so these addresses are known before the cluster exists. | <pre>object({<br/>    ingress        = optional(number, 10)<br/>    echo           = optional(number, 11)<br/>    reserved_hosts = optional(number, 32)<br/>  })</pre> | `{}` | no |
+| services | Layer 4 services you offer to the consumers, besides the demonstrated echo: for each, a<br/>Service of type LoadBalancer on the internal services plane, at an address the stack prepares,<br/>for the workload you deploy in namespace, selected by selector. Keyed by name ("echo" and<br/>"internal" are taken). The cluster admits no other load balancer outside the cluster network<br/>(admission policy load-balancer-entries).<br/>- sources: who may connect; the consumers by default.<br/>- host: host number of the address in the cluster network, required on a plane without NAT,<br/>  below service\_addresses.reserved\_hosts and distinct from the other entries. | <pre>map(object({<br/>    namespace = string<br/>    selector  = map(string)<br/>    ports     = list(number)<br/>    sources   = optional(list(string))<br/>    host      = optional(number)<br/>  }))</pre> | `{}` | no |
 | volume\_zones | Block storage zone of the bootstrap instance's root volume (boot\_volume\_size), for each compute zone. A compute zone missing from the map gets the cloud's default storage zone. The root volumes of the cluster machines take the zone of their machine. It also sets where persistent volumes go: every zone mapped to one storage zone means shared storage, volumes created there and usable from every zone; without it, each volume is created in the zone of its node. | `map(string)` | `{}` | no |
 
 ### Outputs

@@ -5,10 +5,10 @@ output "bootstrap" {
 
 output "services" {
   description = "What the consumers reach, on the internal services plane: the internal ingress (HTTPS, names of cluster.domains) and the TCP echo, at a floating IP of the plane with NAT, at their address in the cluster network otherwise. The consumers admit nothing from the cluster for them."
-  value = {
+  value = merge({
     ingress = "${module.cluster.entries.internal}:443"
     echo    = "${module.cluster.entries.echo}:7000"
-  }
+  }, { for k, s in var.services : k => [for p in s.ports : "${module.cluster.entries[k]}:${p}"] })
 }
 
 output "domains" {

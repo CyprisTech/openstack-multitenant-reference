@@ -8,6 +8,11 @@ output "service_address" {
   value       = local.exposed ? "${module.cluster.entries.public}:443" : null
 }
 
+output "services" {
+  description = "The public addresses of the layer 4 services of the services input, \"address:port\" for each port."
+  value       = { for k, s in var.services : k => [for p in s.ports : "${module.cluster.entries[k]}:${p}"] }
+}
+
 output "edge_sources" {
   description = "Addresses of the entry point admitted by the ingress load balancer. Empty with exposure = \"public\" or \"none\"."
   value       = var.exposure == "entry-point" ? var.edge_sources : []

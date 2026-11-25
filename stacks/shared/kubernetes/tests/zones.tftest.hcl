@@ -99,3 +99,31 @@ run "three_zones" {
     error_message = "The control plane must be spread over every zone."
   }
 }
+
+# Layer 4 services you declare: on the internal services plane, admitted to the consumers by
+# default, at the host number you give on a plane without NAT.
+run "declared_services" {
+  command = plan
+
+  variables {
+    zones     = ["az-1"]
+    consumers = ["192.0.2.64/27"]
+    services  = { db = { namespace = "db", selector = { app = "db" }, ports = [5432], host = 12 } }
+  }
+
+  assert {
+    condition     = output.services.db == ["10.36.0.12:5432"]
+    error_message = "A declared service is reached at its host number in the cluster network, on its ports."
+  }
+}
+
+run "declared_services_distinct_hosts" {
+  command = plan
+
+  variables {
+    zones    = ["az-1"]
+    services = { db = { namespace = "db", selector = { app = "db" }, ports = [5432], host = 11 } }
+  }
+
+  expect_failures = [terraform_data.service_hosts]
+}
