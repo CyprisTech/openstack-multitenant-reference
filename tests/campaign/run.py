@@ -25,7 +25,7 @@ from campaign import preflight, previous
 from campaign import scenario as scenarios
 from campaign.context import Context
 from campaign.report import Report
-from campaign.steps import load
+from campaign.steps import GUIDES, load
 from campaign.tools import Runner
 
 HERE = Path(__file__).resolve().parent
@@ -179,6 +179,9 @@ def main(argv=None):
         finally:
             entry.seconds = round(time.monotonic() - started, 1)
             report.durations = ctx.durations
+            report.write(ctx.work / (INNER_REPORT if os.environ.get(INNER) else "report.json"))
+        if entry.status == "ok" and name in GUIDES:
+            entry.measures["guide"] = ", ".join(GUIDES[name])
             report.write(ctx.work / (INNER_REPORT if os.environ.get(INNER) else "report.json"))
         if entry.status == "ok" and steps_notified:
             measures = ", ".join(f"{k} {v}" for k, v in entry.measures.items() if k != "cast")

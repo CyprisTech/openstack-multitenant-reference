@@ -55,14 +55,21 @@ def deploy_demo(ctx):
 
 def ingress_address(ctx):
     # The Service may not exist yet: an empty address, waited for by the caller.
-    return kubectl(ctx).out("-n", "traefik", "get", "svc", "traefik",
-                            "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False)
+    return kubectl(ctx).out(
+        "-n", "traefik", "get", "svc", "traefik", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False
+    )
 
 
 # --- steps -----------------------------------------------------------------------------------------
 
 
-@step("k8s")
+@step(
+    "k8s",
+    guide=[
+        "docs/reference/test-procedure.md#7-published-cluster",
+        "stacks/tenants/kubernetes/README.md#usage",
+    ],
+)
 def k8s(ctx, report):
     ctx.set_inputs(
         STACK,
@@ -77,12 +84,24 @@ def k8s(ctx, report):
     wait_for_bootstrap(ctx, STACK)
 
 
-@step("cluster")
+@step(
+    "cluster",
+    guide=[
+        "docs/reference/test-procedure.md#7-published-cluster",
+        "stacks/tenants/kubernetes/README.md#usage",
+    ],
+)
 def cluster(ctx, report):
     create_cluster(ctx, STACK, ctx.work / "published-clouds.yaml", kubeconfig(ctx, STACK))
 
 
-@step("internal-open")
+@step(
+    "internal-open",
+    guide=[
+        "docs/reference/test-procedure.md#open-the-internal-service",
+        "docs/guides/open-a-service.md#an-internal-service",
+    ],
+)
 def internal_open(ctx, report):
     """The internal service, created closed in the foundation (step internal), is opened to the
     Kubernetes tenant once it exists: a change of its consumers, in place."""
@@ -95,7 +114,7 @@ def internal_open(ctx, report):
     ctx.apply("internal-service")
 
 
-@step("tour")
+@step("tour", guide="docs/guides/kubernetes-tour.md")
 def tour(ctx, report):
     k = kubectl(ctx)
     name = k.cluster_name()
@@ -105,15 +124,25 @@ def tour(ctx, report):
     result = ctx.runner.run(cmd, cwd=ctx.root, quiet=True)
     if not ctx.runner.dry_run:
         (ctx.work / "kubernetes-tour.md").write_text(result.stdout)
-    described = ctx.runner.run(["clusterctl", "describe", "cluster", name, "-n", "platform", "--kubeconfig", k.kubeconfig],
-                               check=False)
+    described = ctx.runner.run(
+        ["clusterctl", "describe", "cluster", name, "-n", "platform", "--kubeconfig", k.kubeconfig], check=False
+    )
     if described.stdout.strip():
         ctx.runner.echo(described.stdout.rstrip())
     k.show("get", "machines", "-n", "platform")
     k.show("get", "gateway,httproute,certificate", "-A")
 
 
-@step("accept")
+@step(
+    "accept",
+    guide=[
+        "docs/reference/test-procedure.md#9-acceptance",
+        "docs/getting-started/README.md#7-check",
+        "docs/guides/check-isolation.md#run",
+        "stacks/tenants/kubernetes/README.md#checks",
+        "stacks/tenants/kubernetes/README.md#certificates",
+    ],
+)
 def accept(ctx, report):
     """HTTPS through the entry point to the domains, then the isolation test."""
     names = ["site-a", "site-b"]
@@ -131,7 +160,7 @@ def accept(ctx, report):
     isolation_test(ctx, report, STACK if ctx.has(STACK) else None)
 
 
-@step("direct")
+@step("direct", guide="docs/reference/test-procedure.md#direct-exposure")
 def direct(ctx, report):
     """The vm tenant exposed directly (exposure = "public"): HTTPS on its own public address, no
     router on the publication plane, the entry point no longer reaches its instances. Then back
@@ -196,7 +225,13 @@ def apply_addons(ctx):
     raise StepFailed(f"the ingress Service did not get {address}")
 
 
-@step("direct-k8s")
+@step(
+    "direct-k8s",
+    guide=[
+        "docs/reference/test-procedure.md#direct-exposure",
+        "stacks/tenants/kubernetes/README.md#change-the-exposure-of-an-existing-cluster",
+    ],
+)
 def direct_k8s(ctx, report):
     """The published cluster exposed directly (exposure = "public"): the ingress moves to a
     public floating IP once the add-ons are applied again, HTTPS there with the certificate
@@ -226,7 +261,7 @@ def direct_k8s(ctx, report):
     back_to_entry_point(ctx, report, STACK, ["apps.published"], failures, after_apply=lambda: apply_addons(ctx), load=None)
 
 
-@step("hostile")
+@step("hostile", guide="docs/reference/test-procedure.md#hostile-route-interface-mode")
 def hostile(ctx, report):
     """Interface mode: a tenant adds a route to another tenant through the transit router. The
     connections stay closed: the security groups decide, not the routes."""
@@ -249,8 +284,10 @@ def hostile(ctx, report):
         ctx.wait_for_instances(bastion, [instance])
         # The route is on the tenant's transit router (ADR-0013): it applies at once.
         opened = [port for port in (443, 22, 9100) if reachable(ctx, bastion, instance, target, port)]
-        record(ctx, [f"hostile route {instance} -> {target}:{port} {'OPEN' if port in opened else 'closed'}"
-                     for port in (443, 22, 9100)])
+        record(
+            ctx,
+            [f"hostile route {instance} -> {target}:{port} {'OPEN' if port in opened else 'closed'}" for port in (443, 22, 9100)],
+        )
     ctx.apply("private", empty_plan=False)
     ctx.scene_done("private")
     report.measures["hostile"] = "closed" if not opened else f"open: {opened}"

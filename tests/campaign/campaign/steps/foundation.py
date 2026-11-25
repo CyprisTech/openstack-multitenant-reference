@@ -43,7 +43,13 @@ def root_certificate(ctx):
 # --- steps -----------------------------------------------------------------------------------------
 
 
-@step("prep")
+@step(
+    "prep",
+    guide=[
+        "docs/reference/test-procedure.md#0-projects-and-prerequisites",
+        "docs/getting-started/README.md#0-projects",
+    ],
+)
 def prep(ctx, report):
     """The credentials of the clusters, and the SSH configuration of the campaign."""
     names = ctx.config.get("cluster_clouds", {})
@@ -81,7 +87,13 @@ def cluster_credential(ctx, entry, path):
     ctx.write_private(path, yaml.safe_dump({"clouds": {"openstack": credential}}))
 
 
-@step("planes")
+@step(
+    "planes",
+    guide=[
+        "docs/reference/test-procedure.md#1-planes",
+        "docs/getting-started/README.md#1-planes",
+    ],
+)
 def planes(ctx, report):
     """The planes of the mode, and an attachment per stack of the scenario that has one."""
     planes = ctx.config.get("planes", {}).get(ctx.mode)
@@ -106,14 +118,26 @@ def planes(ctx, report):
     report.measures["attachments"] = len(attachments)
 
 
-@step("receiver")
+@step(
+    "receiver",
+    guide=[
+        "docs/reference/test-procedure.md#2-shared-services",
+        "docs/getting-started/README.md#2-shared-services",
+    ],
+)
 def receiver(ctx, report):
     ctx.set_inputs("receiver", plane_attachment=attachment(ctx, "receiver"))
     ctx.apply("receiver")
     ctx.wait_for_instances(ctx.value("receiver", "bastion"), [ctx.value("receiver", "address")])
 
 
-@step("acme")
+@step(
+    "acme",
+    guide=[
+        "docs/reference/test-procedure.md#2-shared-services",
+        "docs/guides/certificates.md#with-the-organisations-authority",
+    ],
+)
 def acme(ctx, report):
     ctx.set_inputs("acme", plane_attachment=attachment(ctx, "acme"))
     ctx.apply("acme")
@@ -123,7 +147,7 @@ def acme(ctx, report):
     ctx.wait_for_instances(ctx.value("acme", "bastion"), [ctx.value("acme", "instance_address")])
 
 
-@step("internal")
+@step("internal", guide="docs/reference/test-procedure.md#2-shared-services")
 def internal(ctx, report):
     """The fixture of an internal service, created before its consumers, closed: it admits
     nobody until step internal-open."""
@@ -136,7 +160,7 @@ def internal(ctx, report):
     ctx.apply("internal-service")
 
 
-@step("resolver")
+@step("resolver", guide="docs/reference/integration-points.md#name-resolution-time-and-package-mirrors")
 def resolver(ctx, report):
     """The resolver behind the internal services plane (ADR-0016, D3), for the private tenant:
     the test zone forwarded to the DNS that serves it, public names resolved through its egress."""
@@ -154,7 +178,7 @@ def resolver(ctx, report):
 EGRESS_NAMES = [".archive.ubuntu.com", ".security.ubuntu.com"]
 
 
-@step("egress")
+@step("egress", guide="stacks/shared/egress/README.md")
 def egress(ctx, report):
     """The shared egress (ADR-0016, D1), with no tenant yet: it refuses every request until step
     egress-tenant declares one."""
@@ -165,7 +189,7 @@ def egress(ctx, report):
     ctx.wait_for_instances(ctx.value("egress", "bastion"), ctx.instances("egress"))
 
 
-@step("egress-tenant")
+@step("egress-tenant", guide="stacks/shared/egress/README.md")
 def egress_tenant(ctx, report):
     """A vm tenant with egress = "shared": applied first, then declared on the shared egress with
     its address on the internal services plane, known once its router exists; its instances wait
@@ -199,7 +223,13 @@ def egress_tenant(ctx, report):
     ctx.wait_for_instances(ctx.value("egress-shared", "bastion"), ctx.instances("egress-shared"))
 
 
-@step("edge")
+@step(
+    "edge",
+    guide=[
+        "docs/reference/test-procedure.md#3-entry-point",
+        "docs/getting-started/README.md#3-entry-point",
+    ],
+)
 def edge(ctx, report):
     """The entry point, with no domain yet (step publish publishes them). During the upgrade from
     the previous release, the domains already published stay: they are being served."""
@@ -213,7 +243,14 @@ def edge(ctx, report):
     ctx.wait_for_instances(ctx.value("entry-point", "bastion"), ctx.instances("entry-point"))
 
 
-@step("web")
+@step(
+    "web",
+    guide=[
+        "docs/reference/test-procedure.md#4-tenants-web-and-private",
+        "docs/getting-started/README.md#4-tenants",
+        "stacks/tenants/vm/README.md#several-tenants-of-this-stack",
+    ],
+)
 def web(ctx, report):
     inputs = dict(
         cloud=ctx.cloud("vm"),
@@ -229,7 +266,14 @@ def web(ctx, report):
     ctx.wait_for_instances(ctx.value("vm", "bastion"), ctx.instances("vm"))
 
 
-@step("private")
+@step(
+    "private",
+    guide=[
+        "docs/reference/test-procedure.md#4-tenants-web-and-private",
+        "stacks/tenants/vm/README.md#private-tenant",
+        "stacks/tenants/vm/README.md#several-tenants-of-this-stack",
+    ],
+)
 def private(ctx, report):
     """A private tenant (ADR-0016, D1): the vm stack with its own state, with neither exposure
     nor egress; its workload pushes its metric, nothing else. It resolves names through the test
@@ -253,7 +297,13 @@ def private(ctx, report):
     ctx.wait_for_instances(ctx.value("private", "bastion"), ctx.instances("private"))
 
 
-@step("transit")
+@step(
+    "transit",
+    guide=[
+        "docs/reference/test-procedure.md#planes-again",
+        "docs/getting-started/README.md#5-planes-again-hub-only",
+    ],
+)
 def transit(ctx, report):
     """The planes again: the routes of the transit routers follow the attachments (ADR-0013)."""
     ctx.apply("planes")
@@ -278,7 +328,16 @@ def request_domains(ctx):
                 raise StepFailed(f"request-domains.sh failed for {key}:\n{result.stderr.strip()}")
 
 
-@step("publish")
+@step(
+    "publish",
+    guide=[
+        "docs/reference/test-procedure.md#domain-publication",
+        "docs/getting-started/README.md#6-publish-the-domains",
+        "docs/guides/publish-a-domain.md",
+        "stacks/shared/entry-point/README.md#changing-the-published-domains",
+        "stacks/tenants/kubernetes/README.md#publish-the-domains",
+    ],
+)
 def publish(ctx, report, load=None):
     """The domains of the tenants on the entry point: each tenant's request, then the publication.
     After the first publication, new domains are published under load: no request may fail."""

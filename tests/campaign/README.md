@@ -2,6 +2,8 @@
 
 `run.py` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown. It applies each stack, requires an empty plan, runs the [isolation test](../isolation/README.md) and the HTTPS checks, and keeps the outputs. A scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md)) names the stacks and the steps; the steps themselves are shared.
 
+**What each step runs.** A step names the sections of the documentation it runs, `@step(name, guide=...)`: its section of the [test procedure](../../docs/reference/test-procedure.md) and the guide or README an adopter follows for the same thing. The report gives them for each step that passed (`guide=` in `report.json`). A unit test checks that each named file and heading exists, and that every step names its sections or is listed in `UNDOCUMENTED` with the reason; a change to a procedure updates the step that names it.
+
 ## Usage
 
 ```bash

@@ -32,7 +32,7 @@ LISTINGS = [
 PROJECT_LISTINGS = [(("network", "list"), "ID"), (("port", "list"), "ID")]
 
 
-@step("plans")
+@step("plans", guide="CONTRIBUTING.md#testing-on-a-real-cloud")
 def plans(ctx, report):
     """Every stack of the scenario plans no change, but those removed before the end."""
     skip = set(ctx.scenario.options.get("plans", {}).get("skip", []))
@@ -48,7 +48,14 @@ def plans(ctx, report):
         raise StepFailed(f"plan not empty: {', '.join(drifted)}")
 
 
-@step("teardown")
+@step(
+    "teardown",
+    guide=[
+        "docs/reference/test-procedure.md#10-teardown",
+        "docs/guides/teardown.md",
+        "stacks/tenants/kubernetes/README.md#teardown",
+    ],
+)
 def teardown(ctx, report):
     """Removes everything; goes on after a failure to remove as much as possible, then reports."""
     # The next campaign publishes for the first time again: no load during that publication.
@@ -90,7 +97,7 @@ def teardown(ctx, report):
         raise StepFailed("; ".join(failed))
 
 
-@step("leftovers")
+@step("leftovers", guide="docs/reference/test-procedure.md#10-teardown")
 def leftovers(ctx, report):
     """Nothing is left in the projects of the scenario after the teardown.
 

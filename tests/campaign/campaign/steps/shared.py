@@ -103,7 +103,13 @@ def https_from_consumer(ctx, bastion, instance, address, extra=""):
 # --- steps -----------------------------------------------------------------------------------------
 
 
-@step("k8s-shared")
+@step(
+    "k8s-shared",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "stacks/shared/kubernetes/README.md#usage",
+    ],
+)
 def k8s_shared(ctx, report):
     ctx.set_inputs(
         STACK,
@@ -118,13 +124,19 @@ def k8s_shared(ctx, report):
     wait_for_bootstrap(ctx, STACK)
 
 
-@step("cluster-shared")
+@step(
+    "cluster-shared",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "stacks/shared/kubernetes/README.md#usage",
+    ],
+)
 def cluster_shared(ctx, report):
     k = create_cluster(ctx, STACK, ctx.work / "shared-clouds.yaml", kubeconfig(ctx, STACK))
     deploy_demos(ctx, k)
 
 
-@step("update-shared")
+@step("update-shared", guide="docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply")
 def update_shared(ctx, report):
     """The shared cluster after an apply of its stack: update-cluster.sh from the campaign host,
     then the demonstration services of this release."""
@@ -138,7 +150,7 @@ def deploy_demos(ctx, k):
     k("-n", "echo", "rollout", "status", "deploy/echo", "--timeout=10m")
 
 
-@step("tour-shared")
+@step("tour-shared", guide="docs/guides/kubernetes-tour.md")
 def tour_shared(ctx, report):
     k = kubectl(ctx)
     cmd = ["python3", "tests/tour/capture.py", "--kubeconfig", k.kubeconfig, "--cluster", k.cluster_name()]
@@ -152,7 +164,14 @@ def tour_shared(ctx, report):
     k.show("get", "networkpolicy", "-A")
 
 
-@step("accept-shared")
+@step(
+    "accept-shared",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "docs/guides/check-isolation.md#run",
+        "stacks/shared/kubernetes/README.md#names-and-root-certificate-for-the-consumers",
+    ],
+)
 def accept_shared(ctx, report):
     """A consumer finds the service by its name in the zone, and reaches it over HTTPS with the
     root it received at boot (certificates.ca_bundle)."""
@@ -191,7 +210,13 @@ def try_shared_service(ctx, address):
     return result.returncode == 0
 
 
-@step("consumer")
+@step(
+    "consumer",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "stacks/shared/kubernetes/README.md#add-a-consumer",
+    ],
+)
 def consumer(ctx, report):
     """Closed by default, then a range of users admitted: consumer_cidr, this machine as the
     cluster sees it."""
@@ -233,7 +258,7 @@ def volume_sum(ctx):
     return kubectl(ctx).out("-n", "volume-check", "exec", "data-0", "--", "sha256sum", "/data/marker").split(" ")[0]
 
 
-@step("volume")
+@step("volume", guide="docs/reference/test-procedure.md#6-shared-cluster")
 def volume(ctx, report):
     """A volume of the shared cluster keeps its data across the credential rotation and the
     upgrade. What is checked is the wiring of the landing zone (credential, zones), not Cinder."""
@@ -268,7 +293,13 @@ def volume_moved_intact(ctx, report, when):
     report.measures[f"volume {when}"] = "intact"
 
 
-@step("rotate")
+@step(
+    "rotate",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "docs/guides/kubernetes-lifecycle.md#rotate-the-credential-of-the-cluster",
+    ],
+)
 def rotate(ctx, report):
     """Moves the cluster to another application credential with the steps of the guide
     (docs/guides/kubernetes-lifecycle.md#rotate-the-credential-of-the-cluster), then checks the
@@ -324,8 +355,9 @@ def wait_for_revocation(ctx, cloud, attempts=90, delay=20):
     if ctx.runner.dry_run:
         return
     for attempt in range(attempts):
-        token = ctx.runner.run(["openstack", "--os-cloud", cloud, "token", "issue", "-f", "value", "-c", "id"],
-                               check=False, quiet=True)
+        token = ctx.runner.run(
+            ["openstack", "--os-cloud", cloud, "token", "issue", "-f", "value", "-c", "id"], check=False, quiet=True
+        )
         if token.returncode != 0:
             ctx.runner.echo("the old credential no longer authenticates")
             return
@@ -367,7 +399,13 @@ class ConsumerLoad(Requests):
             time.sleep(2)
 
 
-@step("upgrade")
+@step(
+    "upgrade",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "docs/guides/kubernetes-lifecycle.md#upgrade-kubernetes",
+    ],
+)
 def upgrade(ctx, report):
     """A minor upgrade by Cluster API, with the steps of the guide
     (docs/guides/kubernetes-lifecycle.md#upgrade-kubernetes): the version and its image in the
@@ -431,7 +469,13 @@ def upgrade(ctx, report):
     volume_moved_intact(ctx, report, "after the upgrade")
 
 
-@step("shared-down")
+@step(
+    "shared-down",
+    guide=[
+        "docs/reference/test-procedure.md#6-shared-cluster",
+        "stacks/tenants/kubernetes/README.md#teardown",
+    ],
+)
 def shared_down(ctx, report):
     # The volumes of the check are deleted while Cinder CSI still runs, or they would be left behind.
     kubectl(ctx)("--request-timeout=30s", "delete", "namespace", "volume-check", "--wait=true", "--timeout=10m", check=False)
