@@ -117,7 +117,7 @@ class HostileTest(unittest.TestCase):
 
 
 class TeardownTest(unittest.TestCase):
-    def test_goes_on_after_a_failure_then_reports_it(self):
+    def test_a_failure_stops_before_the_next_wave(self):
         def run(cmd):
             if "destroy" in cmd:
                 # The web tenant only: the private tenant shares its directory, in another workspace.
@@ -129,11 +129,22 @@ class TeardownTest(unittest.TestCase):
         entry = StepReport("teardown")
         with self.assertRaisesRegex(StepFailed, "vm: destroy failed"):
             load()["teardown"](ctx, entry)
-        destroyed = [c[1] for c, _ in ctx.runner.commands if "destroy" in c]
-        self.assertEqual(destroyed, ["-chdir=stacks/tenants/vm", "-chdir=stacks/tenants/vm",
-                                     "-chdir=stacks/shared/entry-point", "-chdir=stacks/shared/planes"])  # fmt: skip
+        # The tenants of the first wave all ran; the entry point and the planes, which they use,
+        # are left for the leftover check.
+        destroyed = sorted(c[1] for c, _ in ctx.runner.commands if "destroy" in c)
+        self.assertEqual(destroyed, ["-chdir=stacks/tenants/vm", "-chdir=stacks/tenants/vm"])
         self.assertFalse((ctx.work / "published-once").exists())
-        self.assertEqual(entry.measures["destroyed"], "3/4")
+        self.assertEqual(entry.measures["destroyed"], "1/4")
+
+    def test_the_waves_destroy_the_planes_last(self):
+        ctx = context(answer(), stacks=STACKS, workspaces=WORKSPACES)
+        entry = StepReport("teardown")
+        load()["teardown"](ctx, entry)
+        destroyed = [c[1] for c, _ in ctx.runner.commands if "destroy" in c]
+        self.assertEqual(destroyed[-1], "-chdir=stacks/shared/planes")
+        self.assertEqual(sorted(destroyed[:2]), ["-chdir=stacks/tenants/vm", "-chdir=stacks/tenants/vm"])
+        self.assertEqual(entry.measures["destroyed"], "4/4")
+        self.assertEqual(len(entry.measures["waves"].split(", ")), 3)
 
 
 if __name__ == "__main__":

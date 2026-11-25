@@ -166,17 +166,20 @@ class Context:
         if plan != 0:
             raise StepFailed(f"plan not empty after apply: {key}")
 
-    def destroy(self, key):
-        """Destroys a stack; its full output in the log."""
+    def destroy(self, key, stream=None):
+        """Destroys a stack; its full output in the log. Several destroys at once do not stream
+        their output (stream=False): a recorded step prints each one whole once it ends, so that
+        their lines do not mix."""
+        stream = self.runner.verbose if stream is None else stream
         started = time.monotonic()
         stack = self.stack(key)
         cmd = [self.tool, f"-chdir={stack}", "destroy", "-auto-approve", "-no-color", *stack.var_files()]
-        result = self.runner.run(cmd, cwd=self.root, env=stack.env(), check=False, stream=self.runner.verbose)
+        result = self.runner.run(cmd, cwd=self.root, env=stack.env(), check=False, stream=stream)
         if not self.runner.dry_run:
             self._log(key).write_text(result.stdout + result.stderr)
             for line in [] if self.runner.verbose else (result.stdout + result.stderr).splitlines():
                 if re.search(r"Destroy complete|Error", line):
-                    self.runner.echo(line)
+                    self.runner.echo(f"{key}: {line}")
         seconds = round(time.monotonic() - started)
         self.timing(f"{key} destroy={seconds}s status={result.returncode}")
         self.durations.append({"stack": key, "action": "destroy", "seconds": seconds})

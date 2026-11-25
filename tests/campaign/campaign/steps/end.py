@@ -1,16 +1,22 @@
 """The end of a campaign: nothing drifted, then nothing left."""
 
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 from ..checks import kubeconfig
 from ..context import StepFailed
 from ..kube import delete_cluster
 from . import step
 
-# The clusters first (Cluster API deletes their servers and load balancers), then the stacks,
-# consumers before what they consume.
+# The teardown in waves, the stacks of a wave destroyed in parallel: the clusters (deleted by
+# Cluster API, then their stack) and the tenants; then the shared services and the fixtures, once
+# their consumers are gone; then the planes. Inside a wave nothing depends on anything else. A
+# stack of the scenario in no wave goes with the second.
 CLUSTERS = ["shared", "published"]
-DESTROY_ORDER = [
-    "shared", "internal-service", "published", "private", "egress-shared", "resolver", "egress", "vm",
-    "entry-point", "receiver", "acme", "planes",
+WAVES = [
+    ["shared", "published", "vm", "private", "egress-shared"],
+    ["internal-service", "resolver", "egress", "entry-point", "receiver", "acme"],
+    ["planes"],
 ]
 
 # Listings of the leftover check: a kind of object and the column holding its ID. The Octavia
@@ -47,20 +53,39 @@ def teardown(ctx, report):
     """Removes everything; goes on after a failure to remove as much as possible, then reports."""
     # The next campaign publishes for the first time again: no load during that publication.
     (ctx.work / "published-once").unlink(missing_ok=True)
-    failed = []
-    for key in CLUSTERS:
-        if ctx.has(key):
+    listed = {k for wave in WAVES for k in wave}
+    waves = [[k for k in wave if ctx.has(k)] for wave in WAVES]
+    waves[1] += [k for k in ctx.scenario.stacks if k not in listed]
+    keys = [k for wave in waves for k in wave]
+
+    def remove(key, stream):
+        """A stack, after its cluster when it has one; the error, or None."""
+        if key in CLUSTERS:
             try:
                 delete_cluster(ctx, key, kubeconfig(ctx, key))
             except Exception as error:
-                failed.append(f"cluster {key}: {error}")
-    keys = [k for k in DESTROY_ORDER if ctx.has(k)] + [k for k in ctx.scenario.stacks if k not in DESTROY_ORDER]
-    for key in keys:
+                return f"cluster {key}: {error}"
         try:
-            ctx.destroy(key)
+            ctx.destroy(key, stream=stream)
         except Exception as error:
-            failed.append(f"{key}: {error}")
-    report.measures["destroyed"] = f"{len(keys) - len([f for f in failed if not f.startswith('cluster')])}/{len(keys)}"
+            return f"{key}: {error}"
+        return None
+
+    failed, destroyed, timings = [], 0, []
+    for number, wave in enumerate(waves, 1):
+        if not wave:
+            continue
+        started = time.monotonic()
+        ctx.runner.echo(f"wave {number}: {', '.join(wave)}")
+        with ThreadPoolExecutor(max_workers=len(wave)) as pool:
+            errors = list(pool.map(remove, wave, [len(wave) == 1] * len(wave)))
+        timings.append(f"{number}: {round(time.monotonic() - started)} s")
+        destroyed += errors.count(None)
+        failed += [e for e in errors if e]
+        if failed:  # the next wave depends on this one: stop, the leftovers step reports the rest
+            break
+    report.measures["destroyed"] = f"{destroyed}/{len(keys)}"
+    report.measures["waves"] = ", ".join(timings)
     if failed:
         raise StepFailed("; ".join(failed))
 

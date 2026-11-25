@@ -485,6 +485,8 @@ Expected: closed. The packet may reach the web instance, whose security group ad
 
 ## 10. Teardown
 
+In three waves, consumers before what they consume: the clusters and the tenants, then the shared services and the fixtures, then the planes. Inside a wave nothing depends on anything else: the campaign destroys its stacks in parallel.
+
 ```bash
 B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
 # The bootstrap instance must be admitted on the API again (it was removed after the move).
