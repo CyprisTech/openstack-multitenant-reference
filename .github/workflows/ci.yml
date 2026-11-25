@@ -80,6 +80,13 @@ jobs:
             fi
           done
 
+      # The scripts written from templates, rendered by the mocked tests, then shellcheck (once).
+      - name: rendered scripts (shellcheck)
+        if: matrix.tool == 'tofu' && matrix.version == 'latest'
+        run: |
+          python3 tests/ci/render_scripts.py --tool tofu --out "$RUNNER_TEMP/rendered"
+          shellcheck -S warning "$RUNNER_TEMP"/rendered/*
+
   tflint:
     runs-on: ubuntu-latest
     steps:
@@ -121,8 +128,10 @@ jobs:
           python3 tests/campaign/run.py private-cloud --dry-run full
           python3 tests/campaign/run.py private-cloud --dry-run --mode interface full
           python3 tests/campaign/run.py public-cloud --dry-run full
-      - name: shell scripts syntax
-        run: bash -n scripts/publish-domains.sh scripts/request-domains.sh scripts/cluster-files.sh images/kubernetes-node/build.sh
+      - name: shell scripts (shellcheck)
+        run: shellcheck -S warning scripts/publish-domains.sh scripts/request-domains.sh scripts/cluster-files.sh images/kubernetes-node/build.sh
+      - name: common variables of the Kubernetes stacks
+        run: python3 tests/ci/common_variables.py
       - name: documentation links
         run: python3 tests/docs/check_links.py
       - name: inputs and outputs tables (terraform-docs)

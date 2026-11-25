@@ -40,8 +40,10 @@ namespace() {
 #    in demonstration mode (without certificates), a self-signed certificate.
 if [[ -f clouds.yaml ]]; then
   cloud_conf=$(./cloud-conf)
+  ca_crt=()
+  [[ -f cacert.pem ]] && ca_crt=(--from-file=ca.crt=cacert.pem)
   kubectl -n kube-system create secret generic cloud-config \
-    --from-literal=cloud.conf="$cloud_conf" $([[ -f cacert.pem ]] && echo --from-file=ca.crt=cacert.pem) --dry-run=client -o yaml | kubectl apply -f -
+    --from-literal=cloud.conf="$cloud_conf" "$${ca_crt[@]}" --dry-run=client -o yaml | kubectl apply -f -
 fi
 kubectl apply -f manifests/node-deletion.yaml -f manifests/storage-class.yaml
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${versions.gateway_api}/standard-install.yaml
