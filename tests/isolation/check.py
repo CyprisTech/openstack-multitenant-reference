@@ -122,7 +122,7 @@ class Prober:
             return "closed"
 
 
-def main():
+def parse_args():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stacks", default="stacks")
     ap.add_argument("--receiver", default="tests/fixtures/receiver")
@@ -144,283 +144,353 @@ def main():
     ap.add_argument("--egress-allowed", default="http://archive.ubuntu.com/ubuntu/", help="URL of a declared name")
     ap.add_argument("--egress-refused", default="https://openstack.org/", help="a URL of a name not declared")
     args = ap.parse_args()
-
-    edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
     if not args.private:
         ap.error("--private is required: the private tenant's directory or a file of its outputs")
-    web = outputs(args.tool, args.web or os.path.join(args.stacks, "tenants", "vm"))
-    prv = outputs(args.tool, args.private)
-    rcv = outputs(args.tool, args.receiver)
-    p = Prober(args.user, args.key)
+    if args.egress and not args.egress_tenant:
+        ap.error("--egress needs --egress-tenant: the tenant's directory or a file of its outputs")
+    return args
 
-    edge_vm = sorted(edge["instances"].items())[0]
-    web_vm = sorted(web["instances"].items())[0]
-    prv_vm = sorted(prv["instances"].items())[0]
-    public_ip = edge["load_balancer"]["floating_ip"]
-    service = web["service_address"].split(":")[0]
-    receiver = rcv["receiver_url"].split("//")[1].split(":")[0]
 
-    def from_edge(target, port):
-        return lambda: p.remote(edge["bastion"], edge_vm[1], target, port)
+class Deployment:
+    """The stacks under test, read from their outputs, and the probes from each of their instances."""
 
-    def from_web(target, port):
-        return lambda: p.remote(web["bastion"], web_vm[1], target, port)
+    def __init__(self, args):
+        self.args = args
+        self.p = Prober(args.user, args.key)
+        self.edge = outputs(args.tool, os.path.join(args.stacks, "shared", "entry-point"))
+        self.web = outputs(args.tool, args.web or os.path.join(args.stacks, "tenants", "vm"))
+        self.prv = outputs(args.tool, args.private)
+        self.rcv = outputs(args.tool, args.receiver)
+        self.edge_vm = sorted(self.edge["instances"].items())[0]
+        self.web_vm = sorted(self.web["instances"].items())[0]
+        self.prv_vm = sorted(self.prv["instances"].items())[0]
+        self.public_ip = self.edge["load_balancer"]["floating_ip"]
+        self.service = self.web["service_address"].split(":")[0]
+        self.receiver = self.rcv["receiver_url"].split("//")[1].split(":")[0]
+        self.probe_pods = []  # the kubectl of each cluster where a probe pod runs
+        self.published_pod = None  # the kubectl of the published cluster's probe pod, once started
 
-    def from_private(target, port):
-        return lambda: p.remote(prv["bastion"], prv_vm[1], target, port)
+    # Who probes: the name of an instance in the rows, and a probe from it.
+    def from_edge(self, target, port):
+        return lambda: self.p.remote(self.edge["bastion"], self.edge_vm[1], target, port)
 
-    def from_receiver(target, port):
-        return lambda: p.remote(rcv["bastion"], rcv["address"], target, port)
+    def from_web(self, target, port):
+        return lambda: self.p.remote(self.web["bastion"], self.web_vm[1], target, port)
 
-    def pushed(tenant):
+    def from_private(self, target, port):
+        return lambda: self.p.remote(self.prv["bastion"], self.prv_vm[1], target, port)
+
+    def from_receiver(self, target, port):
+        return lambda: self.p.remote(self.rcv["bastion"], self.rcv["address"], target, port)
+
+    def tenants(self):
+        return ((f"edge {self.edge_vm[0]}", self.from_edge), (f"web {self.web_vm[0]}", self.from_web),
+                (f"private {self.prv_vm[0]}", self.from_private))  # fmt: skip
+
+    def instances(self):
+        """Each instance: its name in the rows, its bastion, its address."""
+        return ((f"edge {self.edge_vm[0]}", self.edge["bastion"], self.edge_vm[1]),
+                (f"web {self.web_vm[0]}", self.web["bastion"], self.web_vm[1]),
+                (f"private {self.prv_vm[0]}", self.prv["bastion"], self.prv_vm[1]),
+                ("receiver", self.rcv["bastion"], self.rcv["address"]))  # fmt: skip
+
+    def pushed(self, tenant):
         """Whether the receiver holds recent series pushed by the tenant (instant query: the last
         5 minutes)."""
         query = f"count({{tenant=\"{tenant}\"}})"
-        out = p.run(rcv["bastion"], rcv["address"],
-                    f"curl -sfG --data-urlencode {shlex.quote('query=' + query)} http://localhost:9090/api/v1/query")
+        out = self.p.run(self.rcv["bastion"], self.rcv["address"],
+                         f"curl -sfG --data-urlencode {shlex.quote('query=' + query)} http://localhost:9090/api/v1/query")
         try:
             return "yes" if json.loads(out)["data"]["result"] else "no"
         except (ValueError, KeyError):
             return "error: " + out[:60]
 
-    probe_pods = []
-
-    def start_probe(kubeconfig):
-        """Starts the probe pod in the default namespace of a cluster; returns its kubectl."""
-        kubectl = [args.kubectl, "--kubeconfig", kubeconfig, "--request-timeout=30s"]
-        # A probe pod left by an interrupted run would block the new one.
-        for a in (["-n", "default", "delete", "pod", "isolation-probe", "--ignore-not-found", "--wait=true"],
-                  ["run", "isolation-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
-                   "--restart=Never", "--command", "--", "sleep", "600"],
-                  ["wait", "-n", "default", "--for=condition=Ready", "pod/isolation-probe", "--timeout=120s"]):
-            subprocess.run(kubectl + a, check=True, capture_output=True, text=True)
-        probe_pods.append(kubectl)
-        return kubectl
-
-    def kget(kubectl, *a):
-        return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
-
-    rows = []  # (from, to, port, expected, probe)
-    tenants = ((f"edge {edge_vm[0]}", from_edge), (f"web {web_vm[0]}", from_web), (f"private {prv_vm[0]}", from_private))
-    # Publication (ADR-0006): the entry point reaches the tenant's service address, and only it.
-    rows.append(("test runner", "entry point (public IP)", 443, "open", lambda: p.local(public_ip, 443)))
-    rows.append(("test runner", "entry point (public IP)", 80, "open", lambda: p.local(public_ip, 80)))
-    rows.append(("test runner", f"web service address {service}", 443, "closed", lambda: p.local(service, 443)))
-    rows.append((f"edge {edge_vm[0]}", f"web service address {service}", 443, "open", from_edge(service, 443)))
-    rows.append((f"edge {edge_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_edge(web_vm[1], 443)))
-    rows.append((f"private {prv_vm[0]}", f"web service address {service}", 443, "closed", from_private(service, 443)))
-    rows.append((f"web {web_vm[0]}", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", from_web(edge_vm[1], 443)))
-    # Monitoring (ADR-0007): every tenant pushes to the receiver; nothing reaches a tenant's metrics.
-    for name, probe in tenants:
-        rows.append((name, f"receiver {receiver}", 9090, "open", probe(receiver, 9090)))
-    for name, ip in ((edge_vm[0], edge_vm[1]), (web_vm[0], web_vm[1]), (prv_vm[0], prv_vm[1])):
-        rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", from_receiver(ip, 9100)))
-    # Lateral movement (docs/concepts/architecture.md): a tenant or the entry point reaches the receiver on its port only,
-    # and the receiver reaches neither a tenant's service address nor the entry point.
-    for name, probe in tenants:
-        rows.append((name, f"receiver {receiver} (SSH)", 22, "closed", probe(receiver, 22)))
-    rows.append(("receiver", f"web service address {service}", 443, "closed", from_receiver(service, 443)))
-    rows.append(("receiver", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", from_receiver(edge_vm[1], 443)))
-    for tenant in ("edge", "web", "private"):
-        rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: pushed(t)))
-    # Tenant to tenant, at the private addresses, and the private tenant's way out (no egress).
-    rows.append((f"web {web_vm[0]}", f"private {prv_vm[0]} (private {prv_vm[1]})", 22, "closed", from_web(prv_vm[1], 22)))
-    rows.append((f"private {prv_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", from_private(web_vm[1], 443)))
-    rows.append((f"private {prv_vm[0]}", "Internet (1.1.1.1)", 443, "closed", from_private("1.1.1.1", 443)))
-    # IPv6 (ADR-0015, D2): no global IPv6 address and no IPv6 default route on any instance, so
-    # that no IPv6 path exists next to the IPv4 rules. A cloud that adds IPv6 by itself shows here.
-    def ipv6(jump, host):
-        out = p.run(jump, host, "ip -6 -o addr show scope global; ip -6 route show default")
+    def ipv6(self, jump, host):
+        out = self.p.run(jump, host, "ip -6 -o addr show scope global; ip -6 route show default")
         if out.startswith("error"):
             return out
         return "none" if not out else "present: " + out.splitlines()[0][:60]
 
-    for name, jump, host in ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
-                             (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"])):
-        rows.append((name, "routed IPv6 (global address, default route)", "-", "none", lambda j=jump, h=host: ipv6(j, h)))
+    def start_probe(self, kubeconfig):
+        """Starts the probe pod in the default namespace of a cluster; returns its kubectl."""
+        kubectl = [self.args.kubectl, "--kubeconfig", kubeconfig, "--request-timeout=30s"]
+        # A probe pod left by an interrupted run would block the new one.
+        for a in (["-n", "default", "delete", "pod", "isolation-probe", "--ignore-not-found", "--wait=true"],
+                  ["run", "isolation-probe", "-n", "default", "--image=docker.io/library/busybox:1.37",
+                   "--restart=Never", "--command", "--", "sleep", "600"],
+                  ["wait", "-n", "default", "--for=condition=Ready", "pod/isolation-probe", "--timeout=120s"]):  # fmt: skip
+            subprocess.run(kubectl + a, check=True, capture_output=True, text=True)
+        self.probe_pods.append(kubectl)
+        return kubectl
 
-    # Name resolution (ADR-0016, D3): the resolvers of each subnet answer the zone of the landing
-    # zone and public names; the private tenant, without egress, through the resolver behind the
-    # internal services plane.
+
+def kget(kubectl, *a):
+    return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
+
+
+# --- the rows, by family: (from, to, port, expected, probe) ---------------------------------------
+
+
+def publication_rows(d):
+    """Publication (ADR-0006): the entry point reaches the tenant's service address, and only it."""
+    p, edge_vm, web_vm, prv_vm, service = d.p, d.edge_vm, d.web_vm, d.prv_vm, d.service
+    return [
+        ("test runner", "entry point (public IP)", 443, "open", lambda: p.local(d.public_ip, 443)),
+        ("test runner", "entry point (public IP)", 80, "open", lambda: p.local(d.public_ip, 80)),
+        ("test runner", f"web service address {service}", 443, "closed", lambda: p.local(service, 443)),
+        (f"edge {edge_vm[0]}", f"web service address {service}", 443, "open", d.from_edge(service, 443)),
+        (f"edge {edge_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", d.from_edge(web_vm[1], 443)),
+        (f"private {prv_vm[0]}", f"web service address {service}", 443, "closed", d.from_private(service, 443)),
+        (f"web {web_vm[0]}", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", d.from_web(edge_vm[1], 443)),
+    ]
+
+
+def monitoring_rows(d):
+    """Monitoring (ADR-0007): every tenant pushes to the receiver; nothing reaches a tenant's metrics."""
+    rows = [(name, f"receiver {d.receiver}", 9090, "open", probe(d.receiver, 9090)) for name, probe in d.tenants()]
+    for name, ip in ((d.edge_vm[0], d.edge_vm[1]), (d.web_vm[0], d.web_vm[1]), (d.prv_vm[0], d.prv_vm[1])):
+        rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", d.from_receiver(ip, 9100)))
+    return rows
+
+
+def lateral_rows(d):
+    """Lateral movement (docs/concepts/architecture.md): a tenant or the entry point reaches the
+    receiver on its port only, and the receiver reaches neither a tenant's service address nor the
+    entry point; then tenant to tenant at the private addresses, and the private tenant's way out."""
+    rows = [(name, f"receiver {d.receiver} (SSH)", 22, "closed", probe(d.receiver, 22)) for name, probe in d.tenants()]
+    rows.append(("receiver", f"web service address {d.service}", 443, "closed", d.from_receiver(d.service, 443)))
+    rows.append(("receiver", f"edge {d.edge_vm[0]} (private {d.edge_vm[1]})", 443, "closed", d.from_receiver(d.edge_vm[1], 443)))
+    for tenant in ("edge", "web", "private"):
+        rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: d.pushed(t)))
+    web_vm, prv_vm = d.web_vm, d.prv_vm
+    rows.append((f"web {web_vm[0]}", f"private {prv_vm[0]} (private {prv_vm[1]})", 22, "closed", d.from_web(prv_vm[1], 22)))
+    rows.append((f"private {prv_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", d.from_private(web_vm[1], 443)))
+    rows.append((f"private {prv_vm[0]}", "Internet (1.1.1.1)", 443, "closed", d.from_private("1.1.1.1", 443)))
+    return rows
+
+
+def ipv6_rows(d):
+    """IPv6 (ADR-0015, D2): no global IPv6 address and no IPv6 default route on any instance, so
+    that no IPv6 path exists next to the IPv4 rules. A cloud that adds IPv6 by itself shows here."""
+    return [(name, "routed IPv6 (global address, default route)", "-", "none", lambda j=jump, h=host: d.ipv6(j, h))
+            for name, jump, host in d.instances()]  # fmt: skip
+
+
+def resolution_rows(d, args):
+    """Name resolution (ADR-0016, D3): the resolvers of each subnet answer the zone of the landing
+    zone and public names; the private tenant, without egress, through the resolver behind the
+    internal services plane."""
+
     def resolves(jump, host, name, rtype="A"):
-        out = p.run(jump, host, f"resolvectl query --legend=no -t {rtype} {shlex.quote(name)} 2>&1 | head -1")
+        out = d.p.run(jump, host, f"resolvectl query --legend=no -t {rtype} {shlex.quote(name)} 2>&1 | head -1")
         if out.startswith("error"):
             return out
         return "yes" if out and "resolve call failed" not in out and "not found" not in out.lower() else "no: " + out[:50]
 
-    def resolvers(jump, host):
-        return p.run(jump, host, "resolvectl dns 2>/dev/null | awk -F': ' 'NF>1 {print $2}' | tr '\\n' ' '").strip()
-
+    rows = []
     if args.zone:
-        instances = ((f"edge {edge_vm[0]}", edge["bastion"], edge_vm[1]), (f"web {web_vm[0]}", web["bastion"], web_vm[1]),
-                     (f"private {prv_vm[0]}", prv["bastion"], prv_vm[1]), ("receiver", rcv["bastion"], rcv["address"]))
-        for name, jump, host in instances:
+        for name, jump, host in d.instances():
             if name.startswith(("web", "private")):
                 rows.append((name, f"resolves the zone {args.zone} (SOA)", 53, "yes",
-                             lambda j=jump, h=host: resolves(j, h, args.zone, "SOA")))
+                             lambda j=jump, h=host: resolves(j, h, args.zone, "SOA")))  # fmt: skip
             rows.append((name, f"resolves {args.public_name}", 53, "yes",
-                         lambda j=jump, h=host: resolves(j, h, args.public_name)))
+                         lambda j=jump, h=host: resolves(j, h, args.public_name)))  # fmt: skip
     if args.resolver:
         resolver = outputs(args.tool, args.resolver)["resolver"]
 
         def uses_resolver():
-            out = resolvers(prv["bastion"], prv_vm[1])
+            listing = "resolvectl dns 2>/dev/null | awk -F': ' 'NF>1 {print $2}' | tr '\\n' ' '"
+            out = d.p.run(d.prv["bastion"], d.prv_vm[1], listing).strip()
             return "yes" if resolver in out.split() else "no: " + (out or "none")[:50]
 
-        rows.append((f"private {prv_vm[0]}", f"resolver in use {resolver}", "-", "yes", uses_resolver))
+        rows.append((f"private {d.prv_vm[0]}", f"resolver in use {resolver}", "-", "yes", uses_resolver))
+    return rows
 
-    if args.egress:
-        proxy = outputs(args.tool, args.egress)["proxy"]
-        proxy_host, proxy_port = proxy.split("//")[1].rsplit(":", 1)
-        if not args.egress_tenant:
-            ap.error("--egress needs --egress-tenant: the tenant's directory or a file of its outputs")
-        egt = outputs(args.tool, args.egress_tenant)
-        eg_vm = sorted(egt["instances"].items())[0]
 
-        def through_proxy(url):
-            """HTTP status of a request through the proxy, from the tenant with the shared egress:
-            open when the name is declared, refused (403 from the proxy) otherwise."""
-            # A refused HTTPS name fails the CONNECT (curl exits 56, http_connect 403); a refused HTTP
-            # name answers 403. Both are read from the codes, whatever curl's exit status.
-            out = p.run(egt["bastion"], eg_vm[1],
-                        f"curl -s -o /dev/null -w '%{{http_code}} %{{http_connect}}' --max-time 15 "
-                        f"-x {shlex.quote(proxy)} {shlex.quote(url)}; true")
-            if out.startswith("error"):
-                return out
-            codes = out.split()
-            if codes and codes[0][:1] in "23":
-                return "open"
-            return "refused" if "403" in codes else f"error: {out.strip()}"
+def egress_rows(d, args):
+    """The shared egress (ADR-0016, D1): through the proxy, the tenant with egress = shared reaches
+    a declared name and is refused another; it has no direct way out; the tenants not declared do
+    not reach the proxy."""
+    if not args.egress:
+        return []
+    proxy = outputs(args.tool, args.egress)["proxy"]
+    proxy_host, proxy_port = proxy.split("//")[1].rsplit(":", 1)
+    egt = outputs(args.tool, args.egress_tenant)
+    eg_vm = sorted(egt["instances"].items())[0]
 
-        rows.append((f"egress {eg_vm[0]}", f"{args.egress_allowed} through the proxy", proxy_port, "open",
-                     lambda: through_proxy(args.egress_allowed)))
-        rows.append((f"egress {eg_vm[0]}", f"{args.egress_refused} through the proxy", proxy_port, "refused",
-                     lambda: through_proxy(args.egress_refused)))
-        rows.append((f"egress {eg_vm[0]}", "Internet (1.1.1.1), directly", 443, "closed",
-                     lambda: p.remote(egt["bastion"], eg_vm[1], "1.1.1.1", 443)))
-        rows.append((f"web {web_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
-                     from_web(proxy_host, int(proxy_port))))
-        rows.append((f"private {prv_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
-                     from_private(proxy_host, int(proxy_port))))
-        rows.append((f"egress {eg_vm[0]}", "routed IPv6 (global address, default route)", "-", "none",
-                     lambda: ipv6(egt["bastion"], eg_vm[1])))
+    def through_proxy(url):
+        """HTTP status of a request through the proxy, from the tenant with the shared egress:
+        open when the name is declared, refused (403 from the proxy) otherwise."""
+        # A refused HTTPS name fails the CONNECT (curl exits 56, http_connect 403); a refused HTTP
+        # name answers 403. Both are read from the codes, whatever curl's exit status.
+        out = d.p.run(egt["bastion"], eg_vm[1],
+                      f"curl -s -o /dev/null -w '%{{http_code}} %{{http_connect}}' --max-time 15 "
+                      f"-x {shlex.quote(proxy)} {shlex.quote(url)}; true")  # fmt: skip
+        if out.startswith("error"):
+            return out
+        codes = out.split()
+        if codes and codes[0][:1] in "23":
+            return "open"
+        return "refused" if "403" in codes else f"error: {out.strip()}"
 
-    probe_pod = None
-    if args.published_kubeconfig:
-        kubectl = [args.kubectl, "--kubeconfig", args.published_kubeconfig, "--request-timeout=30s"]
+    name = f"egress {eg_vm[0]}"
+    return [
+        (name, f"{args.egress_allowed} through the proxy", proxy_port, "open", lambda: through_proxy(args.egress_allowed)),
+        (name, f"{args.egress_refused} through the proxy", proxy_port, "refused", lambda: through_proxy(args.egress_refused)),
+        (name, "Internet (1.1.1.1), directly", 443, "closed", lambda: d.p.remote(egt["bastion"], eg_vm[1], "1.1.1.1", 443)),
+        (f"web {d.web_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
+         d.from_web(proxy_host, int(proxy_port))),
+        (f"private {d.prv_vm[0]}", f"shared egress {proxy_host} (not declared)", proxy_port, "closed",
+         d.from_private(proxy_host, int(proxy_port))),
+        (name, "routed IPv6 (global address, default route)", "-", "none", lambda: d.ipv6(egt["bastion"], eg_vm[1])),
+    ]  # fmt: skip
 
-        # The ingress address created by the stack, and the one the Service carries: the cloud
-        # controller manager silently allocates another address when the requested one is
-        # unavailable.
-        plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
-        ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
-        svc_ingress = kget(kubectl, "get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
-                           "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
-        server = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
-        api = server.split("//")[1].split(":")[0]
-        internal = outputs(args.tool, args.internal_service)["address"]
-        probe_pod = start_probe(args.published_kubeconfig)
 
-        rows.append(("published Service", "ingress on the stack address", "-", "yes",
-                     lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"))
-        rows.append((f"edge {edge_vm[0]}", f"published ingress {ingress}", 443, "open", from_edge(ingress, 443)))
-        rows.append(("test runner", f"published ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)))
-        rows.append((f"web {web_vm[0]}", f"published ingress {ingress}", 443, "closed", from_web(ingress, 443)))
-        rows.append((f"private {prv_vm[0]}", f"published ingress {ingress}", 443, "closed", from_private(ingress, 443)))
-        rows.append(("published pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(probe_pod, receiver, 9090)))
-        rows.append(("receiver", "series pushed by published", "-", "yes", lambda: pushed("published")))
-        rows.append(("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)))
-        for tenant, out in (("edge", edge), ("web", web), ("private", prv)):
-            rows.append(("published pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
-                         lambda b=out["bastion"]: p.pod(probe_pod, b, 22)))
-        rows.append(("published pod", f"internal service {internal}", 8080, "open", lambda: p.pod(probe_pod, internal, 8080)))
-        rows.append((f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", from_web(internal, 8080)))
-        rows.append((f"private {prv_vm[0]}", f"internal service {internal}", 8080, "closed", from_private(internal, 8080)))
-        rows.append((f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", from_edge(internal, 8080)))
-        rows.append(("receiver", f"internal service {internal}", 8080, "closed", from_receiver(internal, 8080)))
-        rows.append(("receiver", f"published ingress {ingress}", 443, "closed", from_receiver(ingress, 443)))
-        rows.append(("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(probe_pod)))
+def published_cluster_rows(d, args):
+    """The published cluster: its ingress on the stack's address, reached through the entry point
+    only; its pods reach the receiver and the internal service, no bastion of a tenant."""
+    if not args.published_kubeconfig:
+        return []
+    p = d.p
+    kubectl = [args.kubectl, "--kubeconfig", args.published_kubeconfig, "--request-timeout=30s"]
+    # The ingress address created by the stack, and the one the Service carries: the cloud
+    # controller manager silently allocates another address when the requested one is unavailable.
+    plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
+    ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
+    svc_ingress = kget(kubectl, "get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
+                       "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")  # fmt: skip
+    server = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
+    api = server.split("//")[1].split(":")[0]
+    internal = outputs(args.tool, args.internal_service)["address"]
+    pod = d.published_pod = d.start_probe(args.published_kubeconfig)
+    edge_vm, web_vm, prv_vm = d.edge_vm, d.web_vm, d.prv_vm
+    rows = [
+        ("published Service", "ingress on the stack address", "-", "yes",
+         lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"),
+        (f"edge {edge_vm[0]}", f"published ingress {ingress}", 443, "open", d.from_edge(ingress, 443)),
+        ("test runner", f"published ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)),
+        (f"web {web_vm[0]}", f"published ingress {ingress}", 443, "closed", d.from_web(ingress, 443)),
+        (f"private {prv_vm[0]}", f"published ingress {ingress}", 443, "closed", d.from_private(ingress, 443)),
+        ("published pod", f"receiver {d.receiver}", 9090, "open", lambda: p.pod(pod, d.receiver, 9090)),
+        ("receiver", "series pushed by published", "-", "yes", lambda: d.pushed("published")),
+        ("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)),
+    ]
+    for tenant, out in (("edge", d.edge), ("web", d.web), ("private", d.prv)):
+        rows.append(("published pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
+                     lambda b=out["bastion"]: p.pod(pod, b, 22)))  # fmt: skip
+    rows += [
+        ("published pod", f"internal service {internal}", 8080, "open", lambda: p.pod(pod, internal, 8080)),
+        (f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_web(internal, 8080)),
+        (f"private {prv_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_private(internal, 8080)),
+        (f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_edge(internal, 8080)),
+        ("receiver", f"internal service {internal}", 8080, "closed", d.from_receiver(internal, 8080)),
+        ("receiver", f"published ingress {ingress}", 443, "closed", d.from_receiver(ingress, 443)),
+        ("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(pod)),
+    ]
+    return rows
 
-    if args.shared_kubeconfig:
-        # The shared cluster (spec: a Kubernetes cluster for shared services): the web
-        # tenant is its consumer; the others are not.
-        shared = outputs(args.tool, os.path.join(args.stacks, "shared", "kubernetes"))
-        sk = start_probe(args.shared_kubeconfig)
-        s_ingress = shared["services"]["ingress"].split(":")[0]
-        s_echo = shared["services"]["echo"].split(":")[0]
-        svc_internal = kget(sk, "-n", "traefik-internal", "get", "svc", "-l", "app.kubernetes.io/name=traefik", "-o",
-                            "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")
-        whoami_pod = kget(sk, "-n", "whoami", "get", "pod", "-l", "app=whoami", "-o", "jsonpath={.items[0].status.podIP}")
-        echo_pod = kget(sk, "-n", "echo", "get", "pod", "-l", "app=echo", "-o", "jsonpath={.items[0].status.podIP}")
-        rows.append(("shared Service", "internal ingress on the stack address", "-", "yes",
-                     lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"))
-        rows.append((f"web {web_vm[0]}", f"shared internal ingress {s_ingress}", 443, "open", from_web(s_ingress, 443)))
-        rows.append((f"web {web_vm[0]}", f"shared TCP echo {s_echo}", 7000, "open", from_web(s_echo, 7000)))
-        rows.append((f"private {prv_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_private(s_ingress, 443)))
-        rows.append((f"edge {edge_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", from_edge(s_ingress, 443)))
-        rows.append(("receiver", f"shared TCP echo {s_echo}", 7000, "closed", from_receiver(s_echo, 7000)))
-        rows.append(("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)))
-        if probe_pod:
-            rows.append(("published pod", f"shared internal ingress {s_ingress}", 443, "closed",
-                         lambda: p.pod(probe_pod, s_ingress, 443)))
-        rows.append(("shared pod", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", lambda: p.pod(sk, web_vm[1], 443)))
-        rows.append(("shared pod", f"web service address {service}", 443, "closed", lambda: p.pod(sk, service, 443)))
-        for tenant, out in (("edge", edge), ("web", web), ("private", prv)):
-            rows.append(("shared pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
-                         lambda b=out["bastion"]: p.pod(sk, b, 22)))
+
+def shared_cluster_rows(d, args):
+    """The shared cluster (a Kubernetes cluster for shared services): the web tenant is its
+    consumer; the others are not; a pod of the cluster reaches no tenant and, from another
+    namespace, no backend of a service."""
+    if not args.shared_kubeconfig:
+        return []
+    p = d.p
+    shared = outputs(args.tool, os.path.join(args.stacks, "shared", "kubernetes"))
+    sk = d.start_probe(args.shared_kubeconfig)
+    s_ingress = shared["services"]["ingress"].split(":")[0]
+    s_echo = shared["services"]["echo"].split(":")[0]
+    svc_internal = kget(sk, "-n", "traefik-internal", "get", "svc", "-l", "app.kubernetes.io/name=traefik", "-o",
+                        "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")  # fmt: skip
+    whoami_pod = kget(sk, "-n", "whoami", "get", "pod", "-l", "app=whoami", "-o", "jsonpath={.items[0].status.podIP}")
+    echo_pod = kget(sk, "-n", "echo", "get", "pod", "-l", "app=echo", "-o", "jsonpath={.items[0].status.podIP}")
+    edge_vm, web_vm, prv_vm = d.edge_vm, d.web_vm, d.prv_vm
+    rows = [
+        ("shared Service", "internal ingress on the stack address", "-", "yes",
+         lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"),
+        (f"web {web_vm[0]}", f"shared internal ingress {s_ingress}", 443, "open", d.from_web(s_ingress, 443)),
+        (f"web {web_vm[0]}", f"shared TCP echo {s_echo}", 7000, "open", d.from_web(s_echo, 7000)),
+        (f"private {prv_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", d.from_private(s_ingress, 443)),
+        (f"edge {edge_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", d.from_edge(s_ingress, 443)),
+        ("receiver", f"shared TCP echo {s_echo}", 7000, "closed", d.from_receiver(s_echo, 7000)),
+        ("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)),
+    ]  # fmt: skip
+    if d.published_pod:
+        pod = d.published_pod
+        rows.append(("published pod", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.pod(pod, s_ingress, 443)))
+    rows.append(("shared pod", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", lambda: p.pod(sk, web_vm[1], 443)))
+    rows.append(("shared pod", f"web service address {d.service}", 443, "closed", lambda: p.pod(sk, d.service, 443)))
+    for tenant, out in (("edge", d.edge), ("web", d.web), ("private", d.prv)):
+        rows.append(("shared pod", f"{tenant} bastion {out['bastion']} (SSH)", 22, "closed",
+                     lambda b=out["bastion"]: p.pod(sk, b, 22)))  # fmt: skip
+    rows += [
         # Positive control: the shared cluster pushes to the receiver, so the probe pod reaches it.
-        rows.append(("shared pod", f"receiver {receiver}", 9090, "open", lambda: p.pod(sk, receiver, 9090)))
-        rows.append(("shared pod (default)", f"whoami backend {whoami_pod}", 80, "closed", lambda: p.pod(sk, whoami_pod, 80)))
-        rows.append(("shared pod (default)", f"echo backend {echo_pod}", 7000, "closed", lambda: p.pod(sk, echo_pod, 7000)))
-        rows.append(("receiver", "series pushed by shared", "-", "yes", lambda: pushed("shared")))
-        rows.append(("shared pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(sk)))
+        ("shared pod", f"receiver {d.receiver}", 9090, "open", lambda: p.pod(sk, d.receiver, 9090)),
+        ("shared pod (default)", f"whoami backend {whoami_pod}", 80, "closed", lambda: p.pod(sk, whoami_pod, 80)),
+        ("shared pod (default)", f"echo backend {echo_pod}", 7000, "closed", lambda: p.pod(sk, echo_pod, 7000)),
+        ("receiver", "series pushed by shared", "-", "yes", lambda: d.pushed("shared")),
+        ("shared pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(sk)),
+    ]
+    return rows
 
-    if args.acme:
-        acme = outputs(args.tool, args.acme)
-        root = acme["root_certificate"]
 
-        def certificate(domain):
-            """Whether the domain, reached through the entry point, presents a certificate for its
-            name that chains to the test authority."""
-            ctx = ssl.create_default_context(cadata=root)
-            try:
-                with socket.create_connection((public_ip, 443), timeout=10) as sock:
-                    with ctx.wrap_socket(sock, server_hostname=domain):
-                        return "valid"
-            except ssl.SSLCertVerificationError as e:
-                return "invalid: " + (e.verify_message or str(e))[:40]
-            except OSError as e:
-                return "error: " + str(e)[:40]
+def certificate_rows(d, args):
+    """The certificates (ADR-0008): each published domain, reached through the entry point,
+    presents a certificate issued by the test authority; a tenant's TSIG key changes its own
+    _acme-challenge records only."""
+    if not args.acme:
+        return []
+    acme = outputs(args.tool, args.acme)
+    root = acme["root_certificate"]
 
-        def update(owner):
-            """Adds then deletes a TXT record with the web tenant's key, from the web instance."""
-            key = acme["certificates"]["web"]["dns"]["settings"]
-            server, port = key["nameserver"].rsplit(":", 1)
-            script = (f"server {server} {port}\nzone {acme['zone']}\nupdate add {owner}. 60 TXT isolation-probe\nsend\n"
-                      f"update delete {owner}. TXT\nsend\n")
-            cmd = (f"printf {shlex.quote(script)} | nsupdate -y "
-                   f"{shlex.quote('hmac-sha256:' + key['tsig_key_name'] + ':' + key['tsig_secret'])} 2>&1; echo rc=$?")
-            out = p.run(web["bastion"], web_vm[1], cmd)
-            if out.endswith("rc=0"):
-                return "accepted"
-            return "refused" if "REFUSED" in out or "NOTAUTH" in out else "error: " + out[-60:]
+    def certificate(domain):
+        """Whether the domain, reached through the entry point, presents a certificate for its
+        name that chains to the test authority."""
+        ctx = ssl.create_default_context(cadata=root)
+        try:
+            with socket.create_connection((d.public_ip, 443), timeout=10) as sock:
+                with ctx.wrap_socket(sock, server_hostname=domain):
+                    return "valid"
+        except ssl.SSLCertVerificationError as e:
+            return "invalid: " + (e.verify_message or str(e))[:40]
+        except OSError as e:
+            return "error: " + str(e)[:40]
 
-        # The domains published through the entry point; the names of the shared cluster are
-        # served on the internal services plane only (their certificate is checked by its consumer).
-        # The Kubernetes tenant's domains only when it is deployed (--published-kubeconfig).
-        for tenant, names in sorted(acme["tenants"].items()):
-            if tenant == "shared" or (tenant != "web" and not args.published_kubeconfig):
-                continue
-            for d in names:
-                rows.append(("test runner", f"{tenant} certificate of {d}", 443, "valid", lambda d=d: certificate(d)))
-        own = acme["tenants"]["web"][0]
-        rows.append((f"web {web_vm[0]}", f"TSIG update _acme-challenge.{own}", 53, "accepted",
-                     lambda: update(f"_acme-challenge.{own}")))
-        for tenant, names in sorted(acme["tenants"].items()):
-            if tenant != "web":
-                rows.append((f"web {web_vm[0]}", f"TSIG update _acme-challenge.{names[0]}", 53, "refused",
-                             lambda n=names[0]: update(f"_acme-challenge.{n}")))
+    def update(owner):
+        """Adds then deletes a TXT record with the web tenant's key, from the web instance."""
+        key = acme["certificates"]["web"]["dns"]["settings"]
+        server, port = key["nameserver"].rsplit(":", 1)
+        script = (f"server {server} {port}\nzone {acme['zone']}\nupdate add {owner}. 60 TXT isolation-probe\nsend\n"
+                  f"update delete {owner}. TXT\nsend\n")  # fmt: skip
+        cmd = (f"printf {shlex.quote(script)} | nsupdate -y "
+               f"{shlex.quote('hmac-sha256:' + key['tsig_key_name'] + ':' + key['tsig_secret'])} 2>&1; echo rc=$?")  # fmt: skip
+        out = d.p.run(d.web["bastion"], d.web_vm[1], cmd)
+        if out.endswith("rc=0"):
+            return "accepted"
+        return "refused" if "REFUSED" in out or "NOTAUTH" in out else "error: " + out[-60:]
 
+    rows = []
+    # The domains published through the entry point; the names of the shared cluster are served
+    # on the internal services plane only (their certificate is checked by its consumer). The
+    # Kubernetes tenant's domains only when it is deployed (--published-kubeconfig).
+    for tenant, names in sorted(acme["tenants"].items()):
+        if tenant == "shared" or (tenant != "web" and not args.published_kubeconfig):
+            continue
+        for name in names:
+            rows.append(("test runner", f"{tenant} certificate of {name}", 443, "valid", lambda n=name: certificate(n)))
+    own = acme["tenants"]["web"][0]
+    rows.append((f"web {d.web_vm[0]}", f"TSIG update _acme-challenge.{own}", 53, "accepted",
+                 lambda: update(f"_acme-challenge.{own}")))  # fmt: skip
+    for tenant, names in sorted(acme["tenants"].items()):
+        if tenant != "web":
+            rows.append((f"web {d.web_vm[0]}", f"TSIG update _acme-challenge.{names[0]}", 53, "refused",
+                         lambda n=names[0]: update(f"_acme-challenge.{n}")))  # fmt: skip
+    return rows
+
+
+def run(rows):
+    """Probes every row, prints the table; then the positive controls. Returns the failures."""
     failures = 0
     passed = {}  # source -> set of expected results that matched
     print(f"{'from':<22} {'to':<52} {'port':>5}  {'expected':<8} {'actual':<8}")
@@ -440,8 +510,20 @@ def main():
         if results & negative and not results & positive:
             print(f"❌ no positive control from {src}: its closed results prove nothing")
             failures += 1
-    for kubectl in probe_pods:
-        subprocess.run(kubectl + ["-n", "default", "delete", "pod", "isolation-probe", "--wait=false"], capture_output=True)
+    return failures
+
+
+def main():
+    args = parse_args()
+    d = Deployment(args)
+    try:
+        rows = (publication_rows(d) + monitoring_rows(d) + lateral_rows(d) + ipv6_rows(d) + resolution_rows(d, args)
+                + egress_rows(d, args) + published_cluster_rows(d, args) + shared_cluster_rows(d, args)
+                + certificate_rows(d, args))  # fmt: skip
+        failures = run(rows)
+    finally:
+        for kubectl in d.probe_pods:
+            subprocess.run(kubectl + ["-n", "default", "delete", "pod", "isolation-probe", "--wait=false"], capture_output=True)
     return 1 if failures else 0
 
 
