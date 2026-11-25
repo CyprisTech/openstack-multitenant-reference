@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from ..context import StepFailed
+from ..load import Requests
 from . import step
 
 # The application credentials handed to the clusters: a clouds.yaml entry renamed openstack.
@@ -301,16 +302,16 @@ def publish(ctx, report, load=None):
     if not ctx.runner.dry_run:
         marker.touch()
     if loader:
-        report.measures["load"] = f"{loader.ok} ok, {loader.failed} failed"
+        report.measures["load"] = loader.summary()
         with (ctx.work / "https.txt").open("a") as f:
-            f.write(f"requests during the publication: {loader.ok} ok, {loader.failed} failed\n")
+            f.write(f"requests during the publication: {loader.summary()}\n")
     if result.returncode != 0:
         raise StepFailed(f"publish-domains.sh failed:\n{result.stderr.strip()}")
     if loader and loader.failed:
         raise StepFailed(f"{loader.failed} requests failed during the publication")
 
 
-class Load:
+class Load(Requests):
     """HTTPS requests on site-a through the entry point, every 0.2 s, until stopped."""
 
     label = "entry point"
@@ -323,11 +324,13 @@ class Load:
 
     def start(self):
         self.address = self.ctx.value("entry-point", "load_balancer", "floating_ip")
+        self.started()
         self._thread.start()
 
     def stop(self):
         self._stop.set()
         self._thread.join()
+        self.stopped()
 
     def _run(self):
         domain = f"site-a.{test_zone(self.ctx)}"

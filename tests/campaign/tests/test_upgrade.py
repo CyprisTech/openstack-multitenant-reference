@@ -119,3 +119,15 @@ class AttemptsTest(unittest.TestCase):
         migration.plan("vm", ctx.stack("vm"))
         self.assertEqual(migration.stacks["vm"]["destroyed"], ["a.destroyed", "a.gone"])
         self.assertEqual(migration.stacks["vm"]["requests_failed"], 3)
+
+
+class RequestsTest(unittest.TestCase):
+    def test_the_summary_gives_the_duration_and_the_failure_rate(self):
+        from campaign.load import Requests
+
+        load = Requests()
+        load.started()
+        load.ok, load.failed = 349, 10
+        load.stopped()
+        self.assertEqual(load.summary(), "359 requests in 0 min, 10 failed (2.8 %)")
+        self.assertEqual(Requests().summary(), "0 requests, 0 failed")

@@ -9,6 +9,7 @@ import time
 from ..checks import isolation_test, kubeconfig, record
 from ..context import StepFailed
 from ..kube import Kubectl, copy, create_cluster, delete_cluster, demo_manifest, remote, update_cluster, wait_for_bootstrap
+from ..load import Requests
 from . import step
 from .foundation import attachment, cluster_credential, monitoring, test_zone
 
@@ -375,7 +376,7 @@ def wait_for_revocation(ctx, cloud, attempts=90, delay=20):
     raise StepFailed(f"old credential {cloud} still valid after {attempts * delay // 60} minutes")
 
 
-class ConsumerLoad:
+class ConsumerLoad(Requests):
     """Requests from a tenant instance to the shared service, every 2 s, until stopped."""
 
     label = "shared service"
@@ -388,12 +389,14 @@ class ConsumerLoad:
 
     def start(self):
         if not self.args[0].runner.dry_run:
+            self.started()
             self._thread.start()
 
     def stop(self):
         self._stop.set()
         if self._thread.is_alive():
             self._thread.join()
+        self.stopped()
 
     def _run(self):
         while not self._stop.is_set():
@@ -459,8 +462,8 @@ def upgrade(ctx, report):
             ctx.sleep(20)
     finally:
         load.stop()
-    record(ctx, [f"requests during the upgrade: {load.ok} ok, {load.failed} failed"])
-    report.measures["upgrade load"] = f"{load.ok} ok, {load.failed} failed"
+    record(ctx, [f"requests during the upgrade: {load.summary()}"])
+    report.measures["upgrade load"] = load.summary()
     if not done and not ctx.runner.dry_run:
         raise StepFailed(f"the nodes did not all reach {version} in an hour")
     k.show("get", "nodes")
