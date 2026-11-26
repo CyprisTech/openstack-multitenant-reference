@@ -228,12 +228,15 @@ def kget(kubectl, *a):
     return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
 
 
-def load_balancer(kubectl, annotations=None, ranges=None):
-    """Whether the cluster admits a LoadBalancer Service that is not one of its entries, in the
-    default namespace (a server-side dry run: nothing is created)."""
+def load_balancer(kubectl, annotations=None, ranges=None, namespace="default", address=None):
+    """Whether the cluster admits a LoadBalancer Service (a server-side dry run: nothing is
+    created): by default not one of its entries, in the default namespace."""
+    spec = {"type": "LoadBalancer", "ports": [{"port": 80}], "loadBalancerSourceRanges": ranges or []}
+    if address:
+        spec["loadBalancerIP"] = address
     service = {"apiVersion": "v1", "kind": "Service",
-               "metadata": {"name": "isolation-load-balancer", "namespace": "default", "annotations": annotations or {}},
-               "spec": {"type": "LoadBalancer", "ports": [{"port": 80}], "loadBalancerSourceRanges": ranges or []}}  # fmt: skip
+               "metadata": {"name": "isolation-load-balancer", "namespace": namespace, "annotations": annotations or {}},
+               "spec": spec}  # fmt: skip
     r = subprocess.run(kubectl + ["create", "--dry-run=server", "-f", "-"], input=json.dumps(service),
                        capture_output=True, text=True, timeout=60)  # fmt: skip
     if r.returncode == 0:
@@ -244,10 +247,13 @@ def load_balancer(kubectl, annotations=None, ranges=None):
 INTERNAL = {"service.beta.kubernetes.io/openstack-internal-load-balancer": "true"}
 
 
-def load_balancer_rows(name, kubectl):
+def load_balancer_rows(name, kubectl, entry_namespace, entry_address):
     """A LoadBalancer Service outside the entries of the stack is refused (no floating IP on a
-    network the cloud controller picks), and so is an internal one open to every source."""
+    network the cloud controller picks), and so is an internal one open to every source; one at
+    the address of an entry, in its namespace, is admitted (the positive control)."""
     return [
+        (f"{name} API (administrator)", f"LoadBalancer Service, entry {entry_namespace} {entry_address}", "-", "admitted",
+         lambda: load_balancer(kubectl, namespace=entry_namespace, address=entry_address)),
         (f"{name} API (administrator)", "LoadBalancer Service, not an entry", "-", "refused",
          lambda: load_balancer(kubectl)),
         (f"{name} API (administrator)", "internal LoadBalancer Service, sources 0.0.0.0/0", "-", "refused",
@@ -414,7 +420,7 @@ def published_cluster_rows(d, args):
         ("receiver", f"published ingress {ingress}", 443, "closed", d.from_receiver(ingress, 443)),
         ("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(pod)),
     ]
-    return rows + load_balancer_rows("published", kubectl)
+    return rows + load_balancer_rows("published", kubectl, "traefik", ingress)
 
 
 def shared_cluster_rows(d, args):
@@ -459,7 +465,7 @@ def shared_cluster_rows(d, args):
         ("receiver", "series pushed by shared", "-", "yes", lambda: d.pushed("shared")),
         ("shared pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(sk)),
     ]
-    return rows + load_balancer_rows("shared", sk)
+    return rows + load_balancer_rows("shared", sk, "echo", s_echo)
 
 
 def certificate_rows(d, args):
@@ -532,7 +538,7 @@ def run(rows):
 
     # A closed result proves something only if the same source reaches what it should: a probe
     # that cannot connect at all would report every target closed.
-    positive, negative = {"open", "yes", "valid", "accepted"}, {"closed", "refused", "no"}
+    positive, negative = {"open", "yes", "valid", "accepted", "admitted"}, {"closed", "refused", "no"}
     for src, results in sorted(passed.items()):
         if results & negative and not results & positive:
             print(f"❌ no positive control from {src}: its closed results prove nothing")
