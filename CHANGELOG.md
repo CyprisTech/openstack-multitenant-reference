@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `delete-cluster.sh` deletes the persistent volume claims of the cluster, and waits for their Cinder volumes, before deleting it: they stayed in the project, at a cost. Found by the release campaign of v0.6.
 - Campaign: the wait for a bootstrap instance tried SSH once, and stopped the campaign when the instance was still booting; it now retries until SSH answers, then waits for cloud-init.
 - Campaign: the recordings showed the commands and the summary lines only (the Python tooling kept the output of the tools in `logs/`); a recorded step now shows each apply and destroy as it runs and the output of every command it prints.
 - Campaign: the notify hook gets the start and the end of each step, with its duration and measures, as the Bash tooling did with `NOTIFY_STEPS=1`; the stop gives the first line of the error; actions are marked ⚠️ (`notify_steps = false` for the stops and actions only).

@@ -36,8 +36,26 @@ fi
 # then removed with the cluster's network objects by Cluster API, or left for the operator.
 if kubectl --kubeconfig "$workload" --request-timeout=15s get --raw /healthz >/dev/null 2>&1; then
   kubectl --kubeconfig "$workload" delete service -A --field-selector spec.type=LoadBalancer --wait=true
+  # The volumes of the persistent volume claims belong to Cinder CSI: deleted the same way, or they
+  # stay in the project. StatefulSets first: they would recreate a claim with their pod. A claim
+  # is deleted once no pod mounts it: the pods that mount one go too.
+  kubectl --kubeconfig "$workload" delete statefulset -A --all --wait=true
+  kubectl --kubeconfig "$workload" delete pvc -A --all --wait=false
+  kubectl --kubeconfig "$workload" get pods -A -o json \
+    | jq -r '.items[] | select(any(.spec.volumes[]?; .persistentVolumeClaim)) | "\(.metadata.namespace) \(.metadata.name)"' \
+    | while read -r ns pod; do kubectl --kubeconfig "$workload" -n "$ns" delete pod "$pod" --wait=false; done
+  # Until no volume with the reclaim policy Delete is left, read again each time: a claim created
+  # meanwhile has its own.
+  for _ in $(seq 60); do
+    volumes=$(kubectl --kubeconfig "$workload" get pv -o json \
+      | jq -r '.items[] | select(.spec.persistentVolumeReclaimPolicy == "Delete") | .metadata.name')
+    [[ -z "$volumes" ]] && break
+    kubectl --kubeconfig "$workload" delete pvc -A --all --wait=false >/dev/null
+    sleep 10
+  done
+  [[ -z "$volumes" ]] || echo "Volumes still there after 10 minutes ($volumes): check for leftover volumes in the project." >&2
 else
-  echo "The workload API does not answer: its LoadBalancer Services are not deleted first; check for leftover load balancers." >&2
+  echo "The workload API does not answer: its LoadBalancer Services and volumes are not deleted first; check for leftover load balancers and volumes." >&2
 fi
 
 # The operator admitted this instance with a patch of the API sources (variable 0), not by
