@@ -50,13 +50,15 @@ The campaign tests behaviour, not capacity: each instance gets the smallest size
 
 | Stack | Size | Why it is enough |
 |---|---|---|
-| shared cluster | 3 control plane nodes and 2 workers, 2 vCPU and 4 GB each | the high availability of the control plane, the upgrade and the credential rotation are tested on this cluster |
+| shared cluster | 3 control plane nodes and 2 workers, 2 vCPU and 4 GB each, on 20 GiB volumes (`control_plane_root_volume_size`, `worker_root_volume_size`) | the high availability of the control plane, the upgrade and the credential rotation are tested on this cluster |
 | published cluster | 1 control plane node and 2 workers (`control_plane_count = 1`) | its tests (isolation, publication, direct exposure, consumers) do not depend on the control plane's availability; the two workers carry the two Traefik replicas, spread on two nodes |
-| bootstrap instances | 2 vCPU and 4 GB | kind runs there |
+| bootstrap instances | 2 vCPU and 4 GB, on a 20 GiB volume (`boot_volume_size = 20`) | kind runs there |
 | entry point, `vm` (web and private tenants), internal service, ACME authority | 1 vCPU and 1 GB | nginx, Traefik, Knot, step-ca and the metrics agent |
 | receiver | 2 vCPU and 2 GB | Prometheus |
 
 A smaller cloud can also run the shared cluster with one control plane node: the upgrade is then tested without a highly available control plane.
+
+The Kubernetes nodes and the bootstrap instances boot from Cinder volumes, as the stacks do by default: the local disks of the compute nodes are then not a limit, and a rollout needs one volume more per machine replaced. The projects of the clusters need a volume quota of about 15 (the nodes, one more during a rollout, the bootstrap instance, the volumes of the checks).
 
 ## How it is organised
 
