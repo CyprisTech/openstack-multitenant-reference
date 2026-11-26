@@ -13,6 +13,7 @@ from campaign.steps import load
 from campaign.tools import Result
 
 from tests.test_core import context
+from tests.test_foundation import context as tenant_context
 
 HERE = Path(__file__).resolve().parent.parent
 
@@ -131,3 +132,27 @@ class RequestsTest(unittest.TestCase):
         load.stopped()
         self.assertEqual(load.summary(), "359 requests in 0 min, 10 failed (2.8 %)")
         self.assertEqual(Requests().summary(), "0 requests, 0 failed")
+
+
+class IntoStateTest(unittest.TestCase):
+    """The web tenant of the previous release, in the default state of the vm directory."""
+
+    def test_the_default_state_becomes_the_tenants_and_is_initialised(self):
+        from campaign.steps.upgrade import into_state
+
+        ctx = tenant_context(states={"vm": "web"})
+        (ctx.root / "stacks/tenants/vm/terraform.tfstate").write_text("{}")
+        into_state(ctx, "vm")
+        self.assertTrue((ctx.root / "stacks/tenants/vm/web.tfstate").exists())
+        init = [(c, e) for c, e in ctx.runner.commands if "init" in c]
+        self.assertTrue(init, "the tenant's data directory is initialised before its outputs are read")
+        self.assertIn("-backend-config=path=web.tfstate", init[0][0])
+        self.assertEqual(init[0][1]["TF_DATA_DIR"], ".terraform/tenant-web")
+
+    def test_started_again_the_tenant_is_initialised_once_more(self):
+        from campaign.steps.upgrade import into_state
+
+        ctx = tenant_context(states={"vm": "web"})
+        (ctx.root / "stacks/tenants/vm/web.tfstate").write_text("{}")  # moved by the first attempt
+        into_state(ctx, "vm")
+        self.assertTrue([c for c, _ in ctx.runner.commands if "init" in c])

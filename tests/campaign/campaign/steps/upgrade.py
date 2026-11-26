@@ -22,16 +22,20 @@ def loads(ctx):
 
 def into_state(ctx, key):
     """A stack the previous release kept in the default state of a directory this release shares
-    between tenants: that state becomes the stack's own, once. A layout of the campaign: a user
-    with one tenant per state has nothing to move."""
+    between tenants: that state becomes the stack's own, once, and the stack is initialised with
+    it. A layout of the campaign: a user with one tenant per state has nothing to move."""
     stack = ctx.stack(key)
+    if not stack.state:
+        return
     state = ctx.root / stack / "terraform.tfstate"
     target = ctx.root / stack / f"{stack.state}.tfstate"
-    if not stack.state or not state.exists() or target.exists():
-        return
-    if not ctx.runner.dry_run:
-        state.rename(target)
-    ctx.runner.echo(f"{key}: the default state of {stack} is now {target.name}")
+    if state.exists() and not target.exists():
+        if not ctx.runner.dry_run:
+            state.rename(target)
+        ctx.runner.echo(f"{key}: the default state of {stack} is now {target.name}")
+    # The tenant's own data directory, new in this layout, is initialised with its state before
+    # anything reads its outputs (the loads read the web tenant's bastion).
+    ctx.tofu.init(stack)
 
 
 @step("migrate", guide="docs/reference/test-procedure.md#overview")
