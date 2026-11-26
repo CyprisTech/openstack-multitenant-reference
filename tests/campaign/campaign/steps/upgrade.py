@@ -38,7 +38,7 @@ def into_state(ctx, key):
     ctx.tofu.init(stack)
 
 
-@step("migrate", guide="docs/reference/test-procedure.md#overview")
+@step("migrate", guide=["docs/reference/test-procedure.md#overview", "docs/guides/upgrade.md"])
 def migrate(ctx, report):
     """The steps of options.from.apply, in order, under load: each deployed stack is planned
     (kept, with what it replaces and destroys) then applied; the stacks the release adds are
