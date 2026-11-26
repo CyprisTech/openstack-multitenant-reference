@@ -23,6 +23,7 @@ ADRs record decisions. The living specification (topology, flows, contracts, siz
 | [0015](0015-ipv6.md) | IPv4 until v1.0, IPv6 as one family per deployment afterwards | Proposed; refines 0003 D4, 0004 |
 | [0016](0016-network-services-and-edge-by-level.md) | Network services and the edge, by level | Proposed; refines 0003 D3 and D4, 0004, 0006; supersedes 0006 D3 for the source of the routes, once accepted |
 | [0017](0017-upgrades-between-releases.md) | Upgrades between releases | Proposed; refines 0002, 0009; supersedes 0009 D1 for the administration path, once accepted |
+| [0018](0018-deployment-tool.md) | The campaign becomes the deployment tool | Proposed; refines 0005, 0017 |
 
 ## Writing an ADR
 
