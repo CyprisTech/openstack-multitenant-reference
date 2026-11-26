@@ -25,7 +25,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from landing_zone import commands, preflight, previous
+from landing_zone import commands, deployment, preflight, previous
 from landing_zone import scenario as scenarios
 from landing_zone.context import Context
 from landing_zone.report import Report
@@ -87,6 +87,7 @@ def record_step(args, scenario, mode, name, ctx, entry):
 
 # The commands, with the steps they run: a sequence of the scenario, or the steps given.
 COMMANDS = {
+    "deploy": ("your landing zone, from its configuration file (landing-zone.toml)", ["deploy"]),
     "try": ("the reference with its test fixtures, on test projects (the sequence try)", ["try"]),
     "apply": ("apply the sequences or steps given (default: the sequence try)", ["try"]),
     "plan": ("what an apply would change in each deployed stack; nothing is changed", None),
@@ -109,8 +110,9 @@ def parse(argv):
         top.parse_args(argv)  # prints the usage, or the help
     command = argv[0]
     parser = argparse.ArgumentParser(prog=f"lz {command}", description=COMMANDS[command][0])
-    parser.add_argument("scenario", help="a scenario of scenarios/, by name (private-cloud, public-cloud)")
-    if command in ("apply", "campaign"):
+    parser.add_argument("scenario", help="a scenario of scenarios/ by name (private-cloud, public-cloud), "
+                        "or the configuration file of a deployment (landing-zone.toml)")
+    if command in ("apply", "campaign", "deploy"):
         parser.add_argument("items", nargs="*", default=COMMANDS[command][1], help="sequences or steps of the scenario")
     parser.add_argument("--mode", help="plane mode; default: the first mode of the scenario")
     parser.add_argument("--config", default=str(HERE / "campaign.local.toml"), help="the configuration")
@@ -137,7 +139,19 @@ def parse(argv):
 
 def main(argv=None):
     parser, args = parse(argv)
-    scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
+    deployed = None  # the configuration of a deployment (lz deploy), or a scenario of the reference
+    if args.scenario.endswith(".toml") and args.command != "campaign":
+        try:
+            deployed = deployment.load(args.scenario)
+        except deployment.ConfigError as error:
+            print(error, file=sys.stderr)
+            return 2
+        scenario = deployment.scenario(deployed)
+        args.config = str(Path(deployed["base"]) / "lz.local.toml")  # the settings of the machine, if any
+    elif args.command == "deploy":
+        parser.error("deploy takes the configuration file of a deployment (landing-zone.toml)")
+    else:
+        scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
     mode = args.mode or scenario.modes[0]
     if mode not in scenario.modes:
         parser.error(f"mode {mode} is not run by scenario {scenario.name} ({', '.join(scenario.modes)})")
@@ -145,7 +159,7 @@ def main(argv=None):
     if Path(args.config).exists():
         with open(args.config, "rb") as f:
             config = tomllib.load(f)
-    elif not args.dry_run:
+    elif not args.dry_run and deployed is None:
         parser.error(f"no configuration: copy {HERE / 'campaign.local.toml.example'} to {args.config}")
 
     # Only the clouds.yaml entries named in the configuration may be used: the OS_* variables of
@@ -168,6 +182,8 @@ def main(argv=None):
         root = previous.tree(work)  # an upgrade started again: its states are in its worktree
     ctx = Context(scenario, mode, config, runner, root, work)
     ctx.campaign = args.command == "campaign"
+    if deployed is not None:
+        deployment.prepare(ctx, deployed)
     if args.command in ("plan", "status", "update-clusters"):
         return read_or_update(args.command, ctx)
     label = "campaign" if ctx.campaign else f"lz {args.command}"

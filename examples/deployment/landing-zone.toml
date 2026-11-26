@@ -1,0 +1,56 @@
+# The configuration of a deployment, read by lz deploy (ADR-0018). Copy this directory into your
+# deployment repository, then adapt each file:
+#
+#     tools/landing-zone/lz deploy path/to/landing-zone.toml --dry-run    # the commands, without a cloud
+#     tools/landing-zone/lz deploy path/to/landing-zone.toml
+#
+# lz writes what the stacks give each other (attachments, the receiver, the sources of the entry
+# point); every other input of a stack is in its own file below, as in the stack's README.
+
+profile = "private-cloud"           # or "public-cloud" (ADR-0014)
+site    = "par1"                    # prefix of every resource
+mode    = "interface"               # plane mode: "interface" (hub planes) or "gateway" (operator planes)
+
+[admin]                             # how lz reaches the bootstrap instances of the Kubernetes tenants
+ssh_user = "ops"
+ssh_key  = "~/.ssh/id_ed25519"
+
+# [state]                           # the backend of the states, one key per stack; without it, a
+# backend = "s3"                    # local state beside each stack
+# config  = { bucket = "lz-states", endpoint = "https://s3.example.org", region = "par1" }
+# key     = "key=par1/{stack}.tfstate"
+
+[clouds]                            # clouds.yaml entry of each shared stack's project
+planes      = "hub"
+entry-point = "edge"
+# egress    = "egress"              # the shared egress (stacks/shared/egress), optional
+
+[stacks.planes]                     # the planes themselves: see examples/planes
+inputs = "../planes/hub.tfvars.example"
+
+[stacks.entry-point]
+cidr   = "10.20.0.0/24"             # the range of the entry point's network
+inputs = "../../stacks/shared/entry-point/terraform.tfvars.example"
+
+[external]                          # your shared services, which lz does not deploy
+monitoring = { receiver = "https://metrics.example.org/api/v1/write" }
+# resolvers = ["10.38.0.5"]         # a resolver behind the internal services plane, for tenants without egress
+
+[[tenants]]                         # one block per tenant, each in its own project and state
+name   = "shop"
+type   = "vm"
+cloud  = "shop"
+cidr   = "10.21.0.0/24"
+planes = { publication = "tenant", observability = "tenant" }
+inputs = "../../stacks/tenants/vm/terraform.tfvars.example"   # exposure, egress, domains, sizes…
+# egress_proxy   = true             # out through the shared egress, with egress = "shared" in its inputs
+# egress_domains = [".ubuntu.com"]  # the names it may reach there
+
+[[tenants]]
+name          = "apps"
+type          = "kubernetes"
+cloud         = "apps"
+cluster_cloud = "apps-cluster"      # the clouds.yaml entry of the cluster's application credential
+cidr          = "10.24.0.0/22"
+planes        = { publication = "tenant", observability = "tenant" }
+inputs        = "../../stacks/tenants/kubernetes/terraform.tfvars.example"

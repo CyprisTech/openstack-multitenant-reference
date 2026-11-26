@@ -82,9 +82,11 @@ class Stack(str):
     data directory (.terraform/tenant-<name>, so that several are initialised at once) and its
     own inputs file, as with a backend key per tenant in production."""
 
-    def __new__(cls, path, state=None):
+    def __new__(cls, path, state=None, extra_inputs=(), backend=None):
         stack = super().__new__(cls, path)
         stack.state = state
+        stack.extra_inputs = list(extra_inputs)  # the adopter's own inputs files (lz deploy)
+        stack.backend = backend  # {"type", "config", "key"}: the adopter's state backend (lz deploy)
         return stack
 
     @property
@@ -103,8 +105,10 @@ class Stack(str):
         return dict(os.environ, TF_DATA_DIR=self.data_dir) if self.state else None
 
     def var_files(self):
-        """Arguments of plan, apply and destroy for the inputs of a tenant of a shared directory."""
-        return [f"-var-file={self.inputs}"] if self.state else []
+        """Arguments of plan, apply and destroy: the adopter's inputs files, then the inputs lz
+        writes (for a tenant of a shared directory), which come last and win."""
+        own = [f"-var-file={path}" for path in self.extra_inputs]
+        return own + ([f"-var-file={self.inputs}"] if self.state else [])
 
 
 # A tenant of a shared directory keeps its state in a local backend, at a path of its own.
@@ -130,7 +134,15 @@ class Tofu:
         """Init; a tenant of a shared directory with its own state and data directory."""
         stack = stack_of(stack)
         args = []
-        if stack.state:
+        if stack.backend:  # the adopter's backend: one key per stack
+            override = os.path.join(self.root, stack, "backend_override.tf")
+            if not self.runner.dry_run:
+                with open(override, "w") as f:
+                    f.write(f'terraform {{\n  backend "{stack.backend["type"]}" {{}}\n}}\n')
+            args = [f"-backend-config={k}={v}" for k, v in stack.backend.get("config", {}).items()]
+            args.append(f"-backend-config={stack.backend['key']}")
+            args.append("-reconfigure")
+        elif stack.state:
             override = os.path.join(self.root, stack, "backend_override.tf")
             if not self.runner.dry_run and not os.path.exists(override):
                 with open(override, "w") as f:

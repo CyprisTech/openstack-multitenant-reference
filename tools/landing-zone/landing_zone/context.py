@@ -33,6 +33,7 @@ class Context:
         self.migration = None  # during the upgrade from the previous release (previous.Migration)
         self.durations = []  # applies and destroys: {stack, action, seconds}, for the report
         self.campaign = True  # the test campaign; lz try, apply and upgrade run no load nor check
+        self.external = {}  # outputs of the adopter's services, by stack key (lz deploy)
 
     @property
     def tool(self):
@@ -69,10 +70,14 @@ class Context:
         state name when several tenants share the stack's directory."""
         if key not in self.scenario.stacks:
             raise KeyError(f"stack {key} is not in scenario {self.scenario.name}")
-        return Stack(self.scenario.stacks[key], self.scenario.states.get(key))
+        options = self.scenario.options.get("stacks", {}).get(key, {})
+        return Stack(self.scenario.stacks[key], self.scenario.states.get(key), options.get("inputs", ()),
+                     options.get("backend"))  # fmt: skip
 
     def has(self, key):
-        return key in self.scenario.stacks
+        """Whether the scenario deploys the stack, or the configuration gives its outputs (the
+        adopter's own services, in place of the test fixtures)."""
+        return key in self.scenario.stacks or key in self.external
 
     def cloud(self, key):
         """The clouds.yaml entry of a stack's project."""
@@ -100,7 +105,13 @@ class Context:
         return self.tofu.output(self.stack(key), name)
 
     def value(self, key, name, *path):
-        """An output of a stack, or a value inside it; in a dry run, a placeholder naming it."""
+        """An output of a stack, or a value inside it; in a dry run, a placeholder naming it. A
+        service the configuration gives (lz deploy) answers with the values given there."""
+        if key in self.external:
+            value = self.external[key][name]
+            for part in path:
+                value = value[part]
+            return value
         if self.runner.dry_run:
             self.output(key, name)
             return "<" + ".".join((key, name) + path) + ">"

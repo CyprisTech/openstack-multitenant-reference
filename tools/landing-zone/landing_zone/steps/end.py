@@ -51,12 +51,16 @@ def teardown(ctx, report):
     (ctx.work / "published-once").unlink(missing_ok=True)
     listed = {k for wave in WAVES for k in wave}
     waves = [[k for k in wave if ctx.has(k)] for wave in WAVES]
-    waves[1] += [k for k in ctx.scenario.stacks if k not in listed]
+    # The stacks of a deployment (lz deploy): its tenants with the clusters and tenants, the
+    # shared stacks it adds with the shared services.
+    others = [k for k in ctx.scenario.stacks if k not in listed]
+    waves[0] += [k for k in others if ctx.scenario.stacks[k].startswith("stacks/tenants/")]
+    waves[1] += [k for k in others if not ctx.scenario.stacks[k].startswith("stacks/tenants/")]
     keys = [k for wave in waves for k in wave]
 
     def remove(key, stream):
         """A stack, after its cluster when it has one; the error, or None."""
-        if key in CLUSTERS:
+        if key in ctx.options.get("clusters", CLUSTERS):
             try:
                 delete_cluster(ctx, key, kubeconfig(ctx, key))
             except Exception as error:

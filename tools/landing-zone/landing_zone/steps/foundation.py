@@ -96,8 +96,9 @@ def cluster_credential(ctx, entry, path):
 )
 def planes(ctx, report):
     """The planes of the mode, and an attachment per stack of the scenario that has one."""
+    # The planes: those of the campaign's configuration, or a deployment's own inputs of the stack.
     planes = ctx.config.get("planes", {}).get(ctx.mode)
-    if planes is None:
+    if planes is None and not ctx.options.get("planes", {}).get("own_inputs"):
         if not ctx.runner.dry_run:
             raise StepFailed(f"campaign.local.toml has no [planes.{ctx.mode}]")
         planes = f"<planes.{ctx.mode}>"
@@ -106,14 +107,11 @@ def planes(ctx, report):
     for name, spec in options.get("attachments", {}).items():
         if ctx.has(spec["stack"]):
             attachments[name] = {"project_id": ctx.project_id(spec["stack"]), "cidr": spec["cidr"], "planes": spec["planes"]}
-    ctx.set_inputs(
-        "planes",
-        cloud=ctx.cloud("planes"),
-        site=ctx.setting("site"),
-        planes=planes,
-        attachments=attachments,
-        tenant_ranges=options.get("tenant_ranges", {}),
-    )
+    inputs = dict(cloud=ctx.cloud("planes"), site=ctx.setting("site"), attachments=attachments,
+                  tenant_ranges=options.get("tenant_ranges", {}))  # fmt: skip
+    if planes is not None:
+        inputs["planes"] = planes
+    ctx.set_inputs("planes", **inputs)
     ctx.apply("planes")
     report.measures["attachments"] = len(attachments)
 

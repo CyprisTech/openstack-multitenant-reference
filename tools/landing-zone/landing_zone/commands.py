@@ -58,7 +58,7 @@ def status(ctx):
                                 quiet=True)  # fmt: skip
         count = len(listed.stdout.split()) if listed.returncode == 0 else 0
         line = f"{key:<18} " + (f"{count} resources" if count else "not deployed")
-        if key in KUBERNETES and count:
+        if key in ctx.options.get("clusters", KUBERNETES) and count:
             config = kubeconfig(ctx, key)
             created = f", kubeconfig {config}"
             line += created if config.exists() else ", no kubeconfig yet (its bootstrap instance creates the cluster)"
@@ -70,7 +70,7 @@ def update_clusters(ctx):
     """Each deployed cluster of the scenario updated from its stack (update-cluster.sh), as after
     an apply of its stack. Returns the clusters updated."""
     updated = []
-    for key in KUBERNETES:
+    for key in ctx.options.get("clusters", KUBERNETES):
         if ctx.has(key) and ctx.tofu.deployed(ctx.stack(key)) and (ctx.runner.dry_run or kubeconfig(ctx, key).exists()):
             update_cluster(ctx, key, kubeconfig(ctx, key))
             updated.append(key)

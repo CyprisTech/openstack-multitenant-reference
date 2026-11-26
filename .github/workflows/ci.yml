@@ -128,6 +128,7 @@ jobs:
           python3 tools/landing-zone/lz private-cloud --dry-run full
           python3 tools/landing-zone/lz private-cloud --dry-run --mode interface full
           python3 tools/landing-zone/lz public-cloud --dry-run full
+          python3 tools/landing-zone/lz deploy examples/deployment/landing-zone.toml --dry-run
       - name: shell scripts (shellcheck)
         run: shellcheck -S warning scripts/publish-domains.sh scripts/request-domains.sh scripts/cluster-files.sh images/kubernetes-node/build.sh
       - name: common variables of the Kubernetes stacks
