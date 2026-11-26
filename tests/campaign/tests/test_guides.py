@@ -10,9 +10,7 @@ from campaign.steps import GUIDES, load
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 # Steps that run no procedure of the documentation, with the reason.
-UNDOCUMENTED = {
-    "migrate": "the upgrade from the previous release: its procedure is in the CHANGELOG of each release",
-}
+UNDOCUMENTED = {}
 
 
 def anchors(path):

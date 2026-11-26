@@ -161,7 +161,7 @@ def accept(ctx, report):
     isolation_test(ctx, report, STACK if ctx.has(STACK) else None)
 
 
-@step("direct", guide="docs/reference/test-procedure.md#direct-exposure")
+@step("direct", guide=["docs/reference/test-procedure.md#direct-exposure", "stacks/tenants/vm/README.md#change-the-exposure"])
 def direct(ctx, report):
     """The vm tenant exposed directly (exposure = "public"): HTTPS on its own public address, no
     router on the publication plane, the entry point no longer reaches its instances. Then back

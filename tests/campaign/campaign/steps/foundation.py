@@ -160,7 +160,13 @@ def internal(ctx, report):
     ctx.apply("internal-service")
 
 
-@step("resolver", guide="docs/reference/integration-points.md#name-resolution-time-and-package-mirrors")
+@step(
+    "resolver",
+    guide=[
+        "docs/reference/test-procedure.md#2-shared-services",
+        "docs/reference/integration-points.md#name-resolution-time-and-package-mirrors",
+    ],
+)
 def resolver(ctx, report):
     """The resolver behind the internal services plane (ADR-0016, D3), for the private tenant:
     the test zone forwarded to the DNS that serves it, public names resolved through its egress."""
@@ -178,7 +184,7 @@ def resolver(ctx, report):
 EGRESS_NAMES = [".archive.ubuntu.com", ".security.ubuntu.com"]
 
 
-@step("egress", guide="stacks/shared/egress/README.md")
+@step("egress", guide=["docs/reference/test-procedure.md#2-shared-services", "stacks/shared/egress/README.md#usage"])
 def egress(ctx, report):
     """The shared egress (ADR-0016, D1), with no tenant yet: it refuses every request until step
     egress-tenant declares one."""
@@ -189,7 +195,10 @@ def egress(ctx, report):
     ctx.wait_for_instances(ctx.value("egress", "bastion"), ctx.instances("egress"))
 
 
-@step("egress-tenant", guide="stacks/shared/egress/README.md")
+@step(
+    "egress-tenant",
+    guide=["docs/reference/test-procedure.md#4-tenants-web-and-private", "stacks/shared/egress/README.md#usage"],
+)
 def egress_tenant(ctx, report):
     """A vm tenant with egress = "shared": applied first, then declared on the shared egress with
     its address on the internal services plane, known once its router exists; its instances wait

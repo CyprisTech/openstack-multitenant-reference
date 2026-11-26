@@ -45,3 +45,27 @@ The cluster holds its application credential in two secrets: one for Cluster API
 3. Check it works: create an internal Service of type `LoadBalancer` (annotation `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"`, `loadBalancerSourceRanges` within the cluster network: outside its entries, the cluster admits no other load balancer), wait for its address, delete it. Then revoke the old credential.
 
 Then delete the `clouds.yaml` of the directory. Also replace `/opt/platform/clouds.yaml` on the bootstrap instance, if there is one, before using it to delete the cluster.
+
+## Delete a cluster
+
+For either cluster: `S=stacks/tenants/kubernetes` (the published cluster) or `S=stacks/shared/kubernetes` (the shared cluster), with its kubeconfig. The bootstrap instance deletes the cluster: set `bootstrap = true` in the stack and apply if it was removed.
+
+```bash
+# 1. The bootstrap instance must be admitted on the API again: after the move, the cluster
+#    no longer admits it, and it cannot admit itself.
+B=$(tofu -chdir=$S output -raw bootstrap)
+scripts/cluster-files.sh $S ~/cluster   # from the root of the repository
+KUBECONFIG=cluster.kubeconfig ~/cluster/update-cluster.sh --admit "$B/32"
+sleep 60   # the API load balancer takes the new source
+
+#    If the creation stopped before the move, Cluster API still runs on the bootstrap instance:
+#    skip this step, delete-cluster.sh deletes the cluster from there.
+
+# 2. Delete the cluster from the bootstrap instance, then the stack.
+ssh ops@$B 'sudo /opt/platform/delete-cluster.sh'
+tofu -chdir=$S destroy
+```
+
+If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command to run. A bootstrap instance kept since an earlier release still has that release's scripts, written by cloud-init when it was created: copy the current ones (`cluster-files.sh`) to its `/opt/platform` first.
+
+`delete-cluster.sh` deletes the `LoadBalancer` Services first (their load balancers belong to the cloud controller manager), moves Cluster API back to a kind cluster, deletes the `Cluster` and waits until its servers and API load balancer are gone. The floating IPs of the Services (gateway mode) are kept and destroyed by `tofu destroy` with the rest of the stack.

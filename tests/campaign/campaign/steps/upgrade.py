@@ -34,7 +34,7 @@ def into_state(ctx, key):
     ctx.runner.echo(f"{key}: the default state of {stack} is now {target.name}")
 
 
-@step("migrate")
+@step("migrate", guide="docs/reference/test-procedure.md#overview")
 def migrate(ctx, report):
     """The steps of options.from.apply, in order, under load: each deployed stack is planned
     (kept, with what it replaces and destroys) then applied; the stacks the release adds are

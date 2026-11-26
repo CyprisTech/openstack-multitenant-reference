@@ -20,6 +20,7 @@ WAVES = [
     ["planes"],
 ]
 
+
 @step("plans", guide="CONTRIBUTING.md#testing-on-a-real-cloud")
 def plans(ctx, report):
     """Every stack of the scenario plans no change, but those removed before the end."""
@@ -41,7 +42,7 @@ def plans(ctx, report):
     guide=[
         "docs/reference/test-procedure.md#10-teardown",
         "docs/guides/teardown.md",
-        "stacks/tenants/kubernetes/README.md#teardown",
+        "docs/guides/kubernetes-lifecycle.md#delete-a-cluster",
     ],
 )
 def teardown(ctx, report):

@@ -169,24 +169,7 @@ A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour
 
 ## Teardown
 
-```bash
-# 1. The bootstrap instance must exist (bootstrap = true) and be admitted on the API again:
-#    after the move, the cluster no longer admits it, and it cannot admit itself.
-scripts/cluster-files.sh stacks/tenants/kubernetes ~/published   # from the root of the repository
-KUBECONFIG=published.kubeconfig ~/published/update-cluster.sh --admit "$(tofu output -raw bootstrap)/32"
-sleep 60   # the API load balancer takes the new source
-
-#    If the creation stopped before the move, Cluster API still runs on the bootstrap instance:
-#    skip this step, delete-cluster.sh deletes the cluster from there.
-
-# 2. Delete the cluster from the bootstrap instance, then the stack.
-ssh ops@$(tofu output -raw bootstrap) 'sudo /opt/platform/delete-cluster.sh'
-tofu destroy
-```
-
-If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command to run.
-
-`delete-cluster.sh` deletes the `LoadBalancer` Services first (their load balancers belong to the cloud controller manager), moves Cluster API back to a kind cluster, deletes the `Cluster` and waits until its servers and API load balancer are gone. The floating IPs of the Services (gateway mode) are kept and destroyed by `tofu destroy` with the rest of the stack.
+As for both clusters: [delete a cluster](../../../docs/guides/kubernetes-lifecycle.md#delete-a-cluster), from its bootstrap instance, then `tofu destroy`.
 
 ## Inputs and outputs
 

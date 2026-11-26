@@ -90,6 +90,10 @@ The sources are written in the manifests. A consumer is a tenant, once it has jo
 
 The load balancers then admit the new sources; their addresses do not change.
 
+## Teardown
+
+As for both clusters: [delete a cluster](../../../docs/guides/kubernetes-lifecycle.md#delete-a-cluster), from its bootstrap instance, then `tofu destroy`.
+
 ## Inputs and outputs
 
 <!-- BEGIN_TF_DOCS -->

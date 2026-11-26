@@ -32,6 +32,27 @@ tofu output -raw proxy   # the shared_egress.proxy of the tenants
 
 A new tenant: add it to `tenants` (its sources and names) and apply this stack, then apply the tenant. The tenants reach the proxies as instance metadata, updated in place and rendered by a timer on each proxy every 10 seconds (`squid-tenants`, as the routes of the entry point, [ADR-0006](../../../docs/adr/0006-exposure.md), D3): no instance is replaced, and Squid reloads its rules.
 
+## Usage
+
+The egress first, with no tenant: it refuses every request. Then each tenant that goes out through it, then the egress again, with the tenant declared.
+
+```bash
+cp stacks/shared/egress/terraform.tfvars.example stacks/shared/egress/terraform.tfvars   # tenants = {}: adapt
+tofu -chdir=stacks/shared/egress init && tofu -chdir=stacks/shared/egress apply
+tofu -chdir=stacks/shared/egress output -raw proxy    # shared_egress.proxy of the tenants
+```
+
+1. The tenant (`vm`): `egress = "shared"`, `shared_egress = { proxy = "<proxy>" }`, and an attachment to the internal services plane; apply. Its instances wait for their admission at first boot.
+2. Its `internal_sources` output in `tenants` of this stack, with the names it may reach, then apply: the proxies read the tenants from their metadata, no instance is replaced.
+
+```hcl
+tenants = {
+  builds = { sources = ["10.23.0.1/32"], domains = [".ubuntu.com", "pypi.org", ".pythonhosted.org"] }
+}
+```
+
+A request refused is a `TCP_DENIED` line in `/var/log/squid/access.log` on a proxy, with the tenant's address and the name.
+
 ## Inputs and outputs
 
 <!-- BEGIN_TF_DOCS -->

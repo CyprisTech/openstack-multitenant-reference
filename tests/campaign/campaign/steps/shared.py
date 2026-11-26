@@ -136,7 +136,10 @@ def cluster_shared(ctx, report):
     deploy_demos(ctx, k)
 
 
-@step("update-shared", guide="docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply")
+@step(
+    "update-shared",
+    guide=["docs/reference/test-procedure.md#overview", "docs/guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply"],
+)
 def update_shared(ctx, report):
     """The shared cluster after an apply of its stack: update-cluster.sh from the campaign host,
     then the demonstration services of this release."""
@@ -474,7 +477,7 @@ def upgrade(ctx, report):
     "shared-down",
     guide=[
         "docs/reference/test-procedure.md#6-shared-cluster",
-        "stacks/tenants/kubernetes/README.md#teardown",
+        "docs/guides/kubernetes-lifecycle.md#delete-a-cluster",
     ],
 )
 def shared_down(ctx, report):

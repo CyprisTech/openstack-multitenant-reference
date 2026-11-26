@@ -93,6 +93,12 @@ Each tenant has its own state, under its own key, with its own access rights whe
 
 The web tenant is the one of `terraform.tfvars.example`; the private tenant, the one of [`private.tfvars.example`](private.tfvars.example). Workspaces are not used: they share the backend and its credentials, so that whoever reads one state reads the others.
 
+### Change the exposure
+
+From `"entry-point"` to `"public"`: set `exposure = "public"` and apply. The service address gets a public floating IP of `egress_network` (output `service_address`), the router on the publication plane is removed, and `published_domains` becomes empty: withdraw the tenant's domains from the entry point ([publish a domain](../../../docs/guides/publish-a-domain.md)), and point their DNS records at the new address.
+
+Back to `"entry-point"`: apply, then on hub planes apply `shared/planes` again for the new router ([planes again](../../../docs/getting-started/README.md#5-planes-again-hub-only)), and publish the domains again. Then [check the isolation](../../../docs/guides/check-isolation.md).
+
 ## Publishing the domains on the entry point
 
 The `published_domains` output maps each domain to the service address, in the shape of the `domains` input of the entry point. [`scripts/request-domains.sh`](../../../scripts/request-domains.sh) writes it into the entry point's domains file, the change to review; [`scripts/publish-domains.sh`](../../../scripts/publish-domains.sh) applies the entry point once it is merged ([publish a domain](../../../docs/guides/publish-a-domain.md)). With `exposure = "public"`, the output is empty: point the domains to the `service_address` output instead.

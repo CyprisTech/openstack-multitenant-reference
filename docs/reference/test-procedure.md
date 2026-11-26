@@ -58,8 +58,10 @@ The steps of the campaign, in the order it runs them, with the section of each a
 | `prep` | 0, the credentials of the clusters, the SSH configuration | 0 s |
 | `planes` | 1 | 20 s |
 | `receiver`, `acme`, `internal` | 2 | 1 min 20, 1 min, 50 s |
+| `resolver`, `egress` | 2, the test resolver and the shared egress (measured on 2026-11-24) | 1 min, 2 min 50 |
 | `edge` | 3 | 3 min (2 min 30 to 3 min 20 over the five campaigns of 2026-11-20 and 21) |
 | `web`, `private` | 4 | 3 min, 1 min 40 |
+| `egress-tenant` | 4, the tenant with the shared egress (measured on 2026-11-24) | 2 min |
 | `transit`, `publish` | 5 (first publication) | 8 s, 4 s |
 | `k8s-shared`, `transit` | 6.1, the stack of the shared cluster, then its routes | 1 min, 6 s |
 | `cluster-shared` | 6.1, `create-cluster.sh` | 13 min |
@@ -79,7 +81,9 @@ The steps of the campaign, in the order it runs them, with the section of each a
 | `teardown`, `leftovers` | 10 | 8 min 40, 1 min 30 |
 | **Total** | | **about 1 h 30** without incident |
 
-That is per plane mode: about 3 h for a release, which runs both. The spoofed source (section 9) is not run by the campaign: it changes the port of a tenant by hand.
+That is per plane mode: about 3 h for a release, which runs both.
+
+**From the previous release** (`run.py --from <tag>`, [ADR-0017](../adr/0017-upgrades-between-releases.md)): the previous release deploys the foundation and the shared cluster with its own campaign, then step `migrate` applies the new release over its states, under load, in the order of the foundation, then the stack of the shared cluster, its routes and `update-shared` (`update-cluster.sh`, [update a cluster](../guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply)). It writes `migration.json`: for each stack, what the plan replaces and destroys, and the requests that failed during its apply. The scenario then goes on from `tour-shared`. `migrate`: 12 min 40 (interface mode, 2026-11-25). The spoofed source (section 9) is not run by the campaign: it changes the port of a tenant by hand.
 
 Expected results are extracts of the campaign of 2026-11-21 (interface mode), and of the cycle of 2026-11-02 where it shows more; addresses outside the private ranges of the example are documentation addresses.
 
@@ -160,6 +164,13 @@ cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -deta
 |---|---|
 | `knot` and `step-ca` active on the instance (through its bastion) | cloud-init `error` with packages not installed: the instance had no Internet access at boot (its egress router); replace it once the egress works |
 
+The **test resolver** ([`tests/fixtures/resolver`](../../tests/fixtures/resolver/README.md)), Unbound on the internal services plane, stands for a resolver behind a plane: the private tenant, which has no egress, takes it as its `dns_nameservers` ([name resolution](integration-points.md#name-resolution-time-and-package-mirrors)). The **shared egress** ([`stacks/shared/egress`](../../stacks/shared/egress/README.md)) is created with no tenant: it refuses every request until section 4 declares one.
+
+```bash
+cd tests/fixtures/resolver && tofu init && tofu apply && tofu plan -detailed-exitcode
+cd stacks/shared/egress && tofu init && tofu apply && tofu plan -detailed-exitcode   # tenants = {}
+```
+
 ## 3. Entry point
 
 ```bash
@@ -199,6 +210,12 @@ unset TF_DATA_DIR
 | two empty plans | report |
 | cloud-init `done` on the instances (through their bastions) | as in section 3 |
 | `vm` instances: `/etc/nginx/conf.d/web.conf` present, certificate issued by the test authority (`openssl x509 -in /etc/nginx/tls/cert.pem -noout -issuer`) | `journalctl -u lego-certificate`: the authority and the DNS server must be reachable on the internal services plane |
+
+A third tenant of the `vm` stack, `egress-shared`, goes out through the shared egress (`egress = "shared"`, `exposure = "none"`), as in [the stack's usage](../../stacks/shared/egress/README.md#usage): applied first, then declared in the `tenants` of `shared/egress` with its `internal_sources`; its instances wait for that admission, then install their packages through the proxy.
+
+| Checkpoint | If it fails |
+|---|---|
+| cloud-init `done` on the instance, packages installed through the proxy | `/var/log/squid/access.log` on a proxy: a `TCP_DENIED` line names the source and the domain refused |
 
 ## 5. Planes again and domain publication
 
@@ -273,7 +290,7 @@ The test cloud holds one Kubernetes cluster at a time: this cluster is created, 
 1. **Stack and cluster**: `consumers` = `TF_DATA_DIR=.terraform/tenant-web tofu -chdir=stacks/tenants/vm output -json internal_sources`, `certificates` from the authority (`shared`), then section 5 again for its routes, then `create-cluster.sh` as in [section 7](#7-published-cluster), and the demonstration services: `kubectl apply -f stacks/shared/kubernetes/demo/whoami.yaml -f stacks/shared/kubernetes/demo/echo.yaml`.
 2. **Names**: written by the stack in the Designate zone of `internal_zone` (the test zone, shared with the project), served by the cloud's DNS servers.
 3. **Acceptance**: from a `vm` instance, the name resolves to the `services` address, and HTTPS answers, verified with `/etc/lego/ca.pem`. Then the isolation test with `--shared-kubeconfig`.
-4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, with `addons.yaml` and `services.yaml` applied again, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
+4. **A consumer added**: from an undeclared source the service is closed; added to `consumers`, applied, then `update-cluster.sh` run, it answers ([Add a consumer](../../stacks/shared/kubernetes/README.md#add-a-consumer)).
 5. **A volume**: a StatefulSet of one replica writes 1 MiB of random data on a claim of the default storage class; its checksum is kept.
 6. **Lifecycle** ([guide](../guides/kubernetes-lifecycle.md)): the credential rotated, a load balancer and a volume created with the new one, the pod of the volume moved (detached, attached again) with its data intact, the old credential revoked; then the minor upgrade, while a consumer sends requests, and the volume checked again once its node was replaced.
 7. **Teardown** of the volumes (the namespace of the check, while Cinder CSI runs), then of the cluster and the stack, as in [section 10](#10-teardown), with the kubeconfig of the shared cluster and its Cluster object, `shared` by default (`cluster.name`).
@@ -383,7 +400,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
 | Checkpoint | Expected | If it fails |
 |---|---|---|
 | HTTPS through the entry point, verified with the test root | 12 answers per domain, all with the client's address | no answer: members and published domains (section 5, `stacks/shared/entry-point/domains.auto.tfvars.json`), Traefik Service (section 7); interface mode: transit routes (section 5) |
-| isolation test | every row as expected (51 with the published cluster and the internal service; 49 with the shared cluster, [section 6](#6-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
+| isolation test | every row as expected (67 with the published cluster and the internal service; 65 with the shared cluster, [section 6](#6-shared-cluster)) | a row in error (not "open" nor "closed") is a probe that could not run — usually SSH through a bastion: run the test again; a wrong "open" or "closed" is a defect |
 | plans | `tofu plan -detailed-exitcode` exits 0 in every stack | report |
 
 ```console
@@ -409,7 +426,7 @@ edge t1-edge-1         routed IPv6 (global address, default route)              
 Each tenant type that can leave the entry point is switched to `exposure = "public"`, checked, then put back.
 
 1. **`vm`**: apply with `exposure = "public"`; HTTPS on `service_address`, verified with the test root; from an entry point instance, the tenant's instance on 443 is closed. Back to `"entry-point"`: apply, then section 5 (planes, domain publication), HTTPS through the entry point once it answers steadily.
-2. **`kubernetes`**: apply with `exposure = "public"`, then apply the add-ons again in the cluster (`tofu output -json manifests | jq -r '."addons.yaml"' | kubectl apply -f -`); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, add-ons, section 5 (planes, domain publication), HTTPS through the entry point.
+2. **`kubernetes`**: apply with `exposure = "public"`, then `update-cluster.sh` ([update a cluster](../guides/kubernetes-lifecycle.md#update-a-cluster-after-an-apply)); the Traefik Service gets the address of `service_address`; HTTPS there, verified; from an entry point instance, the former address of the ingress on 443 is closed. Back to `"entry-point"`: apply, `update-cluster.sh`, section 5 (planes, domain publication), HTTPS through the entry point.
 
 | Checkpoint | Expected | If it fails |
 |---|---|---|
@@ -489,20 +506,17 @@ Expected: closed. The packet may reach the web instance, whose security group ad
 
 In three waves, consumers before what they consume: the clusters and the tenants, then the shared services and the fixtures, then the planes. Inside a wave nothing depends on anything else: the campaign destroys its stacks in parallel.
 
+The published cluster first, as in [delete a cluster](../guides/kubernetes-lifecycle.md#delete-a-cluster) (with `bootstrap = true`); then the stacks, wave by wave:
+
 ```bash
-B=$(tofu -chdir=stacks/tenants/kubernetes output -raw bootstrap)    # with bootstrap = true
-# The bootstrap instance must be admitted on the API again (it was removed after the move).
-scripts/cluster-files.sh stacks/tenants/kubernetes /tmp/published
-KUBECONFIG=published.kubeconfig /tmp/published/update-cluster.sh --admit "$B/32"
-sleep 60   # the API load balancer takes the new source
-ssh -t ops@$B 'sudo /opt/platform/delete-cluster.sh'
-for s in tests/fixtures/internal-service stacks/tenants/kubernetes; do tofu -chdir=$s destroy -auto-approve; done
-for t in private web; do
+for t in private web egress-shared; do
   TF_DATA_DIR=.terraform/tenant-$t tofu -chdir=stacks/tenants/vm destroy -auto-approve -var-file=mode.$t.tfvars.json
 done
-for s in stacks/shared/entry-point tests/fixtures/receiver tests/fixtures/acme stacks/shared/planes; do
+for s in tests/fixtures/internal-service tests/fixtures/resolver stacks/shared/egress stacks/shared/entry-point \
+         tests/fixtures/receiver tests/fixtures/acme; do
   tofu -chdir=$s destroy -auto-approve
 done
+tofu -chdir=stacks/shared/planes destroy -auto-approve
 ```
 
 | Checkpoint | How |
