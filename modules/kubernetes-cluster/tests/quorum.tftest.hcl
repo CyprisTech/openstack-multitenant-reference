@@ -146,3 +146,26 @@ run "load_balancer_policy" {
     error_message = "Internal load balancers are admitted with sources within the cluster network only."
   }
 }
+
+# The files of the bootstrap instance are compressed: its user data stays below the 65535 bytes
+# Nova accepts, with every manifest and script of the cluster.
+run "bootstrap_user_data" {
+  command = plan
+
+  variables {
+    zones     = ["az-1"]
+    bootstrap = true
+    ingresses = { internal = { plane = "internal", sources = ["192.0.2.0/24"], domains = ["services.example.org"], host = 10 } }
+    services  = { echo = { plane = "internal", namespace = "echo", selector = { app = "echo" }, ports = [7000], sources = ["192.0.2.0/24"], host = 11 } }
+  }
+
+  assert {
+    condition     = length(base64encode(module.cloudinit[0].rendered)) <= 40000
+    error_message = "The user data of the bootstrap instance is far larger than expected once compressed."
+  }
+
+  assert {
+    condition     = length(regexall("\"encoding\": \"gz\\+b64\"", module.cloudinit[0].rendered)) >= 10
+    error_message = "The manifests and scripts are written compressed."
+  }
+}

@@ -118,6 +118,16 @@ locals {
 }
 
 
+locals {
+  bootstrap_files = merge(
+    # kind takes the MTU of the default Docker bridge: it must not exceed the MTU of the cluster
+    # network, or large replies of the cloud APIs are dropped silently (no "fragmentation needed").
+    var.network_mtu == null ? {} : { "/etc/docker/daemon.json" = { content = base64gzip(jsonencode({ mtu = var.network_mtu })), permissions = "0644" } },
+    { for name, content in local.manifests : "/opt/platform/manifests/${name}" => { content = base64gzip(content), permissions = "0644" } },
+    { for name, content in local.scripts : "/opt/platform/${name}" => { content = base64gzip(content), permissions = "0755" } },
+  )
+}
+
 module "cloudinit" {
   source = "git::https://github.com/CyprisTech/terraform-openstack-tenant.git//modules/cloudinit?ref=v0.1.6"
   count  = var.bootstrap ? 1 : 0
@@ -128,15 +138,13 @@ module "cloudinit" {
   }
   packages = ["docker.io", "jq"]
   # A mirror error at first boot would leave the instance without its packages, silently.
-  extra_config = { apt = { conf = "Acquire::Retries \"10\";\n" } }
-
-  write_files = merge(
-    # kind takes the MTU of the default Docker bridge: it must not exceed the MTU of the cluster
-    # network, or large replies of the cloud APIs are dropped silently (no "fragmentation needed").
-    var.network_mtu == null ? {} : { "/etc/docker/daemon.json" = { content = jsonencode({ mtu = var.network_mtu }) } },
-    { for name, content in local.manifests : "/opt/platform/manifests/${name}" => { content = content } },
-    { for name, content in local.scripts : "/opt/platform/${name}" => { content = content, permissions = "0755" } },
-  )
+  # The files, compressed (gz+b64): the manifests and scripts of the cluster exceed the 64 KiB
+  # Nova allows for user data otherwise. Passed as write_files of extra_config, merged last, since
+  # the write_files input of the module takes no encoding.
+  extra_config = {
+    apt         = { conf = "Acquire::Retries \"10\";\n" }
+    write_files = [for path in sort(keys(local.bootstrap_files)) : merge(local.bootstrap_files[path], { path = path, encoding = "gz+b64", owner = "root:root" })]
+  }
 
   runcmd = [
     "curl -fsSLo /usr/local/bin/kind https://github.com/kubernetes-sigs/kind/releases/download/${local.versions.kind}/kind-linux-amd64",
@@ -148,6 +156,18 @@ module "cloudinit" {
 
 # Zones (ADR-0012): Cluster API spreads the control plane nodes over the zones; the quorum of etcd
 # survives the loss of a zone only if no zone holds half of them or more.
+# Nova refuses user data above 65535 bytes once encoded (base64): said at plan, not at apply.
+resource "terraform_data" "bootstrap_user_data" {
+  count = var.bootstrap ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = length(base64encode(module.cloudinit[0].rendered)) <= 65535
+      error_message = "The user data of the bootstrap instance exceeds the 65535 bytes Nova accepts once encoded."
+    }
+  }
+}
+
 check "volume_zones" {
   assert {
     condition = local.storage_zone != null || length(var.volume_zones) == 0 || alltrue([
