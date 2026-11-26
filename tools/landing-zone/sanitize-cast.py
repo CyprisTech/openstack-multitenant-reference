@@ -6,7 +6,7 @@ Replaces addresses outside the cluster networks (10.0.0.0/8) with documentation 
 up to the end of a line first, so that an address cut between two chunks is still found. The result
 is checked: the script fails if an address or a --forbid word remains.
 
-    tests/campaign/sanitize-cast.py input.cast output.cast [--replace real=example ...] [--forbid word ...]
+    tools/landing-zone/sanitize-cast.py input.cast output.cast [--replace real=example ...] [--forbid word ...]
 """
 
 import argparse
@@ -16,7 +16,7 @@ import pathlib
 import re
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "tour"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "tests" / "tour"))
 from capture import DOC_RANGES, Sanitizer  # noqa: E402
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")

@@ -5,17 +5,17 @@ import sys
 import unittest
 from pathlib import Path
 
-from campaign import previous
-from campaign.context import StepFailed
-from campaign.report import StepReport
-from campaign.scenario import load as load_scenario
-from campaign.steps import load
-from campaign.tools import Result
+from test_core import context
+from test_foundation import context as tenant_context
 
-from tests.test_core import context
-from tests.test_foundation import context as tenant_context
+from landing_zone import previous
+from landing_zone.context import StepFailed
+from landing_zone.report import StepReport
+from landing_zone.scenario import load as load_scenario
+from landing_zone.steps import load
+from landing_zone.tools import Result
 
-HERE = Path(__file__).resolve().parent.parent
+HERE = Path(__file__).resolve().parents[2] / "tools" / "landing-zone"
 
 PLAN = {"resource_changes": [
     {"address": "a.replaced", "change": {"actions": ["delete", "create"]}},
@@ -124,7 +124,7 @@ class AttemptsTest(unittest.TestCase):
 
 class RequestsTest(unittest.TestCase):
     def test_the_summary_gives_the_duration_and_the_failure_rate(self):
-        from campaign.load import Requests
+        from landing_zone.load import Requests
 
         load = Requests()
         load.started()
@@ -138,7 +138,7 @@ class IntoStateTest(unittest.TestCase):
     """The web tenant of the previous release, in the default state of the vm directory."""
 
     def test_the_default_state_becomes_the_tenants_and_is_initialised(self):
-        from campaign.steps.upgrade import into_state
+        from landing_zone.steps.upgrade import into_state
 
         ctx = tenant_context(states={"vm": "web"})
         (ctx.root / "stacks/tenants/vm/terraform.tfstate").write_text("{}")
@@ -150,7 +150,7 @@ class IntoStateTest(unittest.TestCase):
         self.assertEqual(init[0][1]["TF_DATA_DIR"], ".terraform/tenant-web")
 
     def test_started_again_the_tenant_is_initialised_once_more(self):
-        from campaign.steps.upgrade import into_state
+        from landing_zone.steps.upgrade import into_state
 
         ctx = tenant_context(states={"vm": "web"})
         (ctx.root / "stacks/tenants/vm/web.tfstate").write_text("{}")  # moved by the first attempt

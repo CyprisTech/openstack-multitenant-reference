@@ -3,12 +3,12 @@
 import json
 import unittest
 
-from campaign.context import StepFailed
-from campaign.report import StepReport
-from campaign.steps import load
-from campaign.tools import Result
+from test_foundation import context
 
-from tests.test_foundation import context
+from landing_zone.context import StepFailed
+from landing_zone.report import StepReport
+from landing_zone.steps import load
+from landing_zone.tools import Result
 
 STACKS = {
     "planes": "stacks/shared/planes",

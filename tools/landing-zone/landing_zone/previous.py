@@ -84,9 +84,15 @@ def follow(cmd, cwd, echo, notify):
     return process.returncode
 
 
+
+def runner_of(path):
+    """The campaign of a release: tools/landing-zone/lz since v0.6, tests/campaign/run.py before."""
+    lz = path / "tools/landing-zone/lz"
+    return lz if lz.exists() else path / "tests/campaign/run.py"
+
 def deploy(runner, path, scenario, mode, steps, config, work, record=False, notify=None):
     """The previous release, with its own run.py: deployment steps only, no acceptance."""
-    cmd = [sys.executable, str(path / "tests/campaign/run.py"), scenario, *steps, "--mode", mode,
+    cmd = [sys.executable, str(runner_of(path)), scenario, *steps, "--mode", mode,
            "--config", str(config), "--work", str(Path(work).parent)]  # fmt: skip
     if record:
         cmd.append("--record")

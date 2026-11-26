@@ -2,11 +2,11 @@
 
 import unittest
 
-from campaign import preflight
-from campaign.context import StepFailed
-from campaign.tools import Result
+from test_core import context
 
-from tests.test_core import context
+from landing_zone import preflight
+from landing_zone.context import StepFailed
+from landing_zone.tools import Result
 
 STACKS = {"planes": "stacks/shared/planes", "shared": "stacks/shared/kubernetes"}
 CONFIG = {

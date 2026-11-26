@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from campaign import retry
-from campaign.context import INPUTS, Context, StepFailed
-from campaign.report import StepReport
-from campaign.scenario import Scenario
-from campaign.steps import load
-from campaign.tools import Result, Runner
+from landing_zone import retry
+from landing_zone.context import INPUTS, Context, StepFailed
+from landing_zone.report import StepReport
+from landing_zone.scenario import Scenario
+from landing_zone.steps import load
+from landing_zone.tools import Result, Runner
 
 STACKS = {
     "planes": "stacks/shared/planes",

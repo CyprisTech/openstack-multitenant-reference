@@ -2,7 +2,7 @@
 
 import unittest
 
-from campaign.tools import Runner
+from landing_zone.tools import Runner
 
 
 class VerboseTest(unittest.TestCase):

@@ -122,12 +122,12 @@ jobs:
       - name: tour script syntax
         run: python3 -m py_compile tests/tour/capture.py
       - name: campaign tooling, unit tests (no cloud)
-        run: python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
+        run: PYTHONPATH=tools/landing-zone python3 -m unittest discover -s tests/landing_zone -t tests/landing_zone
       - name: campaign scenarios, dry run (no cloud)
         run: |
-          python3 tests/campaign/run.py private-cloud --dry-run full
-          python3 tests/campaign/run.py private-cloud --dry-run --mode interface full
-          python3 tests/campaign/run.py public-cloud --dry-run full
+          python3 tools/landing-zone/lz private-cloud --dry-run full
+          python3 tools/landing-zone/lz private-cloud --dry-run --mode interface full
+          python3 tools/landing-zone/lz public-cloud --dry-run full
       - name: shell scripts (shellcheck)
         run: shellcheck -S warning scripts/publish-domains.sh scripts/request-domains.sh scripts/cluster-files.sh images/kubernetes-node/build.sh
       - name: common variables of the Kubernetes stacks

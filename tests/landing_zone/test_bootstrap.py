@@ -2,11 +2,11 @@
 
 import unittest
 
-from campaign import kube
-from campaign.context import StepFailed
-from campaign.tools import Result
+from test_core import context
 
-from tests.test_core import context
+from landing_zone import kube
+from landing_zone.context import StepFailed
+from landing_zone.tools import Result
 
 STACKS = {"published": "stacks/tenants/kubernetes"}
 REFUSED = Result(255, "", "ssh: connect to host 192.0.2.10 port 22: Connection refused")

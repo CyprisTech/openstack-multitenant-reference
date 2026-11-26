@@ -4,7 +4,7 @@ Every step of a full test cycle, with the checkpoint that must pass before the n
 
 Run everything from a machine that is an administration source of the stacks (`admin.sources`, `bastion.ssh_cidrs`), with a `clouds.yaml` entry per project and **no `OS_*` variable in the shell**.
 
-`tests/campaign/run.py` runs this procedure end to end, one scenario per profile ([usage](../../tests/campaign/README.md)).
+`tools/landing-zone/lz` runs this procedure end to end, one scenario per profile ([usage](../../tools/landing-zone/README.md)).
 
 ## Overview
 
@@ -436,7 +436,7 @@ Each tenant type that can leave the entry point is switched to `exposure = "publ
 
 ### Hostile route (interface mode)
 
-A tenant adds a route to another tenant through the transit router, and must still reach nothing. The isolation test only opens connections and does not run this step; the campaign does (step `hostile` of [`tests/campaign`](../../tests/campaign/README.md), interface mode). By hand:
+A tenant adds a route to another tenant through the transit router, and must still reach nothing. The isolation test only opens connections and does not run this step; the campaign does (step `hostile` of [`tools/landing-zone`](../../tools/landing-zone/README.md), interface mode). By hand:
 
 ```bash
 # the private tenant routes the web range through the observability transit router (172.31.1.1 here)

@@ -3,14 +3,14 @@
 import json
 import unittest
 
-from campaign.context import StepFailed
-from campaign.kube import delete_cluster
-from campaign.report import StepReport
-from campaign.steps import load
-from campaign.steps.shared import wait_for_revocation
-from campaign.tools import Result
+from test_foundation import context
 
-from tests.test_foundation import context
+from landing_zone.context import StepFailed
+from landing_zone.kube import delete_cluster
+from landing_zone.report import StepReport
+from landing_zone.steps import load
+from landing_zone.steps.shared import wait_for_revocation
+from landing_zone.tools import Result
 
 SECRET = "s3cr3t-never-printed"
 STACKS = {"shared": "stacks/shared/kubernetes", "vm": "stacks/tenants/vm"}

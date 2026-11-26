@@ -10,7 +10,7 @@ What a deployment needs, what it shares, and how far it scales.
 
 ## Sizing
 
-What the test campaigns of 2026-11-19 ran, project by project, with the flavors of the test cloud ([campaign sizing](../../tests/campaign/README.md#sizing)); every instance boots from the flavor's local disk. The Kubernetes clusters are deployed one after the other in the tests; in production both run at once, and a published cluster usually has 3 control plane nodes.
+What the test campaigns of 2026-11-19 ran, project by project, with the flavors of the test cloud ([campaign sizing](../../tools/landing-zone/README.md#sizing)); every instance boots from the flavor's local disk. The Kubernetes clusters are deployed one after the other in the tests; in production both run at once, and a published cluster usually has 3 control plane nodes.
 
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|

@@ -6,12 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from campaign import retry
-from campaign.context import INPUTS, Context, StepFailed
-from campaign.report import StepReport
-from campaign.scenario import Scenario
-from campaign.steps import load
-from campaign.tools import CommandError, Result, Runner
+from landing_zone import retry
+from landing_zone.context import INPUTS, Context, StepFailed
+from landing_zone.report import StepReport
+from landing_zone.scenario import Scenario
+from landing_zone.steps import load
+from landing_zone.tools import CommandError, Result, Runner
 
 
 def context(fake=None, dry_run=True, stacks=None, config=None):
@@ -105,16 +105,16 @@ class ProfileInputsTest(unittest.TestCase):
         self.assertEqual(written, {"bastion_placement": "stack-network", "cloud": "web"})
 
     def test_the_public_scenario_sets_the_bastion_placement(self):
-        from campaign.scenario import load as load_scenario
+        from landing_zone.scenario import load as load_scenario
 
-        public = load_scenario(Path(__file__).resolve().parents[1] / "scenarios" / "public-cloud.toml")
+        public = load_scenario(Path(__file__).resolve().parents[2] / "tools" / "landing-zone" / "scenarios" / "public-cloud.toml")
         for key in ("entry-point", "vm", "receiver"):
             self.assertEqual(public.options["inputs"][key]["bastion_placement"], "stack-network")
 
 
 class MeasuresTest(unittest.TestCase):
     def test_steady_time_is_measured(self):
-        from campaign.checks import https_probe, wait_https
+        from landing_zone.checks import https_probe, wait_https
 
         def fake(cmd):
             return Result(0, "Hostname: web-1\n")

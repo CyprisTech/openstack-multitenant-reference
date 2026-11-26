@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from campaign import scenario
+from landing_zone import scenario
 
-SCENARIOS = Path(__file__).resolve().parents[1] / "scenarios"
+SCENARIOS = Path(__file__).resolve().parents[2] / "tools" / "landing-zone" / "scenarios"
 
 
 def write(text):

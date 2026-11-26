@@ -38,5 +38,5 @@ __pycache__/
 images/kubernetes-node/build.json
 images/kubernetes-node/.work/
 # Test campaign: local configuration, outputs and recordings
-tests/campaign/work/
-tests/campaign/campaign.local.toml
+tools/landing-zone/work/
+tools/landing-zone/campaign.local.toml

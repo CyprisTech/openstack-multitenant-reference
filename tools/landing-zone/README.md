@@ -1,8 +1,8 @@
 # Test campaign
 
-`run.py` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown. It applies each stack, requires an empty plan, runs the [isolation test](../isolation/README.md) and the HTTPS checks, and keeps the outputs. A scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md)) names the stacks and the steps; the steps themselves are shared.
+`run.py` runs the campaign described in the [test procedure](../../docs/reference/test-procedure.md), from empty projects to an empty teardown. It applies each stack, requires an empty plan, runs the [isolation test](../../tests/isolation/README.md) and the HTTPS checks, and keeps the outputs. A scenario per profile ([ADR-0014](../../docs/adr/0014-profiles.md)) names the stacks and the steps; the steps themselves are shared.
 
-**What to read.** To use the reference, you do not need this directory: the [isolation test](../isolation/README.md) and the [guides](../../docs/guides) are what you run on your deployment. The campaign is the maintainers' tool: it runs those guides, end to end and upgrades included, before each release.
+**What to read.** To use the reference, you do not need this directory: the [isolation test](../../tests/isolation/README.md) and the [guides](../../docs/guides) are what you run on your deployment. The campaign is the maintainers' tool: it runs those guides, end to end and upgrades included, before each release.
 
 **Why its own tool.** Terratest and `tofu test` with a real provider test one configuration at a time. A campaign spans several projects and stacks, feeding each stack the outputs of the others, two Kubernetes clusters created and upgraded by Cluster API, loads that must not fail during an apply, and the upgrade from the previous release; and it must resume after an interruption and leave the projects empty. Python's standard library and the `tofu` and `openstack` command lines are enough for that, without a framework to learn.
 
@@ -11,14 +11,14 @@
 ## Usage
 
 ```bash
-cp tests/campaign/campaign.local.toml.example tests/campaign/campaign.local.toml   # adapt
+cp tools/landing-zone/campaign.local.toml.example tools/landing-zone/campaign.local.toml   # adapt
 # and a terraform.tfvars for each stack and fixture, from its terraform.tfvars.example
-tests/campaign/run.py private-cloud --mode gateway full
-tests/campaign/run.py private-cloud --mode interface planes edge   # or a few steps
-tests/campaign/run.py public-cloud full
-tests/campaign/run.py private-cloud --dry-run full                 # the commands, without a cloud
-tests/campaign/run.py private-cloud --mode interface --from v0.5.1 # the upgrade from a release
-python3 -m unittest discover -s tests/campaign/tests -t tests/campaign
+tools/landing-zone/lz private-cloud --mode gateway full
+tools/landing-zone/lz private-cloud --mode interface planes edge   # or a few steps
+tools/landing-zone/lz public-cloud full
+tools/landing-zone/lz private-cloud --dry-run full                 # the commands, without a cloud
+tools/landing-zone/lz private-cloud --mode interface --from v0.5.1 # the upgrade from a release
+PYTHONPATH=tools/landing-zone python3 -m unittest discover -s tests/landing_zone -t tests/landing_zone
 ```
 
 Python 3.11 or later, standard library only; step `prep` reads `clouds.yaml` with PyYAML, installed with the `openstack` client. Other tools on the machine that runs it: OpenTofu or Terraform, the `openstack` client with its Octavia plugin (`python-octaviaclient`, for the load balancers of the leftover check), `kubectl`, `clusterctl`, `curl`, and `asciinema` with `--record`.
@@ -31,7 +31,7 @@ With a `notify_hook`, the operator is told when the campaign starts and ends, wh
 
 The campaign stops at the first failure: a command that fails, a request that fails, a plan that is not empty, an instance that does not come up. The teardown runs in three waves, the stacks of a wave destroyed in parallel: the clusters (deleted by Cluster API, then their stack) and the tenants; the shared services and the fixtures; the planes. A failure lets the other stacks of its wave finish, then stops before the next wave, which depends on it; the leftover check reports what remains. The two Kubernetes clusters are deployed one after the other, so that it fits a small test cloud ([sizing](#sizing)).
 
-Outputs, under `tests/campaign/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures — HTTPS counts, time to a steady answer, loads — and the duration of each apply and destroy), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
+Outputs, under `tools/landing-zone/work/<scenario>-<mode>` (git-ignored): `report.json` (each step, its status, duration and measures — HTTPS counts, time to a steady answer, loads — and the duration of each apply and destroy), `isolation-*.txt`, `https.txt`, `timings.txt`, `logs/` (full output of each apply and of the cluster scripts), the regenerated [Kubernetes tour](../../docs/guides/kubernetes-tour.md).
 
 ## Upgrade from the previous release
 
@@ -89,7 +89,7 @@ $ TF_DATA_DIR=.terraform/tenant-private tofu -chdir=stacks/tenants/vm apply -aut
 With `--record`, each step is recorded with [asciinema](https://asciinema.org) in `casts/`, with the full output of the tools: each apply and destroy as it runs, and the output of every command the step shows. The same output is printed by the campaign itself, step after step, so that its log is readable without the recordings. Recordings show real addresses: before publishing one, run
 
 ```bash
-tests/campaign/sanitize-cast.py input.cast output.cast --replace internal.name=example.org --forbid internal
+tools/landing-zone/sanitize-cast.py input.cast output.cast --replace internal.name=example.org --forbid internal
 ```
 
 It replaces the addresses outside the cluster networks with documentation addresses and refuses to write the file if an address or a forbidden word remains. Names it cannot know about are yours to list; watch the result before publishing it.

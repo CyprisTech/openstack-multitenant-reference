@@ -6,7 +6,7 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-The release campaign of v0.6 (2026-11-26), run with [`tests/campaign`](../../tests/campaign/README.md) from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md): hub planes (interface) **upgraded from v0.5.1** with `run.py --from`, operator planes (gateway) **from empty**. Sizing as in the [campaign README](../../tests/campaign/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers. The commits of each run are in the [detailed results](#detailed-results-the-release-campaign-of-v06-2026-11-26).
+The release campaign of v0.6 (2026-11-26), run with [`tools/landing-zone`](../../tools/landing-zone/README.md) from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md): hub planes (interface) **upgraded from v0.5.1** with `run.py --from`, operator planes (gateway) **from empty**. Sizing as in the [campaign README](../../tools/landing-zone/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers. The commits of each run are in the [detailed results](#detailed-results-the-release-campaign-of-v06-2026-11-26).
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
@@ -162,7 +162,7 @@ The `v0.5` changes (zones, volume zones, one machine deployment per zone, the ca
 
 ## Detailed results: campaigns of 2026-11-10 to 2026-11-12
 
-The whole scenario with [`tests/campaign`](../../tests/campaign/README.md), in both plane modes: foundation, shared cluster (consumer, rotation, upgrade), published cluster (acceptance, exposure change), hostile route, plans, teardown.
+The whole scenario with [`tests/campaign`](../../tools/landing-zone/README.md), in both plane modes: foundation, shared cluster (consumer, rotation, upgrade), published cluster (acceptance, exposure change), hostile route, plans, teardown.
 
 - **Defects found and fixed:**
   - The cloud controller ran with `internal-lb = true`: it then ignores the annotation `openstack-internal-load-balancer: "false"` and uses the requested floating IP as the VIP address in the cluster network. Removed; every entry states its choice with its annotations.

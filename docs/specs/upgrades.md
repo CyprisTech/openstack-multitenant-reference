@@ -1,7 +1,7 @@
 # Spec: upgrades between releases
 
 - **Status:** Proposed — its release is given in the README's [status](../../README.md#status) (`v0.6`)
-- **Related:** [ADR-0017](../adr/0017-upgrades-between-releases.md) (upgrades between releases), [ADR-0009](../adr/0009-kubernetes-lifecycle.md) (Kubernetes lifecycle), [test campaign](../../tests/campaign/README.md), [test procedure](../reference/test-procedure.md), [CHANGELOG](../../CHANGELOG.md) (the migration notes of each release)
+- **Related:** [ADR-0017](../adr/0017-upgrades-between-releases.md) (upgrades between releases), [ADR-0009](../adr/0009-kubernetes-lifecycle.md) (Kubernetes lifecycle), [test campaign](../../tools/landing-zone/README.md), [test procedure](../reference/test-procedure.md), [CHANGELOG](../../CHANGELOG.md) (the migration notes of each release)
 
 ## Problem
 

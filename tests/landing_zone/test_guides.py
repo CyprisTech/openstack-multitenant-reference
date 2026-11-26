@@ -5,9 +5,9 @@ import re
 import unittest
 from pathlib import Path
 
-from campaign.steps import GUIDES, load
+from landing_zone.steps import GUIDES, load
 
-ROOT = Path(__file__).resolve().parent.parent.parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 # Steps that run no procedure of the documentation, with the reason.
 UNDOCUMENTED = {}

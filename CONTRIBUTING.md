@@ -78,7 +78,7 @@ A change that adds or removes a flow must update the matrix in both places: the 
 
 **A procedure is written once.** A procedure on one stack lives in its README (add a consumer, change the exposure); a procedure across stacks, in a guide (add a tenant, publish a domain, the Kubernetes lifecycle, check the isolation); Getting started and the test procedure link to them rather than repeat their commands.
 
-**The campaign grows with what it proves.** Code added to [`tests/campaign`](tests/campaign/README.md) comes with a claim it tests (a guide it runs, a row it checks, a measure it records); a workaround for one test cloud stays out of the repository.
+**The campaign grows with what it proves.** Code added to [`tools/landing-zone`](tools/landing-zone/README.md) comes with a claim it tests (a guide it runs, a row it checks, a measure it records); a workaround for one test cloud stays out of the repository.
 
 ## Conventions
 
@@ -144,7 +144,7 @@ In a sequence diagram, group the participants with `box` in the same colours (`r
 
 Maintainers tag releases from `main` following [Semantic Versioning](https://semver.org/):
 
-1. Run the test campaign of the release on `main` ([tests/campaign](tests/campaign/README.md)).
+1. Run the test campaign of the release on `main` ([tools/landing-zone](tools/landing-zone/README.md)).
 2. One commit `Release vX.Y.Z`: the *Unreleased* entries of [CHANGELOG.md](CHANGELOG.md) moved under the new version with its date, the status in the README, the [test results](docs/concepts/test-results.md).
 3. An annotated tag `vX.Y.Z` on that commit, and a GitHub release with the changelog section.
 
