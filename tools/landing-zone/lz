@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Test campaign of the reference, by profile (ADR-0014).
+"""lz, the deployment tool of the reference (ADR-0018): Terraform applies the stacks, lz sequences them.
 
-    tools/landing-zone/lz private-cloud --mode gateway full
-    tools/landing-zone/lz public-cloud planes edge
-    tools/landing-zone/lz private-cloud --dry-run full
-    tools/landing-zone/lz private-cloud --mode interface --from v0.5.1     # the upgrade
+    lz try private-cloud                      # the reference with its test fixtures, on test projects
+    lz plan private-cloud                     # what an apply would change, stack by stack
+    lz status private-cloud                   # what is deployed
+    lz apply private-cloud web transit        # sequences or steps of the scenario
+    lz update-clusters private-cloud          # the clusters take their stack's manifests
+    lz upgrade private-cloud                  # this release applied over the deployed one
+    lz teardown private-cloud
+    lz campaign private-cloud --mode interface --from v0.5.1   # the test campaign of a release
 
-The scenario (scenarios/<name>.toml) names the stacks and the sequences; the maintainers'
-configuration (clouds.yaml entries, administrator addresses) is in campaign.local.toml, not
-versioned. Python 3.11 or later, standard library only.
+The scenario (scenarios/<name>.toml) names the stacks and the sequences; the configuration
+(clouds.yaml entries, administrator addresses) is in campaign.local.toml, not versioned. Python
+3.11 or later, standard library only.
 """
 
 import argparse
@@ -21,7 +25,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from landing_zone import preflight, previous
+from landing_zone import commands, preflight, previous
 from landing_zone import scenario as scenarios
 from landing_zone.context import Context
 from landing_zone.report import Report
@@ -61,7 +65,7 @@ def record_step(args, scenario, mode, name, ctx, entry):
     casts = ctx.work / "casts"
     casts.mkdir(exist_ok=True)
     cast = casts / f"{time.strftime('%m%d-%H%M', time.gmtime())}-{mode}-{name}.cast"
-    inner = [sys.executable, str(Path(__file__).resolve()), scenario.name, name, "--mode", mode,
+    inner = [sys.executable, str(Path(__file__).resolve()), "campaign", scenario.name, name, "--mode", mode,
              "--config", args.config, "--work", args.work, "--root", str(ctx.root)]  # fmt: skip
     (ctx.work / INNER_REPORT).unlink(missing_ok=True)
     (ctx.work / INNER_OUTPUT).unlink(missing_ok=True)
@@ -81,25 +85,58 @@ def record_step(args, scenario, mode, name, ctx, entry):
         raise RuntimeError(inner_entry.get("error") or f"step {name} failed (cast: {cast})")
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+# The commands, with the steps they run: a sequence of the scenario, or the steps given.
+COMMANDS = {
+    "try": ("the reference with its test fixtures, on test projects (the sequence try)", ["try"]),
+    "apply": ("apply the sequences or steps given (default: the sequence try)", ["try"]),
+    "plan": ("what an apply would change in each deployed stack; nothing is changed", None),
+    "status": ("what is deployed: the stacks and the number of their resources, the clusters", None),
+    "update-clusters": ("each deployed cluster takes the manifests of its stack (update-cluster.sh)", None),
+    "upgrade": ("this release applied over the deployed one, stack by stack (the step migrate)", ["migrate"]),
+    "teardown": ("destroy everything, in waves, then check that nothing is left", ["teardown", "leftovers"]),
+    "campaign": ("the test campaign: deployment, checks, teardown (default: the sequence full)", ["full"]),
+}
+
+
+def parse(argv):
+    """The command and its arguments. Without a command, the form before lz: a campaign."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    top = argparse.ArgumentParser(prog="lz", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    top.add_argument("command", choices=list(COMMANDS), help="; ".join(f"{k}: {v[0]}" for k, v in COMMANDS.items()))
+    if argv and argv[0] not in COMMANDS and not argv[0].startswith("-"):
+        argv = ["campaign", *argv]
+    if not argv or argv[0] not in COMMANDS:
+        top.parse_args(argv)  # prints the usage, or the help
+    command = argv[0]
+    parser = argparse.ArgumentParser(prog=f"lz {command}", description=COMMANDS[command][0])
     parser.add_argument("scenario", help="a scenario of scenarios/, by name (private-cloud, public-cloud)")
-    parser.add_argument("items", nargs="*", default=["full"], help="sequences or steps (default: full)")
+    if command in ("apply", "campaign"):
+        parser.add_argument("items", nargs="*", default=COMMANDS[command][1], help="sequences or steps of the scenario")
     parser.add_argument("--mode", help="plane mode; default: the first mode of the scenario")
-    parser.add_argument("--config", default=str(HERE / "campaign.local.toml"), help="maintainers' configuration")
+    parser.add_argument("--config", default=str(HERE / "campaign.local.toml"), help="the configuration")
     parser.add_argument("--work", default=str(HERE / "work"), help="outputs of the runs (git-ignored)")
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
-    parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
     parser.add_argument("--no-preflight", action="store_true", help="skip the checks before the first step")
     parser.add_argument("--allow-existing", action="store_true",
-                        help="start although the projects hold objects and no state of the campaign does")
-    parser.add_argument("--from", dest="previous", metavar="TAG",
-                        help="deploy the release TAG first, then upgrade it to this commit (default steps: from-previous)")
+                        help="start although the projects hold objects and no state of the scenario does")
+    if command == "campaign":
+        parser.add_argument("--record", action="store_true", help="record each step with asciinema, in <work>/casts")
+        parser.add_argument("--from", dest="previous", metavar="TAG",
+                            help="deploy the release TAG first, then upgrade it to this commit (default steps: from-previous)")
     parser.add_argument("--root", help=argparse.SUPPRESS)  # the tree of a recorded step
-    args = parser.parse_intermixed_args(argv)
+    args = parser.parse_intermixed_args(argv[1:])
+    args.command = command
+    if not hasattr(args, "items"):
+        args.items = COMMANDS[command][1]
+    args.record = getattr(args, "record", False)
+    args.previous = getattr(args, "previous", None)
     if args.previous and args.items == ["full"]:
         args.items = ["from-previous"]
+    return parser, args
 
+
+def main(argv=None):
+    parser, args = parse(argv)
     scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
     mode = args.mode or scenario.modes[0]
     if mode not in scenario.modes:
@@ -130,6 +167,10 @@ def main(argv=None):
     if args.previous and previous.tree(work).exists():
         root = previous.tree(work)  # an upgrade started again: its states are in its worktree
     ctx = Context(scenario, mode, config, runner, root, work)
+    ctx.campaign = args.command == "campaign"
+    if args.command in ("plan", "status", "update-clusters"):
+        return read_or_update(args.command, ctx)
+    label = "campaign" if ctx.campaign else f"lz {args.command}"
     report = Report(scenario.name, scenario.profile, mode, args.dry_run)
     steps = load()
     names = scenario.expand(args.items)
@@ -137,7 +178,7 @@ def main(argv=None):
         try:
             preflight.check(ctx, names, allow_existing=args.allow_existing)
         except Exception as error:  # nothing has run: say why and stop
-            ctx.notify(f"campaign {scenario.name} {mode} not started: {error}")
+            ctx.notify(f"{label} {scenario.name} {mode} not started: {error}")
             return 1
     if args.previous and not os.environ.get(INNER):
         # The previous release, deployed once in a worktree that then checks out this commit:
@@ -153,12 +194,13 @@ def main(argv=None):
             ctx.notify(f"campaign {scenario.name} {mode}: upgrade from {args.previous} stopped: {error}")
             return 1
         ctx = Context(scenario, mode, config, runner, root, work)
+        ctx.campaign = True
 
     outer = not os.environ.get(INNER)  # a recorded step: the outer run tells the operator
     steps_notified = outer and config.get("notify_steps", True) and not args.dry_run
     campaign_started = time.monotonic()
     if steps_notified:
-        ctx.notify(f"campaign {scenario.name} {mode} started: {len(names)} steps")
+        ctx.notify(f"{label} {scenario.name} {mode} started: {len(names)} steps")
 
     for name in names:
         entry = report.step(name)
@@ -194,16 +236,30 @@ def main(argv=None):
         if entry.status == "failed":
             if outer:
                 error = (entry.error or "").strip().splitlines()
-                ctx.notify(f"campaign {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min"
+                ctx.notify(f"{label} {scenario.name} {mode} stopped at step {name} after {entry.seconds / 60:.0f} min"
                            + (f": {error[0][:200]}" if error else ""))
             break
 
     if steps_notified and report.ok:
         minutes = (time.monotonic() - campaign_started) / 60
-        ctx.notify(f"campaign {scenario.name} {mode} finished in {minutes:.0f} min: every step passed")
+        ctx.notify(f"{label} {scenario.name} {mode} finished in {minutes:.0f} min: every step passed")
     if not os.environ.get(INNER):  # a recorded step: the outer run prints the summary
         print("\n" + report.summary())
     return 0 if report.ok else 1
+
+
+def read_or_update(command, ctx):
+    """plan and status read the deployment; update-clusters updates its clusters from their stacks."""
+    if command == "plan":
+        lines, changed = commands.plan(ctx)
+        print("\n".join(lines))
+        return 2 if changed else 0  # as plan -detailed-exitcode: 2 when something would change
+    if command == "status":
+        print("\n".join(commands.status(ctx)))
+        return 0
+    updated = commands.update_clusters(ctx)
+    print("updated: " + (", ".join(updated) if updated else "no deployed cluster"))
+    return 0
 
 
 if __name__ == "__main__":

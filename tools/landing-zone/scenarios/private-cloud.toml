@@ -23,6 +23,8 @@ foundation = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egr
 shared     = ["k8s-shared", "transit", "cluster-shared", "tour-shared", "accept-shared", "consumer", "volume", "rotate", "upgrade", "shared-down"]
 published  = ["k8s", "cluster", "internal-open", "transit", "tour", "publish", "accept", "direct", "direct-k8s", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
+# lz try: the deployment steps only, with the test fixtures, no check.
+try        = ["foundation", "k8s", "cluster", "internal-open", "transit", "publish"]
 full       = ["foundation", "shared", "published", "end"]
 # From the previous release (run.py --from <tag>): the new release applied over its states, then
 # the scenario without the steps that created them.

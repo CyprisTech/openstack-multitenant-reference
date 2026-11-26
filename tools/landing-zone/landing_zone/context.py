@@ -32,6 +32,7 @@ class Context:
         self._projects = {}
         self.migration = None  # during the upgrade from the previous release (previous.Migration)
         self.durations = []  # applies and destroys: {stack, action, seconds}, for the report
+        self.campaign = True  # the test campaign; lz try, apply and upgrade run no load nor check
 
     @property
     def tool(self):

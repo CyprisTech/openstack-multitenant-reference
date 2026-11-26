@@ -15,6 +15,8 @@ private     = { path = "stacks/tenants/vm", state = "private" }
 foundation = ["prep", "planes", "receiver", "edge", "web", "private", "transit", "publish"]
 checks     = ["accept", "direct", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
+# lz try: the deployment steps only, with the test fixtures, no check.
+try        = ["foundation"]
 full       = ["foundation", "checks", "end"]
 
 # Settings of the steps.

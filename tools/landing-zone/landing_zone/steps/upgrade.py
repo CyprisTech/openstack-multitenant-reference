@@ -52,7 +52,8 @@ def migrate(ctx, report):
         raise StepFailed(f"options.from.apply: unknown steps {unknown}")
     for key in ctx.options.get("from", {}).get("default_state", []):
         into_state(ctx, key)
-    running = [] if ctx.runner.dry_run else loads(ctx)
+    # The loads measure the upgrade: a campaign only.
+    running = [] if ctx.runner.dry_run or not ctx.campaign else loads(ctx)
     for load in running:
         load.start()
     ctx.migration = Migration(ctx, running)
