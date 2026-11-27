@@ -111,6 +111,9 @@ def check(config, base):
             problems.append("state.backend: the Terraform backend of the states (s3, http, pg, local…)")
         if "{stack}" not in state.get("key", ""):
             problems.append('state.key: the backend setting of each state, with {stack}, e.g. "key=par1/{stack}.tfstate"')
+    rows = config.get("check", {}).get("rows")
+    if rows and not (base / rows).exists():
+        problems.append(f"check.rows: no file {rows}")
     tenants = config.get("tenants", [])
     if not tenants:
         problems.append("tenants: at least one [[tenants]] block")

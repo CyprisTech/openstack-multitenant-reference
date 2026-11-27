@@ -2,7 +2,16 @@
 
 The isolation test opens a TCP connection for every row of the [isolation matrix](../reference/isolation-matrix.md) — from the Internet, from inside each tenant, from the receiver and from the Kubernetes cluster — asks the receiver which tenants pushed metrics, and compares each result with the expected one. It changes nothing.
 
-`lz` runs this test in the test campaign only; on your deployment, run it as below, with the outputs of your stacks.
+## With `lz`
+
+```bash
+lz check landing-zone.toml --dry-run   # the rows, without probing
+lz check landing-zone.toml
+```
+
+`lz` produces the rows from the members of your configuration and the outputs of their stacks ([the rules](../reference/isolation-matrix.md#the-rules-of-every-deployment)), then probes each one from the machine running it and from an instance of each member, through its bastion. A member of type `existing` is a target at the addresses it declares (`probe_addresses`), and a source if it says how to reach it (`probe = { jump, host }`). Rows of your own, such as a database port that only one tenant may reach, go in a file named by `[check] rows`. The rows and their result are kept in `isolation-rows.json` of the work directory.
+
+By hand, with the stacks of the reference scenario: the sections below.
 
 ## When to run it
 

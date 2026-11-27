@@ -135,10 +135,34 @@ def receiver_endpoint(ctx):
     return f"{url.hostname}:{url.port or (443 if url.scheme == 'https' else 80)}"
 
 
+def own_rows(config, found):
+    """The adopter's own rows: the file named by [check] rows, each with from (a member, or "local"
+    for the machine running lz), to (an address), port and expected ("open" or "closed")."""
+    import tomllib  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    name = config.get("check", {}).get("rows")
+    if not name:
+        return []
+    with open(Path(config["base"]) / name, "rb") as f:
+        listed = tomllib.load(f).get("rows", [])
+    sources = {m.name: m.source() for m in found}
+    out = []
+    for r in listed:
+        source = isolation.LOCAL if r["from"] == "local" else sources.get(r["from"])
+        if source is None:
+            raise ValueError(f"[check] rows: {r['from']} is not a member with instances and a bastion")
+        out.append(isolation.row(source, isolation.target(r["to"], r.get("label", r["to"])), int(r["port"]),
+                                 r["expected"], "own"))  # fmt: skip
+    return out
+
+
 def check(ctx, config):
     """The isolation of the deployment: the rows of its members (isolation.rows), written to
     <work>/isolation-rows.json, then probed by tests/isolation/check.py. Returns the exit code."""
-    rows = isolation.rows(members(ctx, config), receiver=receiver_endpoint(ctx))
+    found = members(ctx, config)
+    rows = isolation.rows(found, receiver=receiver_endpoint(ctx))
+    rows += own_rows(config, found)
     ctx.work.mkdir(parents=True, exist_ok=True)
     path = ctx.work / "isolation-rows.json"
     path.write_text(json.dumps(rows, indent=2) + "\n")

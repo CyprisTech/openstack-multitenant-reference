@@ -44,6 +44,7 @@ Each command takes the configuration file of a deployment, or a scenario of the 
 | `init` | a deployment repository: `landing-zone.toml` and an inputs file per stack, from the example |
 | `deploy` | your landing zone, from its configuration file |
 | `plan` | what an apply would change in each deployed stack, kept in `<work>/plans`; nothing is changed. Exit code 2 when something would change |
+| `check` | the isolation of the deployment: rows from its members, probed from the machine running `lz` and from an instance of each member ([check the isolation](../../docs/guides/check-isolation.md)) |
 | `status` | what is deployed: each stack and the number of its resources, the kubeconfig of each cluster |
 | `update-clusters` | each deployed cluster takes the manifests of its stack, as after an apply ([lifecycle](../../docs/guides/kubernetes-lifecycle.md)) |
 | `upgrade` | this release applied over the deployed one, stack by stack ([upgrade guide](../../docs/guides/upgrade.md)) |

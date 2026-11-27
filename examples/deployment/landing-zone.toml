@@ -36,6 +36,9 @@ inputs = "../../stacks/shared/entry-point/terraform.tfvars.example"
 receiver = "https://metrics.example.org/api/v1/write"   # the remote write URL of your metrics receiver
 # resolver = "10.38.0.5"            # a resolver behind the internal services plane, for tenants without egress
 
+# [check]                           # lz check: the isolation rows of the members, and your own
+# rows = "check-rows.toml"          # [[rows]] from = "shop" (or "local"), to = "10.0.0.5", port = 5432, expected = "closed"
+
 # Tenants consume, shared services offer. Their type says what lz deploys in their project:
 # "vm" or "kubernetes" (a stack of the reference), or "existing" (nothing: lz attaches the
 # project to the planes, for a project you run yourself).
@@ -67,6 +70,8 @@ cloud  = "legacy"
 cidr   = "10.25.0.0/24"
 planes = { observability = "tenant", internal = "tenant" }
 internal_sources = ["10.25.0.0/24"] # its addresses on the internal services plane, for the services it consumes
+# probe_addresses = { legacy-db = "10.25.0.10" }   # lz check: addresses to probe as a target
+# probe = { jump = "192.0.2.30", host = "10.25.0.11" }  # lz check: how to probe from it (bastion, instance)
 
 # [[shared-services]]               # the shared cluster, offering services on the internal plane
 # name          = "platform"
