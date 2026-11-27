@@ -93,9 +93,10 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 |---|---|---|
 | Decisions | [ADRs](docs/adr/README.md), [trade-offs](docs/concepts/trade-offs.md), [who it is for](docs/concepts/audiences.md) | read, challenge, adapt |
 | Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent, ACME client, [Kubernetes cluster](modules/kubernetes-cluster/README.md)) | use as they are |
+| Deployment tool | [`lz`](tools/landing-zone/README.md): deploys a landing zone from one configuration file, and plans, upgrades and tears it down; Terraform applies each stack ([ADR-0018](docs/adr/0018-deployment-tool.md)) | `lz deploy landing-zone.toml`, or the stacks by hand |
 | Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; the [shared cluster](stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), whose services are demonstrated, not operated; two tenant types: [`vm`](stacks/tenants/vm/README.md), as a web tenant behind the entry point and a private tenant with neither exposure nor egress, and [`kubernetes`](stacks/tenants/kubernetes/README.md); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
 
-`stacks/shared` holds what the landing zone provides to the tenants: the connectivity (`planes`) and the services (`entry-point`, `egress`, `kubernetes`); `stacks/tenants`, the tenants, each in its own project.
+`stacks/shared` holds what the landing zone provides to the tenants: the connectivity (`planes`) and the services (`entry-point`, `egress`, `kubernetes`, `vm`); `stacks/tenants`, the tenants, each in its own project.
 
 The scenario is one instance of the design, chosen to exercise the design areas. Its three planes, by purpose and by name in the code:
 
@@ -111,7 +112,9 @@ Another plane or shared service is declared in `shared/planes`; the stacks that 
 |---|---|
 | [`stacks/shared/planes`](stacks/shared/planes/README.md) | The planes: adopts the cloud operator's external networks, or builds shared networks in the hub project with a transit router; derives the routes of every project |
 | [`stacks/shared/entry-point`](stacks/shared/entry-point/README.md) | A load balancer and two proxies routing by TLS server name to the tenants' service addresses, without decrypting |
+| [`stacks/shared/egress`](stacks/shared/egress/README.md) | The shared egress: forward proxies on the internal services plane, each tenant admitted to the names it declared |
 | [`stacks/shared/kubernetes`](stacks/shared/kubernetes/README.md) | The shared cluster, not published: an internal ingress and layer 4 services, admitted to their consumers only |
+| [`stacks/shared/vm`](stacks/shared/vm/README.md) | A shared service on virtual machines: one address per service on the internal services plane, admitted to its consumers only; your workload |
 | [`stacks/tenants/vm`](stacks/tenants/vm/README.md) | Virtual machines, their exposure and egress declared: behind a load balancer, published through the entry point or with their own address; or private, with neither exposure nor egress |
 | [`stacks/tenants/kubernetes`](stacks/tenants/kubernetes/README.md) | The published cluster, a Kubernetes cluster created with Cluster API ([node image](images/kubernetes-node/README.md)) |
 
@@ -145,6 +148,7 @@ For each need outside it, where it connects: [who it is for](docs/concepts/audie
 ## Getting started
 
 - [Getting started](docs/getting-started/README.md): one path for every cloud; only the configuration of the planes differs. About 20 minutes with the entry point and a `vm` tenant.
+- [`lz deploy`](tools/landing-zone/README.md) applies that path from one configuration file ([`examples/deployment`](examples/deployment/landing-zone.toml)); or apply the stacks by hand, in the same order.
 
 Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintainers. They are the same stacks; only a few inputs differ, set in each stack's `terraform.tfvars`:
 
@@ -238,6 +242,8 @@ web t1-web-1           TSIG update _acme-challenge.services.example.org    53  r
 | Rebuild after a loss | [rebuild](docs/guides/rebuild.md) |
 | Tear down | [teardown](docs/guides/teardown.md) |
 
+With [`lz`](tools/landing-zone/README.md), most of these tasks are a change of `landing-zone.toml` followed by `lz deploy`; each guide starts with the `lz` way, then gives the steps by hand.
+
 ## Before production
 
 This is a reference, not an operated platform. What stays yours:
@@ -252,7 +258,7 @@ This is a reference, not an operated platform. What stays yours:
 
 | | |
 |---|---|
-| **Getting started** | [Getting started](docs/getting-started/README.md) · [Profiles](#getting-started) · [Where the planes come from](examples/planes/README.md) |
+| **Getting started** | [Getting started](docs/getting-started/README.md) · [`lz`, the deployment tool](tools/landing-zone/README.md) · [Profiles](#getting-started) · [Where the planes come from](examples/planes/README.md) |
 | **Guides** | [Existing projects](docs/guides/existing-projects.md) · [Add a tenant](docs/guides/add-a-tenant.md) · [Publish a domain](docs/guides/publish-a-domain.md) · [Open a service](docs/guides/open-a-service.md) · [Certificates](docs/guides/certificates.md) · [Check the isolation](docs/guides/check-isolation.md) · [Kubernetes tour](docs/guides/kubernetes-tour.md) · [Kubernetes lifecycle](docs/guides/kubernetes-lifecycle.md) · [Upgrade](docs/guides/upgrade.md) · [Rebuild](docs/guides/rebuild.md) · [Tear down](docs/guides/teardown.md) |
 | **Reference** | [Integration points](docs/reference/integration-points.md) · [Planes contract](docs/reference/planes-contract.md) · [Isolation matrix](docs/reference/isolation-matrix.md) · [Test procedure](docs/reference/test-procedure.md) · [Sizing and limits](docs/reference/sizing-and-limits.md) · [Domain publication script](scripts/publish-domains.sh) · stack READMEs above |
 | **Concepts** | [Who it is for](docs/concepts/audiences.md) · [Architecture](docs/concepts/architecture.md) · [Security model](docs/concepts/security.md) · [How a tenant joins a plane](docs/concepts/plane-attachment.md) · [Connecting two tenants](docs/concepts/connecting-tenants.md) · [Trade-offs](docs/concepts/trade-offs.md) · [Landscape](docs/concepts/landscape.md) · [Test results](docs/concepts/test-results.md) · [ADRs](docs/adr/README.md) · [Specs](docs/specs/README.md) |
@@ -270,7 +276,7 @@ The design above is the target of `v1.0`. Each release delivers part of it, test
 | `v0.3` | Resource organisation; planes provided by the cloud operator or built with a member role; isolation and its test; exposure by service addresses, domains published without interruption; the integration point for metrics (push contract, the receiver is yours); identity and access; automation; VM and Kubernetes tenants | released |
 | `v0.4` | Certificates of the tenants ([ADR-0008](docs/adr/0008-tenant-certificates.md)); a Kubernetes cluster for shared services ([ADR-0010](docs/adr/0010-kubernetes-shared-services.md)); the Kubernetes lifecycle the landing zone requires ([ADR-0009](docs/adr/0009-kubernetes-lifecycle.md)); direct exposure of both tenant types, without the entry point | released |
 | **`v0.5`** | Availability zones: placement over the zones and requirements on the cloud; recovery of the architecture ([ADR-0012](docs/adr/0012-resilience-scope.md)); environments ([ADR-0011](docs/adr/0011-environments.md)); plane routes on a transit router, so that an exposure change or a plane joined later reaches the existing load balancers ([ADR-0013](docs/adr/0013-plane-routes-on-a-transit-router.md)); in `v0.5.1`, the test campaign by profile, in Python ([ADR-0014](docs/adr/0014-profiles.md), [`tools/landing-zone`](tools/landing-zone/README.md)) | released |
-| `v0.6` | Network services and the edge, by level ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md)): egress declared per tenant, with an optional shared egress; resolvers and time from the cloud, checked by the isolation test; internal names in Designate or as an output; the routes of the entry point as a reviewed input; a test that tenants have no routed IPv6 ([ADR-0015](docs/adr/0015-ipv6.md)); upgrades between releases: the release campaign tested from the previous release, the clusters updated through their API ([ADR-0017](docs/adr/0017-upgrades-between-releases.md)); shared services on virtual machines ([spec](docs/specs/shared-vm.md)) | |
+| `v0.6` | The deployment tool `lz` ([ADR-0018](docs/adr/0018-deployment-tool.md)): a landing zone from one configuration file, and the test campaign with the same steps; network services and the edge, by level ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md)): egress declared per tenant, with an optional shared egress; resolvers and time from the cloud, checked by the isolation test; internal names in Designate or as an output; the routes of the entry point as a reviewed input; a test that tenants have no routed IPv6 ([ADR-0015](docs/adr/0015-ipv6.md)); upgrades between releases: the release campaign tested from the previous release, the clusters updated through their API ([ADR-0017](docs/adr/0017-upgrades-between-releases.md)); shared services on virtual machines ([spec](docs/specs/shared-vm.md)) | |
 | `v0.7` | Networks of the operator: routed operator planes (address scopes and subnet pools) and segments given by the operator to each project, behind its gateway ([spec](docs/specs/operator-segments.md)), from [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline), tested on its DevStack bench | |
 | `v0.8` | Integration points, contracts only (the tools are yours): logs and audit; backups of tenant data; secrets; package mirrors and registry caches, and with them a Kubernetes cluster without egress; a GitOps pipeline, with continuous verification (the isolation test and a drift plan, run on a schedule) | |
 | `v0.9` | Several regions: a site per region, hubs joined by an encrypted overlay; ready for a failover of the entry point by DNS, which you run and rehearse | |

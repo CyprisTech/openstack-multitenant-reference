@@ -1,5 +1,7 @@
 # Getting started
 
+Two ways, the same result: [`lz deploy`](../../tools/landing-zone/README.md) applies the stacks from one configuration file, or you apply them yourself, stack by stack, in the order below. `lz` runs these same steps ([ADR-0018](../adr/0018-deployment-tool.md)), and every stack can still be applied by hand after a deployment with `lz`.
+
 One path for every cloud. Only step 1 depends on where the shared planes come from: the operator's external networks, or private networks you build in a hub project with a member role (on a public cloud, or on a private one that gives no planes). Every other stack takes its `plane_attachment` from step 1 and works the same way ([How a tenant joins a plane](../concepts/plane-attachment.md)). Deploy only the roles you need: [what you deploy, what we test](../reference/sizing-and-limits.md#what-you-deploy-what-we-test).
 
 ```mermaid
@@ -25,7 +27,7 @@ flowchart LR
 > [!WARNING]
 > These steps create real resources: instances, Octavia load balancers, floating IPs and DNS records.
 
-About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes for a Kubernetes tenant, plus 25 minutes once for its node image. Every stack follows the same pattern: copy `terraform.tfvars.example` to `terraform.tfvars` (git-ignored), adapt it, add its `plane_attachment`, then `tofu init && tofu apply` (`terraform` works the same).
+About 20 minutes with the entry point and a `vm` tenant; add about 20 minutes for a Kubernetes tenant, plus 25 minutes once for its node image. Stack by stack, every stack follows the same pattern: copy `terraform.tfvars.example` to `terraform.tfvars` (git-ignored), adapt it, add its `plane_attachment`, then `tofu init && tofu apply` (`terraform` works the same).
 
 ## What the example shows
 
@@ -51,6 +53,25 @@ The fixtures stand for your own receivers, internal services and certificate aut
 - Hub planes: check that a member may share a network, with the hub's credentials — `openstack network create probe && openstack network rbac create --target-project <another project> --action access_as_shared --type network probe` must succeed; then delete both. Check also the quotas of each project and the number of projects the provider allows. Some clouds forbid it (the Sovereign Cloud Stack recommends it in scs-0126).
 - Each project can create security groups: `openstack quota show` gives `secgroups` 3 or more and `secgroup-rules` 20 or more. Some public clouds create new projects with none until their support raises the quota (seen on OVHcloud, 2026-11-19).
 - Kubernetes tenant only: build the [node image](../../images/kubernetes-node/README.md) now; it depends on nothing else.
+
+## Deploy with `lz`
+
+With the projects of step 0 and their `clouds.yaml` entries:
+
+```bash
+mkdir -p ../my-landing-zone && cp -r examples/deployment/. ../my-landing-zone/   # your deployment repository
+# edit landing-zone.toml: profile, plane mode, a clouds.yaml entry per project, the ranges,
+# the tenants and the shared services, the backend of the states; one inputs file per stack
+tools/landing-zone/lz deploy ../my-landing-zone/landing-zone.toml --dry-run   # the commands, without a cloud
+tools/landing-zone/lz deploy ../my-landing-zone/landing-zone.toml
+tools/landing-zone/lz status ../my-landing-zone/landing-zone.toml
+```
+
+`lz` checks the file before anything runs, then runs steps 1 to 6 below, each apply followed by an empty plan, and creates the Kubernetes clusters from their bootstrap instance. It writes what the stacks give each other (the attachments of the planes, the receiver, the sources of the entry point, the consumers of the shared services); every other input is in the stacks' own files, as in their READMEs. A run started again goes on from the states. Then [step 7](#7-check). The commands, the configuration and where the states and kubeconfigs go: [`lz`](../../tools/landing-zone/README.md).
+
+## Stack by stack
+
+What `lz deploy` runs, by hand: the steps below, each with the stack's own commands.
 
 ## 1. Planes
 

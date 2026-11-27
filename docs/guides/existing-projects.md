@@ -2,6 +2,8 @@
 
 Most organisations start with projects that already run: networks, routers, security groups and instances created by hand, by scripts or by another tool, outside any state of this repository. This guide says what to do with them, project by project, and how to do it when there are thousands of objects.
 
+With [`lz`](../../tools/landing-zone/README.md), a project you keep as it is, joined to the planes only, is a tenant or a shared service of type `existing` ([example](../../examples/deployment/landing-zone.toml)): `lz` attaches it to the planes, deploys nothing in it, and never destroys anything there.
+
 ## Why move
 
 What a project gains by becoming a tenant of the reference:

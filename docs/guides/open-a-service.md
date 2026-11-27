@@ -2,6 +2,8 @@
 
 How a tested release reaches its users without being rebuilt, and how opening it to them stays a reviewed change. The landing zone owns the last step only: the domain on the entry point, or the consumers of an internal service. How the application is built and deployed (a CI pipeline, Flux, Argo CD) belongs to your platform ([integration points](../reference/integration-points.md#automation-a-gitops-pipeline)).
 
+With [`lz`](../../tools/landing-zone/README.md), the opening change is a change of `landing-zone.toml` or of a tenant's inputs file, reviewed in your deployment repository, then `lz deploy`: a domain in the tenant's inputs (a public service), or a tenant in the `consumers` of a shared service (an internal service).
+
 ## The principle
 
 1. **What was qualified is what goes to production.** Promote the artifact, not its source: the container image by its digest, the chart by its version, the virtual machine image by its ID. Rebuilding for production would deploy something that was never tested.

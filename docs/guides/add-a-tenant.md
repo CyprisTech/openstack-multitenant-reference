@@ -2,6 +2,26 @@
 
 A tenant is a project with its own credentials, joined to the shared planes it needs through its own routers ([How a tenant joins a plane](../concepts/plane-attachment.md)). The steps are the same for every tenant type and every cloud; step 6 only applies to planes built in a hub project (interface mode).
 
+## With `lz`
+
+Steps 1 and 2 below, then a `[[tenants]]` block in `landing-zone.toml` ([example](../../examples/deployment/landing-zone.toml)) with its inputs file, and:
+
+```toml
+[[tenants]]
+name   = "shop"
+type   = "vm"
+cloud  = "shop"                       # its clouds.yaml entry
+cidr   = "10.21.4.0/24"
+planes = { publication = "tenant", observability = "tenant" }
+inputs = "shop.tfvars"                # exposure, egress, domains, sizes, as in the stack's README
+```
+
+```bash
+tools/landing-zone/lz deploy landing-zone.toml
+```
+
+`lz` declares the attachment (step 3), applies the planes, the tenant and the planes again (steps 5 and 6), and publishes its domains (step 7). `lz deploy` destroys nothing: to remove a tenant, follow *Remove a tenant* below, then remove its block. By hand: steps 3 to 7.
+
 ## 1. Project and credentials
 
 Create the project (provider's console or API, or [`cloud-baseline`](https://github.com/CyprisTech/terraform-openstack-cloud-baseline) on a private cloud), with resources in the same region as the other projects, and an application credential scoped to it, with the roles `member` and `load-balancer_member`. Add it to `clouds.yaml`. A Kubernetes tenant needs a second credential for the cluster itself ([Kubernetes tenant](../../stacks/tenants/kubernetes/README.md)).

@@ -2,6 +2,10 @@
 
 Order matters: what depends on another stack goes first.
 
+**With [`lz`](../../tools/landing-zone/README.md):** `tools/landing-zone/lz teardown landing-zone.toml` runs the order below in waves (the clusters and the tenants, the shared services, the planes), then checks that nothing is left in the projects of its stacks. It destroys what its states hold, and nothing in a project of type `existing`, which it only attached.
+
+By hand:
+
 1. **Kubernetes clusters** (the published cluster, and the shared cluster): set `bootstrap = true` and apply (the bootstrap instance is needed again), admit it on the API, then run `delete-cluster.sh` on it — see [delete a cluster](kubernetes-lifecycle.md#delete-a-cluster).
 2. **Services that admit named consumers**: the internal service (shared services project).
 3. **Tenants**: `tofu destroy` in each tenant stack.

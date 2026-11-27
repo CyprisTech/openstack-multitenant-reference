@@ -2,6 +2,8 @@
 
 The architecture is code: after the loss of a project, a stack, a region or the whole cloud, it is rebuilt from the repository and the inputs, in a fixed order. What is not code is the tenants' data, and the states. This guide covers what the reference owns ([ADR-0012](../adr/0012-resilience-scope.md)); restoring the tenants' data is theirs, through the backup integration point.
 
+With [`lz`](../../tools/landing-zone/README.md), the order below is that of `lz deploy`: with the states and `landing-zone.toml` kept outside the cloud, the rebuild is `tools/landing-zone/lz deploy landing-zone.toml` again, which recreates what is missing.
+
 ## What you need, kept outside the cloud
 
 | What | Why | How to keep it |

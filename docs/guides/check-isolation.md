@@ -2,6 +2,8 @@
 
 The isolation test opens a TCP connection for every row of the [isolation matrix](../reference/isolation-matrix.md) — from the Internet, from inside each tenant, from the receiver and from the Kubernetes cluster — asks the receiver which tenants pushed metrics, and compares each result with the expected one. It changes nothing.
 
+`lz` runs this test in the test campaign only; on your deployment, run it as below, with the outputs of your stacks.
+
 ## When to run it
 
 - After the first deployment.

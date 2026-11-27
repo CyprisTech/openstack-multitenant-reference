@@ -2,6 +2,8 @@
 
 How a tenant gets certificates its clients trust ([ADR-0008](../adr/0008-tenant-certificates.md), [architecture](../concepts/architecture.md#certificates)). The `vm` and `kubernetes` tenant stacks take the same `certificates` input.
 
+With [`lz`](../../tools/landing-zone/README.md), `certificates` goes in the inputs file of each tenant, or in `[external]` of `landing-zone.toml`, keyed by tenant ([example](../../examples/deployment/landing-zone.toml)); `lz` passes it to the stack.
+
 | Tenant | TLS ends on | Tool | Certificate |
 |---|---|---|---|
 | `vm` | each instance (nginx in front of the application) | lego, run by a systemd timer | one per instance; the site is enabled once it is issued |

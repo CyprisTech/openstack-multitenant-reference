@@ -2,6 +2,10 @@
 
 The entry point routes each domain by SNI to the tenant that serves it, without decrypting the traffic: the tenant keeps its certificates, and the client address reaches it in a PROXY protocol v2 header.
 
+**With [`lz`](../../tools/landing-zone/README.md):** add the domain to the tenant's inputs (`domains`, or `cluster.domains`), then `tools/landing-zone/lz deploy landing-zone.toml`: it applies the tenant, runs `scripts/request-domains.sh` for each tenant on the publication plane, then `scripts/publish-domains.sh` (steps 2 and 3 below). The review is then the change of the tenant's inputs in your deployment repository, before `lz deploy` runs.
+
+By hand:
+
 1. **Declare the domain in the tenant**: `domains` of a [`vm`](../../stacks/tenants/vm/README.md) tenant, `cluster.domains` of a [`kubernetes`](../../stacks/tenants/kubernetes/README.md) tenant. Apply the tenant: its `published_domains` output now lists the domain and the tenant's service address ([ADR-0006](../adr/0006-exposure.md)).
 2. **Ask for the route**: the domains of the entry point are a reviewed input of its stack, the file `stacks/shared/entry-point/domains.auto.tfvars.json` of your deployment repository ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D5). Write the tenant's domains into it, then commit it and open a merge request:
 

@@ -2,6 +2,8 @@
 
 What the landing zone requires of a cluster's life ([ADR-0009](../adr/0009-kubernetes-lifecycle.md)). For everything else (scaling, remediation, etcd backups), follow the [Cluster API documentation](https://cluster-api.sigs.k8s.io/tasks/). The commands run from an administration source admitted on the API, with the kubeconfig of the cluster; the bootstrap instance is not needed.
 
+With [`lz`](../../tools/landing-zone/README.md), `lz deploy` and `lz upgrade` update each cluster after the apply of its stack (the first section below); `tools/landing-zone/lz update-clusters landing-zone.toml` updates them alone, and `lz status` gives the kubeconfig of each. `lz teardown` deletes the clusters before their stacks (the last section). The upgrade of Kubernetes is a change of the stack's `cluster` input, then `lz deploy`, with the checks of its section; the rotation of the credential is done by hand, as its section says.
+
 ## Update a cluster after an apply
 
 The manifests and scripts of a cluster reach its bootstrap instance once, at creation. After `clusterctl move` the cluster manages itself: an apply of its stack that changes them (a new release, new consumers, another Kubernetes version) reaches it through `update-cluster.sh`, run from an administration source with the cluster's kubeconfig ([ADR-0017](../adr/0017-upgrades-between-releases.md), D3). From the root of the repository:

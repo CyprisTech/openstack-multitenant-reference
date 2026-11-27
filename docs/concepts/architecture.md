@@ -345,6 +345,8 @@ The operations and their order:
 | Rebuild after a loss | [rebuild](../guides/rebuild.md): the same order, from the first lost step |
 | Tear down | [teardown](../guides/teardown.md): Kubernetes clusters first, then the internal services, the tenants, the entry point, the receivers, the planes |
 
+**Who runs them.** [`lz`](../../tools/landing-zone/README.md), the deployment tool of the reference ([ADR-0018](../adr/0018-deployment-tool.md)), runs these operations in this order from one configuration file: `deploy`, `plan`, `upgrade`, `update-clusters`, `teardown`. It is an orchestrator, not a control plane: Terraform applies each stack, the states are the only record, and nothing of `lz` runs in the cloud, so it appears in no diagram of this page. Each operation can also be run by hand, stack by stack, as the guides say.
+
 ## Kubernetes clusters
 
 **Status:** delivered: published cluster in `v0.2`, shared cluster and lifecycle in `v0.4`, repair of duplicated add-ons in `v0.5.1`, no longer needed with CAAPH v0.6.6.
