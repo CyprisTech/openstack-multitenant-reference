@@ -2,7 +2,10 @@
 updates its Kubernetes clusters as a whole (update-clusters)."""
 
 import json
+import os
+from urllib.parse import urlsplit
 
+from . import isolation
 from .checks import kubeconfig
 from .kube import update_cluster
 from .previous import changes
@@ -75,3 +78,75 @@ def update_clusters(ctx):
             update_cluster(ctx, key, kubeconfig(ctx, key))
             updated.append(key)
     return updated
+
+
+def members(ctx, config):
+    """The members of a deployment with the facts their stacks give, for the isolation rows."""
+
+    def output(key, name, default=None):
+        try:
+            value = ctx.value(key, name)
+        except Exception:  # an output the stack does not have, or a stack not deployed
+            return default
+        if value is None:
+            return default
+        if ctx.runner.dry_run and isinstance(default, dict) and not isinstance(value, dict):
+            # A placeholder in a dry run: shaped as the output, so that the rows can be listed.
+            return {f"{key}-1": value} if name == "instances" else {}
+        return value
+
+    found = []
+    if ctx.has("entry-point"):
+        lb = output("entry-point", "load_balancer", {})
+        found.append(isolation.Member(
+            name="entry-point", role="entry-point", planes={"publication": "shared", "observability": "tenant"},
+            instances=output("entry-point", "instances", {}), bastion=output("entry-point", "bastion"),
+            public_address=lb.get("floating_ip") if isinstance(lb, dict) else None))  # fmt: skip
+    for kind, role in (("tenants", "tenant"), ("shared-services", "service")):
+        for m in config.get(kind, []):
+            name = m["name"]
+            if m["type"] == "existing":  # a target only, at the addresses it declares; a source if it says how
+                probe = m.get("probe", {})
+                instances = dict(m.get("probe_addresses", {}))
+                if probe.get("host"):
+                    instances.setdefault(name, probe["host"])
+                found.append(isolation.Member(name=name, role=role, planes=m["planes"], instances=instances,
+                                              bastion=probe.get("jump"), consumers=m.get("consumers", [])))  # fmt: skip
+                continue
+            if not ctx.has(name):
+                continue
+            service = output(name, "service_address")
+            found.append(isolation.Member(
+                name=name, role=role, planes=m["planes"], instances=output(name, "instances", {}),
+                bastion=output(name, "bastion"), service_address=service.split(":")[0] if service else None,
+                services=output(name, "services", {}) if role == "service" else {},
+                consumers=m.get("consumers", []), egress=m.get("values", {}).get("egress")))  # fmt: skip
+    return found
+
+
+def receiver_endpoint(ctx):
+    """host:port of the metrics receiver, from its URL, or None."""
+    try:
+        url = urlsplit(ctx.value("receiver", "receiver_url"))
+    except Exception:
+        return None
+    if not url.hostname:
+        return None
+    return f"{url.hostname}:{url.port or (443 if url.scheme == 'https' else 80)}"
+
+
+def check(ctx, config):
+    """The isolation of the deployment: the rows of its members (isolation.rows), written to
+    <work>/isolation-rows.json, then probed by tests/isolation/check.py. Returns the exit code."""
+    rows = isolation.rows(members(ctx, config), receiver=receiver_endpoint(ctx))
+    ctx.work.mkdir(parents=True, exist_ok=True)
+    path = ctx.work / "isolation-rows.json"
+    path.write_text(json.dumps(rows, indent=2) + "\n")
+    print(f"{len(rows)} rows from the configuration: {path}")
+    if ctx.runner.dry_run:
+        for r in rows:
+            print(f"  {r['source']['label']:<28} {r['target']['label']:<52} {r['port']:>5}  {r['expected']}  ({r['rule']})")
+        return 0
+    cmd = ["python3", "tests/isolation/check.py", "--rows", str(path), "--user", ctx.setting("ssh_user"),
+           "--key", os.path.expanduser(ctx.setting("ssh_key"))]  # fmt: skip
+    return ctx.runner.run(cmd, cwd=ctx.root, check=False).returncode

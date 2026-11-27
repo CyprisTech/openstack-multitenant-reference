@@ -92,6 +92,7 @@ COMMANDS = {
     "try": ("the reference with its test fixtures, on test projects (the sequence try)", ["try"]),
     "apply": ("apply the sequences or steps given (default: the sequence try)", ["try"]),
     "plan": ("what an apply would change in each deployed stack; nothing is changed", None),
+    "check": ("the isolation of the deployment: rows from its members, probed (tests/isolation/check.py)", None),
     "status": ("what is deployed: the stacks and the number of their resources, the clusters", None),
     "update-clusters": ("each deployed cluster takes the manifests of its stack (update-cluster.sh)", None),
     "upgrade": ("this release applied over the deployed one, stack by stack (the step migrate)", ["migrate"]),
@@ -199,6 +200,10 @@ def main(argv=None):
     ctx.campaign = args.command == "campaign"
     if deployed is not None:
         deployment.prepare(ctx, deployed)
+    if args.command == "check":
+        if deployed is None:
+            parser.error("check takes the configuration file of a deployment (landing-zone.toml)")
+        return commands.check(ctx, deployed)
     if args.command in ("plan", "status", "update-clusters"):
         return read_or_update(args.command, ctx)
     label = "campaign" if ctx.campaign else f"lz {args.command}"

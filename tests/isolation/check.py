@@ -136,6 +136,7 @@ def parse_args():
     ap.add_argument("--internal-service", default="stacks/shared/vm",
                     help="the internal service the published cluster consumes: its directory or a file of its outputs")
     ap.add_argument("--key", required=True)
+    ap.add_argument("--rows", help="a file of rows (lz check): only these rows are probed, the scenario's are not")
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
     ap.add_argument("--shared-kubeconfig", help="kubeconfig of the shared cluster (stacks/shared/kubernetes)")
@@ -551,8 +552,26 @@ def run(rows):
     return failures
 
 
+def rows_from_file(path, prober):
+    """The rows of a file written by lz check: each with its source (the machine running the test,
+    or an instance through its bastion), its target and the expected result."""
+    with open(path) as f:
+        listed = json.load(f)
+    out = []
+    for r in listed:
+        src, dst, port = r["source"], r["target"], r["port"]
+        if src["kind"] == "local":
+            probe = lambda a=dst["address"], p=port: prober.local(a, p)  # noqa: E731
+        else:
+            probe = lambda j=src["jump"], h=src["host"], a=dst["address"], p=port: prober.remote(j, h, a, p)  # noqa: E731
+        out.append((src["label"], dst["label"], port, r["expected"], probe))
+    return out
+
+
 def main():
     args = parse_args()
+    if args.rows:
+        return 1 if run(rows_from_file(args.rows, Prober(args.user, args.key))) else 0
     d = Deployment(args)
     try:
         rows = (publication_rows(d) + monitoring_rows(d) + lateral_rows(d) + ipv6_rows(d) + resolution_rows(d, args)
