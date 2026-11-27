@@ -104,7 +104,7 @@ Four rules follow from this design, each learned from a test failure ([test resu
 
 ## Public entry point
 
-**Status:** delivered in `v0.1`; routes through instance metadata in `v0.3`; routes as a reviewed input of the stack, planned in `v0.6`.
+**Status:** delivered in `v0.1`; routes through instance metadata in `v0.3`; routes as a reviewed input of the stack in `v0.6`.
 
 One public address for every domain published through it: an Octavia load balancer in TCP with the PROXY protocol, and two Traefik instances in anti-affinity that route by SNI with TLS passthrough. The routes are an input of the stack, kept in the deployment repository: a tenant asks for a route with a change that is reviewed and merged ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D5). They reach the instances as metadata, one item per domain, updated in place, so that a change of routes replaces no instance ([ADR-0006](../adr/0006-exposure.md), D3). It does not terminate TLS, route at layer 7 or filter requests: each tenant owns its certificates, and what needs decryption is level 3 ([trade-offs](trade-offs.md#1-tls-passthrough-at-the-public-entry-point)). Its settings are in the [stack's README](../../stacks/shared/entry-point/README.md#settings); publishing a domain is a [guide](../guides/publish-a-domain.md).
 
@@ -221,7 +221,7 @@ The contract between the sources and the receivers:
 
 ## Network services
 
-**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered, the shared egress for Kubernetes clusters, planned in `v0.7`, and the package mirrors, planned in `v0.8` with the other integration points. The shared egress is [`stacks/shared/egress`](../../stacks/shared/egress/README.md), for `vm` tenants. A Kubernetes cluster declares its egress too, `egress = "router"` only until then: it reaches the Internet through its own router, without filtering or logging.
+**Status:** delivered in `v0.6`, except the shared egress for Kubernetes clusters, planned in `v0.7`, and the package mirrors, planned in `v0.8` with the other integration points. The shared egress is [`stacks/shared/egress`](../../stacks/shared/egress/README.md), for `vm` tenants. A Kubernetes cluster declares its egress too, `egress = "router"` only until then: it reaches the Internet through its own router, without filtering or logging.
 
 What every tenant needs from the network, split by level ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)):
 
@@ -310,7 +310,7 @@ With one network for the administration and internal services roles, administrat
 
 ## Lifecycle
 
-**Status:** delivered; the routes of the entry point as a reviewed input, planned in `v0.6`.
+**Status:** delivered; the routes of the entry point as a reviewed input in `v0.6`.
 
 ```mermaid
 ---
