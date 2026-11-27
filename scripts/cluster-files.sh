@@ -35,4 +35,5 @@ done
 for name in $(jq -r 'keys[]' <<<"$manifests"); do
   jq -j --arg n "$name" '.[$n]' <<<"$manifests" > "$dir/manifests/$name"
 done
+"$tool" -chdir="$stack" output -raw revision > "$dir/revision"
 echo "Written in $dir: $(jq -r 'keys | join(", ")' <<<"$scripts"), manifests/."

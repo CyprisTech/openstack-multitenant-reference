@@ -23,6 +23,11 @@ output "internal_sources" {
   value       = lookup(module.cluster.sources, "internal", [])
 }
 
+output "revision" {
+  description = "Digest of the manifests and scripts of the cluster: a cluster whose ConfigMap platform/landing-zone holds another one is behind its stack (update-cluster.sh --check, lz status)."
+  value       = module.cluster.revision
+}
+
 output "manifests" {
   description = "Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key)."
   sensitive   = true

@@ -159,6 +159,7 @@ As for both clusters: [delete a cluster](../../../docs/guides/kubernetes-lifecyc
 | dns\_records | The records of cluster.domains in internal\_zone (ADR-0016, D2), keyed "<name> <type>", each { zone, name, type, ttl, records }: written in Designate with dns = "designate", to publish with your DNS provider otherwise (a for\_each of its record resource). Empty without internal\_zone. |
 | domains | Names of the HTTP services and the address they resolve to; as records, in dns\_records. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
+| revision | Digest of the manifests and scripts of the cluster: a cluster whose ConfigMap platform/landing-zone holds another one is behind its stack (update-cluster.sh --check, lz status). |
 | scripts | Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory). |
 | services | What the consumers reach, on the internal services plane: the internal ingress (HTTPS, names of cluster.domains) and the TCP echo, at a floating IP of the plane with NAT, at their address in the cluster network otherwise. The consumers admit nothing from the cluster for them. |
 | sources | Addresses the cluster connects from on each plane it joins, for the admission rules of what it calls (allowed\_sources). |

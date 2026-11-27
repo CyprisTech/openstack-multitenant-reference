@@ -77,3 +77,23 @@ class PlanStatusTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevisionTest(unittest.TestCase):
+    def state(self, running):
+        def answer(cmd):
+            if cmd[0] == "tofu" and "revision" in cmd:
+                return Result(0, json.dumps("a1b2c3d4e5f6a7b8"))
+            if cmd[0] == "kubectl":
+                return Result(0, running) if running else Result(1, "", "not found")
+            return Result(0, "")
+
+        ctx = context(answer)
+        return commands.revision_state(ctx, "web", ctx.work / "web.kubeconfig")
+
+    def test_a_cluster_that_runs_its_stacks_revision(self):
+        self.assertEqual(self.state("a1b2c3d4e5f6a7b8"), "runs its stack's revision")
+
+    def test_a_cluster_behind_its_stack(self):
+        self.assertIn("behind its stack (runs 0000", self.state("0000aaaa1111"))
+        self.assertIn("no recorded revision", self.state(""))

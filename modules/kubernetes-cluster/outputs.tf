@@ -22,6 +22,11 @@ output "scripts" {
   value       = local.scripts
 }
 
+output "revision" {
+  description = "Digest of the rendered manifests and scripts: update-cluster.sh writes it in the cluster (ConfigMap platform/landing-zone) once it applied them; a cluster whose revision differs is behind its stack."
+  value       = local.stack_revision
+}
+
 output "entries" {
   description = "Address of each entry, keyed like the ingresses and the services inputs: a floating IP of its plane with NAT, its address in the cluster network otherwise."
   value = merge(

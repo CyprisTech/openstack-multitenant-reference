@@ -25,6 +25,13 @@ The script applies, in order:
 
 It can be run again. With certificates, the manifests hold the key of the DNS provider: `cluster-files.sh` writes them readable by their owner only.
 
+**Is a cluster behind its stack?** An apply of the stack changes nothing in the cluster until `update-cluster.sh` runs, and the plan of the stack is then empty: the cluster may not apply what the stack declares (its consumers, its entries). The script records the revision it applied (the stack's `revision` output) in the ConfigMap `platform/landing-zone`; `update-cluster.sh --check` (exit code 1 when behind), `lz status` and a row of the [isolation test](check-isolation.md) compare it with the stack's.
+
+```bash
+scripts/cluster-files.sh stacks/tenants/kubernetes ~/published
+KUBECONFIG=~/published.kubeconfig ~/published/update-cluster.sh --check
+```
+
 ## Upgrade Kubernetes
 
 A Kubernetes version needs its node image. The service addresses and the address of the API do not change.

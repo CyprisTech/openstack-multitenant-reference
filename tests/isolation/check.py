@@ -231,6 +231,20 @@ class Deployment:
         return kubectl
 
 
+def revision_applied(kubectl, stack_outputs):
+    """Whether the cluster runs the manifests of its stack: the revision update-cluster.sh recorded
+    (ConfigMap platform/landing-zone) is the stack's revision output. A cluster behind its stack
+    may not apply the isolation the stack declares."""
+    expected = stack_outputs.get("revision")
+    if not expected:
+        return "no revision output"
+    try:
+        running = kget(kubectl, "-n", "platform", "get", "configmap", "landing-zone", "-o", "jsonpath={.data.revision}")
+    except subprocess.CalledProcessError:  # no revision recorded: an update-cluster.sh before v0.6
+        running = ""
+    return "yes" if running == expected else f"no: {running[:12] or 'none recorded'}"
+
+
 def kget(kubectl, *a):
     return subprocess.run(kubectl + list(a), check=True, capture_output=True, text=True).stdout.strip()
 
@@ -388,6 +402,7 @@ def published_cluster_rows(d, args):
     rows = [
         ("published Service", "ingress on the stack address", "-", "yes",
          lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"),
+        ("published cluster", "the revision of its stack, applied", "-", "yes", lambda: revision_applied(kubectl, plat)),
         ("published pod", f"receiver {d.receiver}", 9090, "open", lambda: p.pod(pod, d.receiver, 9090)),
         ("receiver", "series pushed by published", "-", "yes", lambda: d.pushed("published")),
         ("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)),
@@ -421,6 +436,7 @@ def shared_cluster_rows(d, args):
     echo_pod = kget(sk, "-n", "echo", "get", "pod", "-l", "app=echo", "-o", "jsonpath={.items[0].status.podIP}")
     web_vm = d.web_vm
     rows = [
+        ("shared cluster", "the revision of its stack, applied", "-", "yes", lambda: revision_applied(sk, shared)),
         ("shared Service", "internal ingress on the stack address", "-", "yes",
          lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"),
         ("receiver", f"shared TCP echo {s_echo}", 7000, "closed", d.from_receiver(s_echo, 7000)),

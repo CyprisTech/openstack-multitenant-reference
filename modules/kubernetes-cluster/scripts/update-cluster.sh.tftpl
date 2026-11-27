@@ -12,6 +12,11 @@
 # the move, --from-bootstrap at the end (the last apply cuts the bootstrap instance off the API, so
 # the script does not wait for the cluster). The script can be run again.
 #
+#     KUBECONFIG=<cluster>.kubeconfig ./update-cluster.sh --check
+#
+# says whether the cluster runs the revision of the directory (the stack's revision output, written
+# by scripts/cluster-files.sh): exit code 0 when it does, 1 when it is behind its stack.
+#
 #     KUBECONFIG=<cluster>.kubeconfig ./update-cluster.sh --admit <address>/32
 #
 # admits the bootstrap instance on the cluster's API again, before delete-cluster.sh runs on it
@@ -20,14 +25,25 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 : "$${KUBECONFIG:?set KUBECONFIG to the kubeconfig of the cluster}"
-workload_only=false from_bootstrap=false admit=""
+workload_only=false from_bootstrap=false admit="" check=false
 case "$${1:-}" in
   --workload-only) workload_only=true ;;
   --from-bootstrap) from_bootstrap=true ;;
   --admit) admit="$${2:?--admit needs the address of the bootstrap instance, <address>/32}" ;;
+  --check) check=true ;;
   "") ;;
-  *) echo "usage: $0 [--workload-only | --from-bootstrap | --admit <address>/32]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--workload-only | --from-bootstrap | --check | --admit <address>/32]" >&2; exit 2 ;;
 esac
+
+if $check; then
+  expected=$(cat revision 2>/dev/null || true)
+  running=$(kubectl --request-timeout=15s -n platform get configmap landing-zone -o jsonpath='{.data.revision}' 2>/dev/null || true)
+  if [[ -n "$expected" && "$running" == "$expected" ]]; then
+    echo "${cluster.name} runs the revision of its stack ($${expected:0:12})."; exit 0
+  fi
+  echo "${cluster.name} is behind its stack: it runs $${running:-no recorded revision}, the stack has $${expected:-no revision file}. Run update-cluster.sh." >&2
+  exit 1
+fi
 
 if [[ -n "$admit" ]]; then
   kubectl --request-timeout=15s -n platform get cluster/${cluster.name} >/dev/null
@@ -145,6 +161,10 @@ duplicates=$(kubectl --request-timeout=15s -n platform get helmreleaseproxy \
 
 # 6. The cluster, last: its API admits the administration sources only, no bootstrap instance.
 sed 's|, *"BOOTSTRAP_SOURCE"||' manifests/cluster.yaml | kubectl apply -f -
+# The revision applied, for update-cluster.sh --check, lz status and the isolation test.
+if [[ -f revision ]]; then
+  kubectl -n platform create configmap landing-zone --from-file=revision --dry-run=client -o yaml | kubectl apply -f -
+fi
 $from_bootstrap && { echo "Cluster ${cluster.name} updated; this instance no longer reaches its API."; exit 0; }
 kubectl -n platform wait cluster/${cluster.name} --for=jsonpath='{.status.conditions[?(@.type=="Available")].status}'=True --timeout=30m
 echo "Cluster ${cluster.name} updated."

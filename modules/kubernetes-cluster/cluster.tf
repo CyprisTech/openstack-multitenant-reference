@@ -119,12 +119,17 @@ locals {
 
 
 locals {
+  # Digest of the rendered manifests and scripts: update-cluster.sh records it in the cluster, from
+  # the bootstrap instance at creation as from an administration source after (output revision).
+  stack_revision = nonsensitive(sha256(jsonencode({ manifests = local.manifests, scripts = local.scripts })))
+
   bootstrap_files = merge(
     # kind takes the MTU of the default Docker bridge: it must not exceed the MTU of the cluster
     # network, or large replies of the cloud APIs are dropped silently (no "fragmentation needed").
     var.network_mtu == null ? {} : { "/etc/docker/daemon.json" = { content = base64gzip(jsonencode({ mtu = var.network_mtu })), permissions = "0644" } },
     { for name, content in local.manifests : "/opt/platform/manifests/${name}" => { content = base64gzip(content), permissions = "0644" } },
     { for name, content in local.scripts : "/opt/platform/${name}" => { content = base64gzip(content), permissions = "0755" } },
+    { "/opt/platform/revision" = { content = base64gzip(local.stack_revision), permissions = "0644" } },
   )
 }
 

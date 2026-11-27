@@ -36,6 +36,7 @@ What the module owns of the cluster's lifecycle, and what it leaves to Cluster A
 | Name | Type |
 | ---- | ---- |
 | [openstack_networking_floatingip_v2.entry](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/networking_floatingip_v2) | resource |
+| [terraform_data.bootstrap_user_data](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.checks](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.cluster_network](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.entries](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
@@ -76,6 +77,7 @@ What the module owns of the cluster's lifecycle, and what it leaves to Cluster A
 | bootstrap | Floating IP of the bootstrap instance on the administration network, or null once it is removed. |
 | entries | Address of each entry, keyed like the ingresses and the services inputs: a floating IP of its plane with NAT, its address in the cluster network otherwise. |
 | manifests | Rendered Cluster API manifests, as written on the bootstrap instance. Sensitive with certificates (the DNS provider's key). |
+| revision | Digest of the rendered manifests and scripts: update-cluster.sh writes it in the cluster (ConfigMap platform/landing-zone) once it applied them; a cluster whose revision differs is behind its stack. |
 | scripts | Rendered scripts: create-cluster.sh and delete-cluster.sh, written on the bootstrap instance at its creation; update-cluster.sh, run from the administration sources after each apply (scripts/cluster-files.sh writes them in a directory). |
 | sources | Addresses the cluster connects from on each plane it joins, for the admission rules of what it calls there (allowed\_sources): its router's gateway address on a plane with NAT, the cluster range on a plane without NAT. |
 <!-- END_TF_DOCS -->

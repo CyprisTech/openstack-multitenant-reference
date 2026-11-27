@@ -65,8 +65,25 @@ def status(ctx):
             config = kubeconfig(ctx, key)
             created = f", kubeconfig {config}"
             line += created if config.exists() else ", no kubeconfig yet (its bootstrap instance creates the cluster)"
+            if config.exists():
+                line += ", " + revision_state(ctx, key, config)
         lines.append(line)
     return lines
+
+
+def revision_state(ctx, key, config):
+    """Whether a cluster runs the revision of its stack (update-cluster.sh writes it in the
+    ConfigMap platform/landing-zone once it applied the stack's manifests)."""
+    try:
+        expected = ctx.value(key, "revision")
+    except Exception:
+        return "revision unknown (no revision output)"
+    found = ctx.runner.run(["kubectl", "--kubeconfig", str(config), "--request-timeout=15s", "-n", "platform", "get",
+                            "configmap", "landing-zone", "-o", "jsonpath={.data.revision}"], check=False, quiet=True)  # fmt: skip
+    running = found.stdout.strip() if found.returncode == 0 else ""
+    if ctx.runner.dry_run or running == expected:
+        return "runs its stack's revision"
+    return f"behind its stack (runs {running[:12] or 'no recorded revision'}): lz update-clusters"
 
 
 def update_clusters(ctx):
