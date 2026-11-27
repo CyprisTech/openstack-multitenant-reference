@@ -19,7 +19,8 @@ class ExampleTest(unittest.TestCase):
     def test_the_scenario_of_the_example(self):
         scenario = deployment.scenario(deployment.load(EXAMPLE))
         self.assertEqual(scenario.stacks["shop"], "stacks/tenants/vm")
-        self.assertEqual(scenario.states, {"shop": "shop", "apps": "apps"})
+        self.assertEqual(scenario.states, {"shop": "shop", "apps": "apps", "registry": "registry"})
+        self.assertEqual(scenario.stacks["registry"], "stacks/shared/vm")  # a shared service on virtual machines
         self.assertNotIn("egress", scenario.stacks)  # no clouds.egress in the example
         self.assertNotIn("legacy", scenario.stacks)  # existing: attached, nothing deployed
         self.assertTrue(scenario.options["planes"]["attachments"]["legacy"]["existing"])
@@ -31,8 +32,8 @@ class ExampleTest(unittest.TestCase):
         self.assertIn("10.25.0.0/24", scenario.options["planes"]["tenant_ranges"]["internal"])
         self.assertEqual(scenario.options["clusters"], ["apps"])
         self.assertEqual(scenario.sequences["deploy"],
-                         ["prep", "planes", "deploy-entry-point", "tenant-shop", "tenant-apps", "transit",
-                          "deploy-publish", "cluster-apps"])  # fmt: skip
+                         ["prep", "planes", "deploy-entry-point", "tenant-shop", "tenant-apps", "service-registry",
+                          "transit", "deploy-publish", "cluster-apps"])  # fmt: skip
 
 
 class UpgradeTest(unittest.TestCase):

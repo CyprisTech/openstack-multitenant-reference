@@ -248,6 +248,7 @@ def prepare(ctx, config):
 MEMBER_GUIDES = {
     "tenant": ["docs/reference/test-procedure.md#4-tenants-web-and-private", "docs/getting-started/README.md#4-tenants"],
     "service": ["docs/reference/test-procedure.md#6-shared-cluster", "stacks/shared/kubernetes/README.md#usage"],
+    "service-vm": ["docs/reference/test-procedure.md#2-shared-services", "stacks/shared/vm/README.md#usage"],
     "cluster": ["docs/reference/test-procedure.md#7-published-cluster", "docs/guides/kubernetes-lifecycle.md"],
 }
 # The steps of the shared stacks that depend on the tenants.
@@ -269,7 +270,8 @@ def register(config):
         kind = "tenant" if member in config["tenants"] else "service"
         STEPS[f"{kind}-{member['name']}"] = partial(tenant_step if kind == "tenant" else service_step, tenant=member,
                                                     config=config)  # fmt: skip
-        GUIDES[f"{kind}-{member['name']}"] = MEMBER_GUIDES[kind]
+        guide = "service-vm" if kind == "service" and member["type"] == "vm" else kind
+        GUIDES[f"{kind}-{member['name']}"] = MEMBER_GUIDES[guide]
         if member["type"] == "kubernetes":
             STEPS[f"cluster-{member['name']}"] = partial(cluster_step, tenant=member)
             GUIDES[f"cluster-{member['name']}"] = MEMBER_GUIDES["cluster"]
@@ -340,8 +342,8 @@ def certificates(ctx, name):
 
 
 def service_step(ctx, report, tenant, config):
-    """A shared service deployed by lz (the shared cluster): admitted to its consumers, the tenants
-    it names, by their addresses on the internal services plane."""
+    """A shared service deployed by lz (a shared cluster, or virtual machines): admitted to its
+    consumers, the tenants it names, by their addresses on the internal services plane."""
     name = tenant["name"]
     consumers = []
     for consumer in tenant.get("consumers", []):
@@ -351,14 +353,19 @@ def service_step(ctx, report, tenant, config):
         consumers += sources if isinstance(sources, list) else [sources]  # a placeholder in a dry run
     inputs = dict(tenant.get("values", {}))
     inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, tenant.get("attachment", name)),
-                  monitoring=monitoring(ctx), consumers=consumers, cluster_cidr=tenant["cidr"],
-                  bootstrap=not kubeconfig(ctx, name).exists())  # fmt: skip
+                  monitoring=monitoring(ctx), consumers=consumers)  # fmt: skip
+    if tenant["type"] == "vm":
+        inputs.update(name=name, cidr=tenant["cidr"])  # the vm stack's resources are named after it
+    else:
+        inputs.update(cluster_cidr=tenant["cidr"], bootstrap=not kubeconfig(ctx, name).exists())
     settings = certificates(ctx, name)
     if settings is not None:
         inputs["certificates"] = settings
     ctx.set_inputs(name, **inputs)
     ctx.apply(name)
-    if inputs["bootstrap"]:
+    if tenant["type"] == "vm":
+        ctx.wait_for_instances(ctx.value(name, "bastion"), ctx.instances(name))
+    elif inputs["bootstrap"]:
         wait_for_bootstrap(ctx, name)
 
 

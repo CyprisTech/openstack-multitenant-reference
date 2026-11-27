@@ -8,7 +8,7 @@ MODES = ("gateway", "interface")
 # What lz deploys for a tenant or a shared service, by type (lz deploy and the scenarios of the
 # reference); "existing": nothing, the project is only attached to the planes.
 TENANT_STACKS = {"vm": "stacks/tenants/vm", "kubernetes": "stacks/tenants/kubernetes", "existing": None}
-SERVICE_STACKS = {"kubernetes": "stacks/shared/kubernetes", "existing": None}
+SERVICE_STACKS = {"vm": "stacks/shared/vm", "kubernetes": "stacks/shared/kubernetes", "existing": None}
 
 
 class ScenarioError(ValueError):

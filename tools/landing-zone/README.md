@@ -19,7 +19,7 @@ tools/landing-zone/lz deploy path/to/landing-zone.toml
 
 | Type | What `lz` does |
 |---|---|
-| `vm` | applies [`stacks/tenants/vm`](../../stacks/tenants/vm) in the project, with its own state |
+| `vm` | applies [`stacks/tenants/vm`](../../stacks/tenants/vm) (a tenant) or [`stacks/shared/vm`](../../stacks/shared/vm) (a shared service) in the project, with its own state |
 | `kubernetes` | applies [`stacks/tenants/kubernetes`](../../stacks/tenants/kubernetes) (a tenant) or [`stacks/shared/kubernetes`](../../stacks/shared/kubernetes) (a shared service), then creates the cluster from its bootstrap instance |
 | `existing` | nothing in the project: attaches it to the planes, for a project you run yourself |
 

@@ -341,3 +341,39 @@ class PrepTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SharedServiceTest(unittest.TestCase):
+    def outputs(self, cmd):
+        values = {
+            ("stacks/shared/planes", "attachments"): {
+                "web": {"planes": {"internal": {"routes": []}}},
+                "registry": {"planes": {"internal": {"routes": []}, "observability": {"routes": []}}},
+            },
+            ("stacks/tenants/vm", "internal_sources"): ["10.21.0.0/24"],
+            ("stacks/shared/vm", "instances"): {"t1-registry-1": "10.37.0.11"},
+            ("stacks/shared/vm", "bastion"): "192.0.2.40",
+        }
+        if cmd[0] == "tofu" and cmd[2] == "output":
+            key = (cmd[1].removeprefix("-chdir="), cmd[4])
+            if key in values:
+                return Result(0, json.dumps(values[key]))
+        return None
+
+    def test_a_shared_service_on_virtual_machines_admits_its_consumers(self):
+        stacks = dict(STACKS, registry="stacks/shared/vm")
+        config = {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "web": "web",
+                             "registry": "registry"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
+        ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
+                      states={"web": "web", "registry": "registry"})  # fmt: skip
+        service = {"name": "registry", "type": "vm", "cidr": "10.37.0.0/27", "consumers": ["web"],
+                   "planes": {"internal": "shared"}, "values": {"egress": "router"}}  # fmt: skip
+        deployment.register({"tenants": [WEB], "shared-services": [service]})
+        load()["service-registry"](ctx, StepReport("service-registry"))
+        written = json.loads((ctx.root / "stacks/shared/vm/mode.registry.tfvars.json").read_text())
+        self.assertEqual(written["consumers"], ["10.21.0.0/24"])
+        self.assertEqual((written["name"], written["cidr"], written["egress"]), ("registry", "10.37.0.0/27", "router"))
+        self.assertNotIn("bootstrap", written)  # no cluster
+        ssh = [c for c, _ in ctx.runner.commands if c[0] == "ssh"]
+        self.assertEqual([c[-2] for c in ssh], ["ops@10.37.0.11"])  # its instances, through its bastion
+        self.assertIn("ops@192.0.2.40", ssh[0])

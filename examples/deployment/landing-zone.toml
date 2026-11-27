@@ -78,6 +78,15 @@ internal_sources = ["10.25.0.0/24"] # its addresses on the internal services pla
 # consumers     = ["shop", "apps", "legacy"]
 # inputs        = "../../stacks/shared/kubernetes/terraform.tfvars.example"
 
+[[shared-services]]                 # a shared service on virtual machines, offering a registry on the internal plane
+name      = "registry"
+type      = "vm"
+cloud     = "registry"
+cidr      = "10.37.0.0/27"
+planes    = { internal = "shared", observability = "tenant" }
+consumers = ["shop", "legacy"]
+inputs    = "../../stacks/shared/vm/terraform.tfvars.example"   # its services, workload, sizes…
+
 [[shared-services]]
 name     = "metrics"
 type     = "existing"               # your receiver, in a project of its own on the observability plane
