@@ -22,3 +22,4 @@ Specs and [ADRs](../adr/README.md) play different parts:
 | [Several regions](regions.md) | Proposed |
 | [Upgrades between releases](upgrades.md) | Proposed |
 | [Segments provided by the operator](operator-segments.md) | Proposed |
+| [Shared services on virtual machines](shared-vm.md) | Proposed |
