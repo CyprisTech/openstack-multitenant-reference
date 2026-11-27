@@ -180,14 +180,18 @@ def delete_cluster(ctx, key, kubeconfig):
     """Admits the bootstrap instance on the API again, then deletes the cluster from it, as the
     teardown of the Kubernetes stacks says.
 
-    Does nothing if the stack has no bootstrap instance. Once moved, the cluster manages itself:
-    the bootstrap instance is admitted on its API first (update-cluster.sh --admit). A creation
-    that stopped before the move left Cluster API on the bootstrap instance: delete-cluster.sh
-    deletes it from there.
+    A cluster whose bootstrap instance was removed (bootstrap = false, once the cluster manages
+    itself) gets it back first: bootstrap = true, then an apply of the stack, as the teardown of the
+    Kubernetes stacks says; without a kubeconfig there is no cluster to delete. Once moved, the
+    cluster manages itself: the bootstrap instance is admitted on its API first (update-cluster.sh
+    --admit). A creation that stopped before the move left Cluster API on the bootstrap instance:
+    delete-cluster.sh deletes it from there.
     """
     host = bootstrap_address(ctx, key)
+    if not host and not ctx.runner.dry_run and cluster_answers(ctx, kubeconfig):
+        host = restore_bootstrap(ctx, key)
     if not host:
-        ctx.runner.echo(f"{key}: no bootstrap instance, nothing to delete")
+        ctx.runner.echo(f"{key}: no bootstrap instance and no cluster, nothing to delete")
         return
     kubectl = Kubectl(ctx, kubeconfig)
     clusters = kubectl("--request-timeout=15s", "-n", "platform", "get", "cluster", "-o", "name", check=False, quiet=True)
@@ -201,6 +205,45 @@ def delete_cluster(ctx, key, kubeconfig):
     ctx.timing(f"delete-cluster {key} {round(time.monotonic() - started)}s")
     if result.returncode != 0:
         raise StepFailed(f"delete-cluster.sh failed on {key} (log: logs/delete-cluster-{key}.log)")
+    # The cluster is gone: its kubeconfig would make a later run look for it again.
+    if not ctx.runner.dry_run:
+        Path(kubeconfig).unlink(missing_ok=True)
+
+
+def cluster_answers(ctx, kubeconfig):
+    """Whether a cluster exists behind its kubeconfig: its API answers. A kubeconfig left by a
+    cluster deleted earlier is no reason to bring a bootstrap instance back."""
+    if not Path(kubeconfig).exists():
+        return False
+    found = ctx.runner.run(["kubectl", "--kubeconfig", str(kubeconfig), "--request-timeout=15s", "get", "--raw", "/healthz"],
+                           check=False, quiet=True)  # fmt: skip
+    return found.returncode == 0
+
+
+def kubeconfig_path(ctx, key):
+    return ctx.work / f"{key}.kubeconfig"
+
+
+def restore_bootstrap(ctx, key):
+    """The bootstrap instance of a stack back (bootstrap = true in its inputs, then an apply), to
+    delete its cluster from it; returns its address."""
+    stack = ctx.stack(key)
+    path = ctx.root / stack / stack.inputs
+    inputs = json.loads(path.read_text()) if path.exists() else {}
+    ctx.runner.echo(f"{key}: the bootstrap instance is back to delete the cluster (bootstrap = true)")
+    inputs["bootstrap"] = True
+    path.write_text(json.dumps(inputs, indent=2) + "\n")
+    ctx.apply(key)
+    wait_for_bootstrap(ctx, key)
+    host = bootstrap_address(ctx, key)
+    # A new instance has no kubeconfig of the cluster: delete-cluster.sh reads it in /opt/platform,
+    # under the cluster's name, as create-cluster.sh left it on the first instance.
+    name = ctx.runner.run(["kubectl", "--kubeconfig", str(kubeconfig_path(ctx, key)), "config", "view", "--minify", "-o",
+                           "jsonpath={.clusters[0].name}"], quiet=True).stdout.strip() or key  # fmt: skip
+    copy(ctx, kubeconfig_path(ctx, key), f"{host}:/tmp/workload.kubeconfig")
+    install = f"sudo install -m 600 /tmp/workload.kubeconfig /opt/platform/{name}.kubeconfig"
+    remote(ctx, host, f"{install}; rm -f /tmp/workload.kubeconfig", quiet=True)
+    return host
 
 
 def refresh_bootstrap(ctx, key, host):

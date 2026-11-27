@@ -39,6 +39,47 @@ class DeleteClusterTest(unittest.TestCase):
         self.assertFalse([c for c, _ in ctx.runner.commands if c[0] == "ssh"])
 
 
+class RestoreBootstrapTest(unittest.TestCase):
+    def test_a_cluster_without_its_bootstrap_instance_gets_it_back_to_be_deleted(self):
+        applied = []
+
+        def answer(cmd):
+            if "apply" in cmd:
+                applied.append(cmd)
+            if "output" in cmd and "bootstrap" in cmd:
+                return Result(0, json.dumps("192.0.2.60" if applied else None))
+            return Result(0, "done")
+
+        ctx = context(answer, stacks=STACKS)
+        ctx.sleep = lambda seconds: None
+        config = ctx.work / "shared.kubeconfig"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text("apiVersion: v1")
+        inputs = ctx.root / ctx.stack("shared") / ctx.stack("shared").inputs
+        inputs.write_text(json.dumps({"bootstrap": False, "cluster_cidr": "10.36.0.0/24"}))
+        delete_cluster(ctx, "shared", config)
+        self.assertTrue(applied, "the stack is applied with its bootstrap instance")
+        self.assertTrue(json.loads(inputs.read_text())["bootstrap"])
+        self.assertTrue(any("delete-cluster.sh" in " ".join(c) for c, _ in ctx.runner.commands))
+
+
+class StaleKubeconfigTest(unittest.TestCase):
+    def test_a_kubeconfig_of_a_deleted_cluster_brings_nothing_back(self):
+        def answer(cmd):
+            if cmd[0] == "kubectl":
+                return Result(1, "", "connection refused")  # no API behind the kubeconfig
+            if "output" in cmd and "bootstrap" in cmd:
+                return Result(0, json.dumps(None))
+            return Result(0, "")
+
+        ctx = context(answer, stacks=STACKS)
+        config = ctx.work / "shared.kubeconfig"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text("apiVersion: v1")
+        delete_cluster(ctx, "shared", config)
+        self.assertFalse([c for c, _ in ctx.runner.commands if "apply" in c], "no stack applied for a deleted cluster")
+
+
 class RotateTest(unittest.TestCase):
     def test_the_guide_runs_with_the_new_credential_never_printed(self):
         try:
