@@ -59,7 +59,16 @@ def rows(members, receiver=None, public_probe="1.1.1.1"):
     if receiver:
         out += observability(members, receiver)
     out += way_out(members, public_probe)
-    return out
+    # A source that reaches nothing it should proves nothing by its closed results (a probe that
+    # cannot connect at all would report every target closed): it stays a target only.
+    controlled = {r["source"]["label"] for r in out if r["expected"] == "open"}
+    unique, seen = [], set()
+    for r in out:  # two rules may expect the same row: probed once, under the first
+        key = (r["source"]["label"], r["target"]["address"], r["port"])
+        if r["source"]["label"] in controlled and key not in seen:
+            seen.add(key)
+            unique.append(r)
+    return unique
 
 
 def publication(entry, members):
@@ -116,13 +125,14 @@ def instance_ports(member):
 
 def internal_services(entry, members):
     """A shared service admits its consumers on its ports, and nobody else on the internal services
-    plane; the entry point never reaches it."""
+    plane; neither the entry point nor the machine running the test reaches it."""
     out = []
     for s in members:
         for name, entries in s.services.items():
             for endpoint in entries:
                 address, port = endpoint.rsplit(":", 1)
                 to = target(address, f"{s.name} {name} {address}")
+                out.append(row(LOCAL, to, int(port), "closed", "internal services"))
                 for m in members:
                     if m is s or not m.source():
                         continue

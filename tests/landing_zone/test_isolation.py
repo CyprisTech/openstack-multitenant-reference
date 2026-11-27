@@ -71,9 +71,26 @@ class DeploymentTest(unittest.TestCase):
 
     def test_a_project_of_type_existing_without_access_is_a_target_only(self):
         members = [
-            Member("shop", "tenant", {"internal": "tenant"}, instances={"shop-1": "10.21.0.5"}, bastion="192.0.2.1"),
+            Member("shop", "tenant", {"internal": "tenant", "observability": "tenant"}, instances={"shop-1": "10.21.0.5"},
+                   bastion="192.0.2.1"),
             Member("legacy", "tenant", {"internal": "tenant"}, instances={"legacy": "10.25.0.5"}),
-        ]
-        listed = rows(members)
+        ]  # fmt: skip
+        listed = rows(members, receiver="198.51.100.9:443")
         self.assertNotIn("legacy", {r["source"]["label"].split()[0] for r in listed})
         self.assertIn(("shop shop-1", "10.25.0.5", 22, "closed"), {key(r) for r in listed})
+
+
+class UniqueTest(unittest.TestCase):
+    def test_a_row_two_rules_expect_is_probed_once(self):
+        listed = rows(scenario(), receiver="10.34.0.8:9090")
+        keys = [(r["source"]["label"], r["target"]["address"], r["port"]) for r in listed]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_a_source_without_positive_control_is_a_target_only(self):
+        members = scenario() + [
+            Member("internal", "service", {"internal": "shared"}, instances={"t1-internal-1": "10.35.0.5"},
+                   bastion="172.19.0.90", services={"internal": ["172.19.0.60:8080"]}, consumers=["published"]),
+        ]  # fmt: skip
+        listed = rows(members, receiver="10.34.0.8:9090")
+        self.assertNotIn("internal t1-internal-1", {r["source"]["label"] for r in listed})
+        self.assertIn(("web t1-web-1", "172.19.0.60", 8080, "closed"), {key(r) for r in listed})

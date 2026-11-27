@@ -49,6 +49,7 @@ no direct way to the Internet; the web and private tenants, not declared, do not
 """
 
 import argparse
+import importlib
 import json
 import os
 import shlex
@@ -270,23 +271,9 @@ def load_balancer_rows(name, kubectl, entry_namespace, entry_address):
 # --- the rows, by family: (from, to, port, expected, probe) ---------------------------------------
 
 
-def publication_rows(d):
-    """Publication (ADR-0006): the entry point reaches the tenant's service address, and only it."""
-    p, edge_vm, web_vm, prv_vm, service = d.p, d.edge_vm, d.web_vm, d.prv_vm, d.service
-    return [
-        ("test runner", "entry point (public IP)", 443, "open", lambda: p.local(d.public_ip, 443)),
-        ("test runner", "entry point (public IP)", 80, "open", lambda: p.local(d.public_ip, 80)),
-        ("test runner", f"web service address {service}", 443, "closed", lambda: p.local(service, 443)),
-        (f"edge {edge_vm[0]}", f"web service address {service}", 443, "open", d.from_edge(service, 443)),
-        (f"edge {edge_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", d.from_edge(web_vm[1], 443)),
-        (f"private {prv_vm[0]}", f"web service address {service}", 443, "closed", d.from_private(service, 443)),
-        (f"web {web_vm[0]}", f"edge {edge_vm[0]} (private {edge_vm[1]})", 443, "closed", d.from_web(edge_vm[1], 443)),
-    ]
-
-
 def monitoring_rows(d):
-    """Monitoring (ADR-0007): every tenant pushes to the receiver; nothing reaches a tenant's metrics."""
-    rows = [(name, f"receiver {d.receiver}", 9090, "open", probe(d.receiver, 9090)) for name, probe in d.tenants()]
+    """Monitoring (ADR-0007): nothing reaches a tenant's metrics (the pushes come from the rules)."""
+    rows = []
     for name, ip in ((d.edge_vm[0], d.edge_vm[1]), (d.web_vm[0], d.web_vm[1]), (d.prv_vm[0], d.prv_vm[1])):
         rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", d.from_receiver(ip, 9100)))
     return rows
@@ -301,10 +288,6 @@ def lateral_rows(d):
     rows.append(("receiver", f"edge {d.edge_vm[0]} (private {d.edge_vm[1]})", 443, "closed", d.from_receiver(d.edge_vm[1], 443)))
     for tenant in ("edge", "web", "private"):
         rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: d.pushed(t)))
-    web_vm, prv_vm = d.web_vm, d.prv_vm
-    rows.append((f"web {web_vm[0]}", f"private {prv_vm[0]} (private {prv_vm[1]})", 22, "closed", d.from_web(prv_vm[1], 22)))
-    rows.append((f"private {prv_vm[0]}", f"web {web_vm[0]} (private {web_vm[1]})", 443, "closed", d.from_private(web_vm[1], 443)))
-    rows.append((f"private {prv_vm[0]}", "Internet (1.1.1.1)", 443, "closed", d.from_private("1.1.1.1", 443)))
     return rows
 
 
@@ -402,14 +385,9 @@ def published_cluster_rows(d, args):
     api = server.split("//")[1].split(":")[0]
     internal = next(iter(outputs(args.tool, args.internal_service)["services"].values()))[0].split(":")[0]
     pod = d.published_pod = d.start_probe(args.published_kubeconfig)
-    edge_vm, web_vm, prv_vm = d.edge_vm, d.web_vm, d.prv_vm
     rows = [
         ("published Service", "ingress on the stack address", "-", "yes",
          lambda: "yes" if svc_ingress == ingress else f"no: {svc_ingress}"),
-        (f"edge {edge_vm[0]}", f"published ingress {ingress}", 443, "open", d.from_edge(ingress, 443)),
-        ("test runner", f"published ingress {ingress}", 443, "closed", lambda: p.local(ingress, 443)),
-        (f"web {web_vm[0]}", f"published ingress {ingress}", 443, "closed", d.from_web(ingress, 443)),
-        (f"private {prv_vm[0]}", f"published ingress {ingress}", 443, "closed", d.from_private(ingress, 443)),
         ("published pod", f"receiver {d.receiver}", 9090, "open", lambda: p.pod(pod, d.receiver, 9090)),
         ("receiver", "series pushed by published", "-", "yes", lambda: d.pushed("published")),
         ("test runner (administrator)", f"published Kubernetes API {api}", 6443, "open", lambda: p.local(api, 6443)),
@@ -419,9 +397,6 @@ def published_cluster_rows(d, args):
                      lambda b=out["bastion"]: p.pod(pod, b, 22)))  # fmt: skip
     rows += [
         ("published pod", f"internal service {internal}", 8080, "open", lambda: p.pod(pod, internal, 8080)),
-        (f"web {web_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_web(internal, 8080)),
-        (f"private {prv_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_private(internal, 8080)),
-        (f"edge {edge_vm[0]}", f"internal service {internal}", 8080, "closed", d.from_edge(internal, 8080)),
         ("receiver", f"internal service {internal}", 8080, "closed", d.from_receiver(internal, 8080)),
         ("receiver", f"published ingress {ingress}", 443, "closed", d.from_receiver(ingress, 443)),
         ("published pod", "routed IPv6 (global address, default route)", "-", "none", lambda: p.pod_ipv6(pod)),
@@ -444,16 +419,11 @@ def shared_cluster_rows(d, args):
                         "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")  # fmt: skip
     whoami_pod = kget(sk, "-n", "whoami", "get", "pod", "-l", "app=whoami", "-o", "jsonpath={.items[0].status.podIP}")
     echo_pod = kget(sk, "-n", "echo", "get", "pod", "-l", "app=echo", "-o", "jsonpath={.items[0].status.podIP}")
-    edge_vm, web_vm, prv_vm = d.edge_vm, d.web_vm, d.prv_vm
+    web_vm = d.web_vm
     rows = [
         ("shared Service", "internal ingress on the stack address", "-", "yes",
          lambda: "yes" if svc_internal == s_ingress else f"no: {svc_internal}"),
-        (f"web {web_vm[0]}", f"shared internal ingress {s_ingress}", 443, "open", d.from_web(s_ingress, 443)),
-        (f"web {web_vm[0]}", f"shared TCP echo {s_echo}", 7000, "open", d.from_web(s_echo, 7000)),
-        (f"private {prv_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", d.from_private(s_ingress, 443)),
-        (f"edge {edge_vm[0]}", f"shared internal ingress {s_ingress}", 443, "closed", d.from_edge(s_ingress, 443)),
         ("receiver", f"shared TCP echo {s_echo}", 7000, "closed", d.from_receiver(s_echo, 7000)),
-        ("test runner", f"shared internal ingress {s_ingress}", 443, "closed", lambda: p.local(s_ingress, 443)),
     ]  # fmt: skip
     if d.published_pod:
         pod = d.published_pod
@@ -552,11 +522,15 @@ def run(rows):
     return failures
 
 
-def rows_from_file(path, prober):
-    """The rows of a file written by lz check: each with its source (the machine running the test,
-    or an instance through its bastion), its target and the expected result."""
-    with open(path) as f:
-        listed = json.load(f)
+def isolation_rules():
+    """The rules of lz check (tools/landing-zone/landing_zone/isolation.py), shared with the test."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools", "landing-zone"))
+    return importlib.import_module("landing_zone.isolation")
+
+
+def probes(listed, prober):
+    """The rows of the rules, each with its probe: from the machine running the test, or from an
+    instance through its bastion."""
     out = []
     for r in listed:
         src, dst, port = r["source"], r["target"], r["port"]
@@ -568,13 +542,55 @@ def rows_from_file(path, prober):
     return out
 
 
+def generic_rows(d, args):
+    """The rows the rules expect of the members under test (publication, between members, internal
+    services, observability, the way out): the same rules as lz check, here with the members of
+    the reference scenario read from the arguments."""
+    rules = isolation_rules()
+    Member = rules.Member
+    members = [
+        Member("edge", "entry-point", {"publication": "shared", "observability": "tenant"}, instances=d.edge["instances"],
+               bastion=d.edge["bastion"], public_address=d.public_ip),
+        Member("web", "tenant", {"publication": "tenant", "observability": "tenant", "internal": "tenant"},
+               instances=d.web["instances"], bastion=d.web["bastion"], service_address=d.service, egress="router"),
+        Member("private", "tenant", {"observability": "tenant", "internal": "tenant"}, instances=d.prv["instances"],
+               bastion=d.prv["bastion"], egress="none"),
+    ]  # fmt: skip
+    if args.egress_tenant:
+        egt = outputs(args.tool, args.egress_tenant)
+        members.append(Member("egress", "tenant", {"observability": "tenant", "internal": "tenant"},
+                              instances=egt["instances"], bastion=egt["bastion"], egress="shared"))  # fmt: skip
+    if args.shared_kubeconfig:
+        shared = outputs(args.tool, args.shared or os.path.join(args.stacks, "shared", "kubernetes"))
+        services = {k: [v] if isinstance(v, str) else v for k, v in shared["services"].items()}
+        members.append(Member("shared", "service", {"internal": "shared", "observability": "tenant"},
+                              services=services, consumers=["web"]))  # fmt: skip
+    if args.published_kubeconfig:
+        plat = outputs(args.tool, args.published or os.path.join(args.stacks, "tenants", "kubernetes"))
+        ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
+        members.append(Member("published", "tenant", {"publication": "tenant", "observability": "tenant",
+                                                      "internal": "tenant"}, service_address=ingress))  # fmt: skip
+        service = outputs(args.tool, args.internal_service)
+        members.append(Member("internal", "service", {"internal": "shared"}, instances=service.get("instances", {}),
+                              bastion=service.get("bastion"), services=service["services"], consumers=["published"]))  # fmt: skip
+    receiver = d.rcv["receiver_url"].split("//")[1].split("/")[0]
+    return probes(rules.rows(members, receiver=receiver), d.p)
+
+
+def rows_from_file(path, prober):
+    """The rows of a file written by lz check: each with its source (the machine running the test,
+    or an instance through its bastion), its target and the expected result."""
+    with open(path) as f:
+        return probes(json.load(f), prober)
+
+
 def main():
     args = parse_args()
     if args.rows:
         return 1 if run(rows_from_file(args.rows, Prober(args.user, args.key))) else 0
     d = Deployment(args)
     try:
-        rows = (publication_rows(d) + monitoring_rows(d) + lateral_rows(d) + ipv6_rows(d) + resolution_rows(d, args)
+        rows = (generic_rows(d, args) + monitoring_rows(d) + lateral_rows(d) + ipv6_rows(d) + resolution_rows(d, args)
                 + egress_rows(d, args) + published_cluster_rows(d, args) + shared_cluster_rows(d, args)
                 + certificate_rows(d, args))  # fmt: skip
         failures = run(rows)
