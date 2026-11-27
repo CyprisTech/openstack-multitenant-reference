@@ -6,30 +6,30 @@ The summary and the detailed results below are those of the current design. The 
 
 ## Current state
 
-The release campaign of v0.6 (2026-11-26), run with [`tools/landing-zone`](../../tools/landing-zone/README.md) from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md): hub planes (interface) **upgraded from v0.5.1** with `run.py --from`, operator planes (gateway) **from empty**. Sizing as in the [campaign README](../../tools/landing-zone/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers. The commits of each run are in the [detailed results](#detailed-results-the-release-campaign-of-v06-2026-11-26).
+The release campaign of v0.6 (2026-11-27, `main` at 862e7be), run with [`lz campaign`](../../tools/landing-zone/README.md) from empty projects, one project per stack, following the [test procedure](../reference/test-procedure.md): hub planes (interface) **upgraded from v0.5.1** with `--from`, operator planes (gateway) **from empty**, with the credential rotation. Sizing as in the [campaign README](../../tools/landing-zone/README.md#sizing): 1 GiB instances (2 GiB for the receiver), the published cluster with one control-plane node and two workers; the Kubernetes machines boot from root volumes. Each run in the [detailed results](#detailed-results-the-release-campaign-of-v06-2026-11-27).
 
 | Area | What is checked | Operator planes (gateway) | Hub planes (interface) |
 |---|---|---|---|
-| Deployment | 12 stacks (with the test ACME authority, the test resolver and the shared egress); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
-| Upgrade from v0.5.1 | v0.5.1 deployed with its own campaign (foundation and shared cluster), then this release applied over its states stack by stack under load, the shared cluster updated with `update-cluster.sh` from the administration sources, then the rest of the scenario | from empty | ✅ during the 14 min of applies, 3899 requests to the entry point and 324 to the shared service, none failed |
+| Deployment | 12 stacks (with the internal service, the test ACME authority, the test resolver and the shared egress); empty plan after apply in every configuration; cloud-init without error on every instance | ✅ | ✅ |
+| Upgrade from v0.5.1 | v0.5.1 deployed with its own campaign (foundation and shared cluster), then this release applied over its states stack by stack under load, the shared cluster updated with `update-cluster.sh` from the administration sources, then the rest of the scenario | from empty | ✅ during the 21 min of applies, 5913 requests to the entry point and 527 to the shared service, none failed |
 | Upgrade from v0.4.0 | the v0.4.0 stacks applied, then the v0.5 stacks applied over them (2026-11-20) | ❌ the planes upgrade in place; every tenant with an egress fails (known issue: redeploy the tenant stacks) | not run |
 | Migration to the transit router | a running tenant moved from host routes to the transit router | not run | not run |
-| Isolation, shared cluster | executable matrix with the shared cluster (66 rows), before and after the Kubernetes upgrade | ✅ 66/66 | ✅ 66/66 |
-| Isolation, published cluster | executable matrix with the published cluster and the internal service (68 rows: the private tenant, the shared egress, name resolution, IPv6, the load balancers outside the entries) | ✅ 68/68 | ✅ 68/68 |
+| Isolation, shared cluster | the rows `lz check` produces with the shared cluster (88), before and after the Kubernetes upgrade | ✅ 88/88 | ✅ 88/88 |
+| Isolation, published cluster | the rows `lz check` produces with the published cluster and the internal service (96: the private tenant, the shared egress, name resolution, IPv6, the load balancers outside the entries, the revision of each cluster's stack) | ✅ 96/96 | ✅ 96/96 |
 | Load balancers outside the entries | a `LoadBalancer` Service that is not an entry of the stack refused, an internal one open to every source refused, one at the address of an entry admitted, on both clusters | ✅ | ✅ |
 | Shared egress | the tenant with `egress = "shared"` installs its packages through the proxies, reaches a declared name and is refused another, has no direct way out; the tenants not declared do not reach the proxies | ✅ | ✅ |
 | Name resolution | public names from every instance, the zone of the landing zone from the tenants, the private tenant through the test resolver behind the internal services plane | ✅ | ✅ |
-| Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run yet | ✅ closed |
+| Hostile route | a tenant routing to another through the transit router | not automated: a manual step ([test procedure](../reference/test-procedure.md#hostile-route-gateway-mode)), not run in this campaign | ✅ closed |
 | Ingress | HTTPS through the entry point, SNI without decryption, client address kept, certificates verified with the authority's root | ✅ 12/12 on each domain | ✅ 12/12 on each domain |
 | Internal ingress | HTTPS to the shared cluster's internal name, registered in Designate, from its consumers only; layer 4 service | ✅ 6/6 | ✅ 6/6 |
-| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 37 / 0 | ✅ 139 / 0 |
-| Opening a service to a consumer | a consumer added with `update-cluster.sh`, the service opened and closed again | ✅ open after 30 s | ✅ open after 30 s |
-| Credential rotation | the cluster's application credential replaced with `update-cluster.sh`, the old one revoked, a load balancer created with the new one | ✅ | ✅ |
-| Kubernetes upgrade | 1.35 to 1.36 under load, the cluster updated with `update-cluster.sh`; the replaced nodes removed | ✅ 19 min, 361 requests, 2 failed (0.6 %) | ✅ 20 min, 4 requests failed (0.4 %) |
-| Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade | ✅ | ✅ |
+| Domain publication under load | requests to another domain while the entry point is applied (ok / failed) | ✅ 33 / 0 | ✅ 24 / 0 |
+| Opening a service to a consumer | a consumer added with `update-cluster.sh`, the service opened and closed again | ✅ open after 30 s | ✅ open after 20 s |
+| Credential rotation | the cluster's application credential replaced with `update-cluster.sh`, the old one revoked, a load balancer created with the new one | ✅ | not run: the upgraded mode runs without it |
+| Kubernetes upgrade | 1.35 to 1.36 under load, the cluster updated with `update-cluster.sh`; the replaced nodes removed | ✅ 22 min, 525 requests, 0 failed | ✅ 21 min, 511 requests, 24 failed (4.7 %) |
+| Volumes across the lifecycle | a volume provisioned after the rotation; an existing volume moved to another node intact after the rotation and after the upgrade | ✅ | ✅ after the upgrade |
 | Exposure change of the VM tenant | the service address on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
 | Exposure change of the published cluster | the ingress on its own public address, then back behind the entry point | ✅ 12/12, then 12/12 | ✅ 12/12, then 12/12 |
-| Deletion of a cluster with volumes | the shared cluster deleted with `delete-cluster.sh` while a claim of the volume check is still bound: its Cinder volume goes with it | ✅ | not run |
+| Deletion of a cluster with volumes | the shared cluster deleted with `delete-cluster.sh` while a claim of the volume check is still bound: its Cinder volume goes with it | ✅ | ✅ |
 | Teardown | in three waves, no leftover in any project, load balancers and volumes included | ✅ | ✅ |
 
 **Requests under load** are sent at a fixed pace (every 0.2 s through the entry point, every 2 s to the shared service) for as long as the change lasts: their count follows the duration of the step, not a throughput. Compare the failure rates, not the counts.
@@ -44,15 +44,44 @@ Known limits, detailed in the findings below and in the [test procedure](../refe
 - The isolation test waits for the ingress address and the first push; a row **in error** (a timeout) is run again, a **wrong** row is a failure.
 - An instance that boots without Internet access misses its packages (cloud-init reports `error`): it must be replaced once its egress works.
 - Each stack has one router more, its transit router: a project hosting several stacks needs a router quota above the default of 10 (the shared services project of the scenario uses 10).
-- CAAPH created duplicate Helm release proxies after the move on every cluster of the campaigns of 2026-11-19, and on none of the release campaign; `create-cluster.sh` repairs them by itself (it did so on the 2026-11-19 interface campaign).
+- The failures during the Kubernetes upgrade on hub planes (24 of 511, none on operator planes) have no recorded cause: the load counts them without their time or their exit code, and a request through the bastion fails on SSH as well as on the service.
+- CAAPH v0.6.6 created no duplicate Helm release proxies. v0.5.1, which the upgrade campaign deploys first, still repairs them in `create-cluster.sh`.
 
 The isolation matrix of the earlier designs had 44 to 46 rows; the counts are not comparable.
 
 ## Environment
 
-Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
+Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Block storage: Cinder with LVM, a volume from an image being a full copy of it; the durations of the steps that create or replace Kubernetes machines depend on it ([sizing](../reference/sizing-and-limits.md#sizing)). Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
-## Detailed results: the release campaign of v0.6 (2026-11-26)
+## Detailed results: the release campaign of v0.6 (2026-11-27)
+
+Both runs on `main` at 862e7be, from empty projects, with `lz campaign private-cloud --record`.
+
+| Run | Steps | Duration |
+|---|---|---|
+| Hub planes (interface), from v0.5.1 | v0.5.1 deployed by its own campaign (foundation and shared cluster), then `migrate` and the rest of the scenario, without `rotate` | 101 min after v0.5.1 |
+| Operator planes (gateway), from empty | the whole scenario, `rotate` included | 127 min |
+
+| Step | Interface | Gateway |
+|---|---|---|
+| `migrate` (applies under load) | 21 min | |
+| Shared cluster created | (by v0.5.1) | 18 min |
+| `rotate` | | 6 min |
+| `upgrade` (1.35 to 1.36, rolling) | 27 min | 28 min |
+| Shared cluster deleted (`shared-down`) | 9 min | 7 min |
+| Published cluster created | 13 min | 13 min |
+| Acceptance (`accept`: HTTPS, isolation) | 6 min | 6 min |
+| Teardown (three waves) | 7 min | 7 min |
+
+The machines of the clusters boot from root volumes, on the LVM block storage of the test cloud: the creation and the replacement of a node include the copy of the image to its volume.
+
+Met on the way, in the code of v0.5.1 only, which the upgrade deploys first, all fixed in v0.6; each was run again:
+
+- `create-cluster.sh` of v0.5.1 gave up at the first refused SSH to its bootstrap instance, which boots slower on a volume.
+- The campaign of v0.5.1, run again after a stop, withdrew the published domains: its marker `published-once` was set aside.
+- The repair of duplicated CAAPH release proxies by `create-cluster.sh` of v0.5.1 failed once.
+
+## Detailed results: the first runs of the release campaign of v0.6 (2026-11-26)
 
 | Run | Steps | Commit |
 |---|---|---|
