@@ -145,19 +145,6 @@ def acme(ctx, report):
     ctx.wait_for_instances(ctx.value("acme", "bastion"), [ctx.value("acme", "instance_address")])
 
 
-@step("internal", guide="docs/reference/test-procedure.md#2-shared-services")
-def internal(ctx, report):
-    """The fixture of an internal service, created before its consumers, closed: it admits
-    nobody until step internal-open."""
-    ctx.set_inputs(
-        "internal-service",
-        cloud=ctx.cloud("internal-service"),
-        plane_attachment=attachment(ctx, "internal-service"),
-        allowed_sources=[],
-    )
-    ctx.apply("internal-service")
-
-
 @step(
     "resolver",
     guide=[

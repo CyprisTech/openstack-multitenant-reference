@@ -36,7 +36,7 @@ The stacks with their example values, and the test fixtures, deploy one instance
 | Planes | the cloud operator's external networks, or shared networks built in a hub project with transit routers; addresses translated or not | step 1, [`examples/planes`](../../examples/planes/README.md) |
 | Exposure | a `vm` and a `kubernetes` tenant behind the shared entry point; each may instead have its own public address (`exposure = "public"`) | steps 3 and 4 |
 | Isolation | the security groups of every target: a tenant reaches no other, whatever routes it adds; a private tenant, a `vm` with neither exposure nor egress | step 4, [isolation matrix](../reference/isolation-matrix.md) |
-| Internal services | a service open to declared consumers only ([fixture](../../tests/fixtures/internal-service/README.md)), and the [shared cluster](../../stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services) | after step 4 |
+| Internal services | a service on virtual machines open to declared consumers only ([`shared/vm`](../../stacks/shared/vm/README.md)), and the [shared cluster](../../stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services) | after step 4 |
 | Observability | every project pushes its metrics to one receiver ([fixture](../../tests/fixtures/receiver/README.md)) | step 2 |
 | Certificates | ACME DNS-01 from an internal authority ([fixture](../../tests/fixtures/acme/README.md)); without it, a self-signed demonstration mode | `certificates` of each tenant |
 | Administration | bastions, and the Kubernetes API and bootstrap instance on an administration network | `admin`, `admin_network` |

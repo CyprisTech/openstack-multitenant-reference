@@ -358,9 +358,13 @@ class SharedServiceTest(unittest.TestCase):
             key = (cmd[1].removeprefix("-chdir="), cmd[4])
             if key in values:
                 return Result(0, json.dumps(values[key]))
+        if "state" in cmd and "list" in cmd:  # the consumer is deployed when its state is
+            return Result(0, "module.web.x\n" if self.deployed else "")
         return None
 
-    def test_a_shared_service_on_virtual_machines_admits_its_consumers(self):
+    deployed = True
+
+    def run_step(self):
         stacks = dict(STACKS, registry="stacks/shared/vm")
         config = {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "web": "web",
                              "registry": "registry"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
@@ -370,7 +374,15 @@ class SharedServiceTest(unittest.TestCase):
                    "planes": {"internal": "shared"}, "values": {"egress": "router"}}  # fmt: skip
         deployment.register({"tenants": [WEB], "shared-services": [service]})
         load()["service-registry"](ctx, StepReport("service-registry"))
-        written = json.loads((ctx.root / "stacks/shared/vm/mode.registry.tfvars.json").read_text())
+        return ctx, json.loads((ctx.root / "stacks/shared/vm/mode.registry.tfvars.json").read_text())
+
+    def test_a_consumer_not_deployed_yet_is_not_admitted(self):
+        self.deployed = False
+        _, written = self.run_step()
+        self.assertEqual(written["consumers"], [])  # admitted when the step runs again
+
+    def test_a_shared_service_on_virtual_machines_admits_its_consumers(self):
+        ctx, written = self.run_step()
         self.assertEqual(written["consumers"], ["10.21.0.0/24"])
         self.assertEqual((written["name"], written["cidr"], written["egress"]), ("registry", "10.37.0.0/27", "router"))
         self.assertNotIn("bootstrap", written)  # no cluster

@@ -26,7 +26,6 @@ env:
     stacks/tenants/vm
     stacks/tenants/kubernetes
     tests/fixtures/receiver
-    tests/fixtures/internal-service
     tests/fixtures/acme
     tests/fixtures/resolver
 

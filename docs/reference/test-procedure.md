@@ -46,7 +46,7 @@ flowchart LR
 | Project | Stacks | Role on the planes |
 |---|---|---|
 | hub (interface mode) | `shared/planes` | owns the planes and their transit routers; no instance. With operator planes, `shared/planes` runs with the shared services' credentials and only adopts them |
-| shared services | `tests/fixtures/receiver`, `tests/fixtures/internal-service`, `tests/fixtures/acme` | `shared` on `observability` (receiver), `shared` on `internal` (internal service, ACME authority). On hub planes, one attachment per project and plane: the internal service and the ACME authority then need a project each |
+| shared services | `tests/fixtures/receiver`, `shared/vm` (the internal service), `tests/fixtures/acme` | `shared` on `observability` (receiver), `shared` on `internal` (internal service, ACME authority); the internal service does not join `observability`, its project holding the receiver. On hub planes, one attachment per project and plane: the internal service and the ACME authority then need a project each |
 | shared cluster | `shared/kubernetes` ([section 6](#6-shared-cluster)) | `shared` on `internal`, `tenant` on `observability` |
 | entry point | `shared/entry-point` | `shared` on `publication`, `tenant` on `observability` |
 | one per tenant | `tenants/vm` (the web and private tenants, a state each), `tenants/kubernetes` | `tenant` |
@@ -154,10 +154,14 @@ tofu output -json certificates | jq '{certificates: .published}' > ../../../stac
 tofu output -raw root_certificate > root.pem      # for the clients of the acceptance
 ```
 
-The **internal service** ([`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)) is created at the same step, **closed**: with an empty `allowed_sources` it admits nobody, as a real internal service exists before its consumers. It is opened in [section 8](#8-internal-service-open-planes-and-publication).
+The **internal service**, a shared service on virtual machines ([`stacks/shared/vm`](../../stacks/shared/vm/README.md)) with its demonstration workload on port 8080, is created at the same step, **closed**: with an empty `consumers` it admits nobody, as a real internal service exists before its consumers. It is opened in [section 8](#8-internal-service-open-planes-and-publication). Its state is its own (`internal-service.tfstate`), as for the tenants of section 4; its inputs, in `mode.internal-service.tfvars.json`, are `name = "internal-service"`, `cidr`, `egress = "router"`, `services = { internal = { ports = [8080] } }` and `consumers = []`, with its attachment and the receiver.
 
 ```bash
-cd tests/fixtures/internal-service && tofu init && tofu apply && tofu plan -detailed-exitcode
+s=stacks/shared/vm; export TF_DATA_DIR=.terraform/tenant-internal-service
+printf 'terraform {\n  backend "local" {}\n}\n' > $s/backend_override.tf
+tofu -chdir=$s init -backend-config=path=internal-service.tfstate
+tofu -chdir=$s apply -auto-approve -var-file=mode.internal-service.tfvars.json && tofu -chdir=$s plan -detailed-exitcode -var-file=mode.internal-service.tfvars.json
+unset TF_DATA_DIR
 ```
 
 | Checkpoint | If it fails |
@@ -359,11 +363,13 @@ Optional, once the cluster manages itself: `tofu apply -var bootstrap=false` rem
 
 ### Open the internal service
 
-Give the internal service its consumers: `allowed_sources` is the `internal_sources` output of the Kubernetes tenant, known once its stack is applied (section 7). The change is in place: the service is not replaced.
+Give the internal service its consumers: `consumers` is the `internal_sources` output of the Kubernetes tenant, known once its stack is applied (section 7). The change is in place: the service is not replaced ([add a consumer](../../stacks/shared/vm/README.md#add-a-consumer)).
 
 ```bash
-tofu -chdir=stacks/tenants/kubernetes output -json internal_sources | jq '{allowed_sources: .}' > tests/fixtures/internal-service/consumers.auto.tfvars.json
-tofu -chdir=tests/fixtures/internal-service apply && tofu -chdir=tests/fixtures/internal-service plan -detailed-exitcode
+s=stacks/shared/vm; export TF_DATA_DIR=.terraform/tenant-internal-service
+jq --argjson c "$(tofu -chdir=stacks/tenants/kubernetes output -json internal_sources)" '.consumers = $c' $s/mode.internal-service.tfvars.json > /tmp/inputs.json && mv /tmp/inputs.json $s/mode.internal-service.tfvars.json
+tofu -chdir=$s apply -auto-approve -var-file=mode.internal-service.tfvars.json && tofu -chdir=$s plan -detailed-exitcode -var-file=mode.internal-service.tfvars.json
+unset TF_DATA_DIR
 ```
 
 ### Planes and publication
@@ -391,8 +397,10 @@ LB=$(tofu -chdir=stacks/shared/entry-point output -json load_balancer | jq -r .f
 for d in site-a.example.org site-b.example.org apps.published.example.org; do
   for i in $(seq 12); do curl -s --cacert tests/fixtures/acme/root.pem --resolve $d:443:$LB https://$d/ | grep -E "client=|X-Real-Ip"; done | sort | uniq -c
 done
+# the internal service has its own state: its outputs in a file
+TF_DATA_DIR=.terraform/tenant-internal-service tofu -chdir=stacks/shared/vm output -json > internal-service-outputs.json
 python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key <ssh key> --published-kubeconfig published.kubeconfig \
-  --acme tests/fixtures/acme
+  --internal-service internal-service-outputs.json --acme tests/fixtures/acme
 ```
 
 Wait until the ingress Service has its address and the agents have pushed once (30 s) before the acceptance.
@@ -408,7 +416,7 @@ Wait until the ingress Service has its address and the agents have pushed once (
      12 host=site-b.example.org  client=198.51.100.100
      12 X-Real-Ip: 198.51.100.100
 $ python3 tests/isolation/check.py --receiver tests/fixtures/receiver --key ~/.ssh/id_ed25519 --published-kubeconfig published.kubeconfig \
-    --internal-service tests/fixtures/internal-service --acme tests/fixtures/acme
+    --internal-service internal-service-outputs.json --acme tests/fixtures/acme
 from                   to                                                    port  expected actual
 test runner            entry point (public IP)                                443  open     open     ✅
 test runner            web service address 10.21.0.227                        443  closed   closed   ✅
@@ -512,7 +520,8 @@ The published cluster first, as in [delete a cluster](../guides/kubernetes-lifec
 for t in private web egress-shared; do
   TF_DATA_DIR=.terraform/tenant-$t tofu -chdir=stacks/tenants/vm destroy -auto-approve -var-file=mode.$t.tfvars.json
 done
-for s in tests/fixtures/internal-service tests/fixtures/resolver stacks/shared/egress stacks/shared/entry-point \
+TF_DATA_DIR=.terraform/tenant-internal-service tofu -chdir=stacks/shared/vm destroy -auto-approve -var-file=mode.internal-service.tfvars.json
+for s in tests/fixtures/resolver stacks/shared/egress stacks/shared/entry-point \
          tests/fixtures/receiver tests/fixtures/acme; do
   tofu -chdir=$s destroy -auto-approve
 done

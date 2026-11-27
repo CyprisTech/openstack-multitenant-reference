@@ -161,8 +161,8 @@ With `certificates` ([ADR-0008](../../../docs/adr/0008-tenant-certificates.md)),
 kubectl apply -f demo/whoami.yaml
 curl -k --resolve apps.published.example.org:443:<public IP of the entry point> https://apps.published.example.org/
 
-# Isolation test with the Kubernetes rows; needs tests/fixtures/receiver and tests/fixtures/internal-service
-tests/isolation/check.py --key <ssh key> --published-kubeconfig published.kubeconfig
+# Isolation test with the Kubernetes rows; needs tests/fixtures/receiver and an internal service (stacks/shared/vm)
+tests/isolation/check.py --key <ssh key> --published-kubeconfig published.kubeconfig --internal-service stacks/shared/vm
 ```
 
 A guided discovery of the cluster, with real outputs, is in the [Kubernetes tour](../../../docs/guides/kubernetes-tour.md).

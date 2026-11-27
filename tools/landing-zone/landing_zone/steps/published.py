@@ -5,8 +5,8 @@ import json
 from ..checks import https_probe, isolation_test, kubeconfig, record, wait_https
 from ..context import StepFailed
 from ..kube import Kubectl, demo_manifest, update_cluster
-from . import step
-from .foundation import attachment, publish, test_zone, transit
+from . import STEPS, step
+from .foundation import publish, test_zone, transit
 
 STACK = "published"
 
@@ -71,15 +71,10 @@ def ingress_address(ctx):
     ],
 )
 def internal_open(ctx, report):
-    """The internal service, created closed in the foundation (step internal), is opened to the
-    Kubernetes tenant once it exists: a change of its consumers, in place."""
-    ctx.set_inputs(
-        "internal-service",
-        cloud=ctx.cloud("internal-service"),
-        plane_attachment=attachment(ctx, "internal-service"),
-        allowed_sources=ctx.value(STACK, "internal_sources"),
-    )
-    ctx.apply("internal-service")
+    """The internal service, created closed in the foundation (its consumer did not exist yet), is
+    opened to the published cluster: its step again, now that the consumer is deployed; a change of
+    its consumers, in place."""
+    STEPS["service-internal-service"](ctx, report)
 
 
 @step("tour", guide="docs/guides/kubernetes-tour.md")

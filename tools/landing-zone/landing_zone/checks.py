@@ -51,7 +51,8 @@ def isolation_test(ctx, report, cluster=None):
     if cluster == "shared":
         cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
     elif cluster == "published":
-        cmd += ["--published-kubeconfig", kubeconfig(ctx, "published"), "--internal-service", ctx.stack("internal-service")]
+        cmd += ["--published-kubeconfig", kubeconfig(ctx, "published")]
+        cmd += ["--internal-service", tenant_outputs(ctx, "internal-service")]
     result = ctx.runner.run(cmd, cwd=ctx.root, check=False)
     output = result.stdout + result.stderr
     if not ctx.runner.dry_run:

@@ -37,7 +37,7 @@ The source of this picture is the SVG next to the PNG in [`docs/images`](../imag
 | `vm` tenant | publication, observability, internal services (optional) | instances behind a load balancer, the tenant's service address |
 | `kubernetes` tenant | publication (through the entry point), observability, internal services (optional) | a cluster created with Cluster API; its ingress load balancer is the service address; private (`exposure = "none"`): no ingress, reached through the administration path only |
 | `vm` tenant, private | observability; internal services when it consumes them | one workload from its image, no exposure, no egress ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) |
-| shared services | the planes they serve (`shared`) | the receiver, internal services; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) |
+| shared services | the planes they serve (`shared`) | the receiver, internal services: on virtual machines ([`shared/vm`](../../stacks/shared/vm/README.md)) or a Kubernetes cluster ([`shared/kubernetes`](../../stacks/shared/kubernetes/README.md)), behind one address per service; in the tests, [fixtures](../../tests/fixtures/receiver/README.md) for the receiver and the ACME authority |
 
 The planes are provided by the cloud operator (external networks) or built in the hub project (shared networks and a transit router); in `v0.7`, they can also be ranges routed by the operator to a segment it gives each project ([spec](../specs/operator-segments.md)). The stacks are the same in every case, only [`stacks/shared/planes`](../../stacks/shared/planes/README.md) changes ([How a tenant joins a plane](plane-attachment.md)).
 

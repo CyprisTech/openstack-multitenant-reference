@@ -12,7 +12,7 @@ outputs. Each stack may live in its own project; the test only reads their outpu
     tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
         --user ops --key ~/.ssh/id_ed25519 [--tool tofu] \
         [--web web.json] [--private private.json] \
-        [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
+        [--published-kubeconfig published.kubeconfig --internal-service internal-service.json] \
         [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig]
 
 Requirements: the stacks shared/entry-point, the web tenant (tenants/vm) and the private tenant
@@ -131,7 +131,8 @@ def parse_args():
     ap.add_argument("--user", default="ops")
     ap.add_argument("--published-kubeconfig")
     ap.add_argument("--kubectl", default="kubectl")
-    ap.add_argument("--internal-service", default="tests/fixtures/internal-service")
+    ap.add_argument("--internal-service", default="stacks/shared/vm",
+                    help="the internal service the published cluster consumes: its directory or a file of its outputs")
     ap.add_argument("--key", required=True)
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
@@ -394,7 +395,7 @@ def published_cluster_rows(d, args):
                        "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")  # fmt: skip
     server = kget(kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
     api = server.split("//")[1].split(":")[0]
-    internal = outputs(args.tool, args.internal_service)["address"]
+    internal = next(iter(outputs(args.tool, args.internal_service)["services"].values()))[0].split(":")[0]
     pod = d.published_pod = d.start_probe(args.published_kubeconfig)
     edge_vm, web_vm, prv_vm = d.edge_vm, d.web_vm, d.prv_vm
     rows = [

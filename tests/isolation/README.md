@@ -13,7 +13,7 @@
 ```bash
 python3 tests/isolation/check.py --stacks stacks --receiver tests/fixtures/receiver \
   --user ops --key ~/.ssh/id_ed25519 --web web.json --private private.json \
-  [--published-kubeconfig published.kubeconfig --internal-service tests/fixtures/internal-service] \
+  [--published-kubeconfig published.kubeconfig --internal-service internal-service.json] \
   [--acme tests/fixtures/acme] [--shared-kubeconfig shared.kubeconfig] \
   [--zone example.org [--public-name openstack.org]] [--resolver tests/fixtures/resolver] \
   [--egress stacks/shared/egress --egress-tenant egress-shared.json]

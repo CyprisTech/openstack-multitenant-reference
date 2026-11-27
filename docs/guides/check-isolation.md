@@ -12,7 +12,7 @@ The isolation test opens a TCP connection for every row of the [isolation matrix
 
 - The entry point, the web tenant and the private tenant (two tenants of the `vm` stack, a state each: give the test a file of each one's outputs, `tofu output -json > web.json`) applied **with bastions**, the domains published.
 - The test receiver [`tests/fixtures/receiver`](../../tests/fixtures/receiver/README.md), given to the stacks as `monitoring.receiver`: the test reads it to check that every tenant pushed.
-- With the published cluster: its kubeconfig, and the internal service it consumes (or the test one, [`tests/fixtures/internal-service`](../../tests/fixtures/internal-service/README.md)).
+- With the published cluster: its kubeconfig, and the internal service it consumes, a [`shared/vm`](../../stacks/shared/vm/README.md) service on port 8080 (`--internal-service`: its directory, or a file of its outputs when it has its own state).
 - For the optional rows: the test ACME authority (`--acme tests/fixtures/acme`) and, with the shared cluster (a Kubernetes cluster for shared services) and its demonstrated services applied, its kubeconfig (`--shared-kubeconfig`).
 - The same SSH user and key on the bastions, the instances and the receiver.
 

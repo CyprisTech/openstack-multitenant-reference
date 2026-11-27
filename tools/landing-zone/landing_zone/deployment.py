@@ -349,6 +349,9 @@ def service_step(ctx, report, tenant, config):
     for consumer in tenant.get("consumers", []):
         member = next(t for t in config["tenants"] if t["name"] == consumer)
         existing = member["type"] == "existing"
+        if not existing and not ctx.tofu.deployed(ctx.stack(consumer)):
+            ctx.runner.echo(f"{name}: consumer {consumer} not deployed yet, admitted when its step runs this one again")
+            continue
         sources = member.get("internal_sources", []) if existing else ctx.value(consumer, "internal_sources")
         consumers += sources if isinstance(sources, list) else [sources]  # a placeholder in a dry run
     inputs = dict(tenant.get("values", {}))

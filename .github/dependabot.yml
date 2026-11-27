@@ -18,7 +18,6 @@ updates:
       - /modules/kubernetes-cluster
       - /tests/fixtures/receiver
       - /tests/fixtures/acme
-      - /tests/fixtures/internal-service
       - /tests/fixtures/resolver
     schedule:
       interval: weekly
