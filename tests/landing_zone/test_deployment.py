@@ -88,3 +88,14 @@ class BackendTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InitTest(unittest.TestCase):
+    def test_a_deployment_repository_outside_the_reference(self):
+        target = Path(tempfile.mkdtemp()) / "my-landing-zone"
+        written = deployment.init(target)
+        self.assertIn("shop.tfvars", written)
+        config = deployment.load(target / "landing-zone.toml")  # every inputs file is beside it
+        self.assertEqual(config["tenants"][0]["inputs"], "shop.tfvars")
+        with self.assertRaises(deployment.ConfigError):
+            deployment.init(target)  # never over an existing configuration

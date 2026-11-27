@@ -87,6 +87,7 @@ def record_step(args, scenario, mode, name, ctx, entry):
 
 # The commands, with the steps they run: a sequence of the scenario, or the steps given.
 COMMANDS = {
+    "init": ("a deployment repository: landing-zone.toml and the inputs file of each stack, from the example", None),
     "deploy": ("your landing zone, from its configuration file (landing-zone.toml)", ["deploy"]),
     "try": ("the reference with its test fixtures, on test projects (the sequence try)", ["try"]),
     "apply": ("apply the sequences or steps given (default: the sequence try)", ["try"]),
@@ -110,6 +111,11 @@ def parse(argv):
         top.parse_args(argv)  # prints the usage, or the help
     command = argv[0]
     parser = argparse.ArgumentParser(prog=f"lz {command}", description=COMMANDS[command][0])
+    if command == "init":
+        parser.add_argument("scenario", metavar="directory", help="the directory of the deployment repository")
+        args = parser.parse_args(argv[1:])
+        args.command = command
+        return parser, args
     parser.add_argument("scenario", help="a scenario of scenarios/ by name (private-cloud, public-cloud), "
                         "or the configuration file of a deployment (landing-zone.toml)")
     if command in ("apply", "campaign", "deploy"):
@@ -139,6 +145,14 @@ def parse(argv):
 
 def main(argv=None):
     parser, args = parse(argv)
+    if args.command == "init":
+        try:
+            written = deployment.init(args.scenario)
+        except deployment.ConfigError as error:
+            print(error, file=sys.stderr)
+            return 2
+        print(f"written in {args.scenario}: {', '.join(written)}; edit them, then: lz deploy {Path(args.scenario) / 'landing-zone.toml'} --dry-run")
+        return 0
     deployed = None  # the configuration of a deployment (lz deploy), or a scenario of the reference
     if args.scenario.endswith(".toml") and args.command != "campaign":
         try:

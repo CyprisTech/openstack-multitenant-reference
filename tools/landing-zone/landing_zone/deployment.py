@@ -423,3 +423,40 @@ def cluster_step(ctx, report, tenant):
         from .steps.shared import deploy_demos  # noqa: PLC0415
 
         deploy_demos(ctx, kubectl)
+
+
+# --- lz init ---------------------------------------------------------------------------------------
+
+EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "deployment" / "landing-zone.toml"
+SECTION = re.compile(r"^\s*#?\s*\[+([^\]]+)\]+")
+MEMBER_NAME = re.compile(r'^\s*#?\s*name\s*=\s*"([^"]+)"')
+INPUTS = re.compile(r'^(\s*#?\s*inputs\s*=\s*)"([^"]+)"')
+
+
+def init(target, example=EXAMPLE):
+    """A deployment repository from the example: landing-zone.toml, and beside it the example
+    inputs of each stack it names, as <name>.tfvars, which the configuration then points to.
+    Returns the files written; refuses a directory that has a configuration already."""
+    target = Path(target)
+    if (target / "landing-zone.toml").exists():
+        raise ConfigError(target / "landing-zone.toml", ["exists already: lz init writes a new deployment"])
+    target.mkdir(parents=True, exist_ok=True)
+    lines, written, name = [], [], None
+    for line in example.read_text().splitlines(keepends=True):
+        section = SECTION.match(line)
+        if section:
+            name = section.group(1).split(".")[-1]  # [stacks.planes] -> planes; [[tenants]] -> its name below
+        member = MEMBER_NAME.match(line)
+        if member:
+            name = member.group(1)
+        found = INPUTS.match(line)
+        if found and name:
+            source = (example.parent / found.group(2)).resolve()
+            local = f"{name}.tfvars"
+            if not (target / local).exists():
+                (target / local).write_text(source.read_text())
+                written.append(local)
+            line = line.replace(f'"{found.group(2)}"', f'"{local}"', 1)
+        lines.append(line)
+    (target / "landing-zone.toml").write_text("".join(lines))
+    return ["landing-zone.toml", *written]
