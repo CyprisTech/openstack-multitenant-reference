@@ -10,7 +10,7 @@ What a deployment needs, what it shares, and how far it scales.
 
 ## Sizing
 
-What the test campaigns of 2026-11-19 ran, project by project, with the flavors of the test cloud ([campaign sizing](../../tools/landing-zone/README.md#sizing)); every instance boots from the flavor's local disk. The Kubernetes clusters are deployed one after the other in the tests; in production both run at once, and a published cluster usually has 3 control plane nodes.
+What the release campaign of `v0.6` (2026-11-27) ran, project by project, with the flavors of the test cloud ([campaign sizing](../../tools/landing-zone/README.md#sizing)); the Kubernetes machines boot from root volumes, the other instances from the flavor's local disk. The Kubernetes clusters are deployed one after the other in the tests; in production both run at once, and a published cluster usually has 3 control plane nodes.
 
 | Project | Instances | vCPU | RAM | Load balancers | Floating IPs |
 |---|---|---|---|---|---|
@@ -21,15 +21,17 @@ What the test campaigns of 2026-11-19 ran, project by project, with the flavors 
 | bootstrap of a cluster (temporary) | 1 | 2 | 4 GiB | 0 | 1 administration |
 | `vm` tenant, private | 1 | 1 | 1 GiB | 0 | 0 |
 | shared services: receiver | 1 | 2 | 2 GiB | 0 | 1 on the observability plane with NAT |
-| shared services: internal service, ACME authority, resolver (tests) | 3 | 3 | 3 GiB | 0 | 1 each on the internal services plane with NAT |
+| shared services: internal service (`shared/vm`) | 2 | 2 | 2 GiB | 1 | 1 on the internal services plane with NAT |
+| shared services: ACME authority, resolver (tests) | 2 | 3 | 3 GiB | 0 | 1 each on the internal services plane with NAT |
 | shared egress | 2 | 2 | 2 GiB | 1 | 1 on the internal services plane with NAT |
 | `vm` tenant with the shared egress (tests) | 1 | 1 | 1 GiB | 0 | 0 |
 | bastions (one per stack, optional) | 1 each | 1 each | 1 GiB each | 0 | 1 each, administration |
-| **Total, both clusters, without bastions and bootstrap** | **16** | **25** | **41 GiB** | **7** | **up to 10** |
-| **Peak of a test campaign** (2026-11-21, measured on the test cloud during the upgrade of the shared cluster: one cluster at a time, with the bastions, a bootstrap instance and the extra machine of the rolling upgrade) | **20** | **29** | **43 GiB** | | |
+| **Total, both clusters, without bastions, bootstrap and test fixtures** | **18** | **27** | **43 GiB** | **9** | **up to 10** |
+| **Peak of a test campaign** (2026-11-27, measured on the test cloud during the upgrade of the shared cluster: every stack but the published cluster, with the test fixtures, the bastions, a bootstrap instance and the extra machine of the rolling upgrade) | **29** | **40** | **54 GiB** | | |
 
-**Load balancers cost instances too.** With the `ACTIVE_STANDBY` topology, each load balancer runs two amphorae, in the cloud operator's Octavia project and on the same hypervisors: 14 more instances for the 7 load balancers above, of the operator's amphora flavor. On a small cloud they are what runs out first: they caused some of the "no valid host" failures seen in the tests.
+**Load balancers cost instances too.** With the `ACTIVE_STANDBY` topology, each load balancer runs two amphorae, in the cloud operator's Octavia project and on the same hypervisors: 18 more instances for the 9 load balancers above, of the operator's amphora flavor. On a small cloud they are what runs out first: they caused some of the "no valid host" failures seen in the tests.
 
+**Root volumes change the time of a rollout, by cloud.** With root volumes (the Kubernetes machines, `boot_volume_size` of the bootstrap instance), the time a node takes to boot or be replaced depends on the block storage of the cloud: a full copy of the image on LVM, a copy-on-write clone on Ceph RBD when the images are in the same cluster. Measure a rollout on yours before planning an upgrade window.
 With hub planes, the hub project holds one router per plane and no instance.
 
 ## Single points of failure
