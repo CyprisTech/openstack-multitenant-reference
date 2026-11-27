@@ -13,11 +13,11 @@ from landing_zone.tools import Result
 STACKS = {
     "planes": "stacks/shared/planes",
     "entry-point": "stacks/shared/entry-point",
-    "vm": "stacks/tenants/vm",
+    "web": "stacks/tenants/vm",
     "private": "stacks/tenants/vm",
 }
 # The web and private tenants share the vm stack's directory: a state each.
-STATES = {"vm": "web", "private": "private"}
+STATES = {"web": "web", "private": "private"}
 OUTPUTS = {
     "load_balancer": {"floating_ip": "192.0.2.80"},
     "service_address": "192.0.2.90:443",
@@ -51,7 +51,7 @@ def with_inputs(ctx, key, values):
 class DirectTest(unittest.TestCase):
     def test_exposed_then_back_to_the_entry_point(self):
         ctx = context(answer(ssh=1), stacks=STACKS, states=STATES)
-        path = with_inputs(ctx, "vm", {"exposure": "entry-point"})
+        path = with_inputs(ctx, "web", {"exposure": "entry-point"})
         entry = StepReport("direct")
         load()["direct"](ctx, entry)
         applied = [c for c, _ in ctx.runner.commands if "apply" in c and "-chdir=stacks/tenants/vm" in c]
@@ -62,14 +62,14 @@ class DirectTest(unittest.TestCase):
 
     def test_the_inputs_are_restored_when_the_exposed_service_fails(self):
         ctx = context(answer(ssh=1, curl_out="nothing here\n"), stacks=STACKS, states=STATES)
-        path = with_inputs(ctx, "vm", {"exposure": "entry-point"})
+        path = with_inputs(ctx, "web", {"exposure": "entry-point"})
         with self.assertRaisesRegex(StepFailed, "requests failed"):
             load()["direct"](ctx, StepReport("direct"))
         self.assertEqual(json.loads(path.read_text()), {"exposure": "entry-point"})
 
     def test_an_entry_point_that_still_reaches_the_instances_fails(self):
         ctx = context(answer(ssh=0), stacks=STACKS, states=STATES)
-        with_inputs(ctx, "vm", {"exposure": "entry-point"})
+        with_inputs(ctx, "web", {"exposure": "entry-point"})
         with self.assertRaisesRegex(StepFailed, "still reaches 10.21.0.11"):
             load()["direct"](ctx, StepReport("direct"))
 
@@ -127,7 +127,7 @@ class TeardownTest(unittest.TestCase):
         ctx = context(run, stacks=STACKS, states=STATES)
         (ctx.work / "published-once").touch()
         entry = StepReport("teardown")
-        with self.assertRaisesRegex(StepFailed, "vm: destroy failed"):
+        with self.assertRaisesRegex(StepFailed, "web: destroy failed"):
             load()["teardown"](ctx, entry)
         # The tenants of the first wave all ran; the entry point and the planes, which they use,
         # are left for the leftover check.

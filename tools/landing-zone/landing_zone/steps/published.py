@@ -4,9 +4,9 @@ import json
 
 from ..checks import https_probe, isolation_test, kubeconfig, record, wait_https
 from ..context import StepFailed
-from ..kube import Kubectl, create_cluster, demo_manifest, update_cluster, wait_for_bootstrap
+from ..kube import Kubectl, demo_manifest, update_cluster
 from . import step
-from .foundation import attachment, edge_sources, monitoring, publish, test_zone, transit
+from .foundation import attachment, publish, test_zone, transit
 
 STACK = "published"
 
@@ -61,39 +61,6 @@ def ingress_address(ctx):
 
 
 # --- steps -----------------------------------------------------------------------------------------
-
-
-@step(
-    "k8s",
-    guide=[
-        "docs/reference/test-procedure.md#7-published-cluster",
-        "stacks/tenants/kubernetes/README.md#usage",
-    ],
-)
-def k8s(ctx, report):
-    ctx.set_inputs(
-        STACK,
-        exposure="entry-point",
-        cloud=ctx.cloud(STACK),
-        plane_attachment=attachment(ctx, "published"),
-        monitoring=monitoring(ctx),
-        edge_sources=edge_sources(ctx),
-        certificates=ctx.value("acme", "certificates", "published"),
-        bootstrap=True,
-    )
-    ctx.apply(STACK)
-    wait_for_bootstrap(ctx, STACK)
-
-
-@step(
-    "cluster",
-    guide=[
-        "docs/reference/test-procedure.md#7-published-cluster",
-        "stacks/tenants/kubernetes/README.md#usage",
-    ],
-)
-def cluster(ctx, report):
-    create_cluster(ctx, STACK, ctx.work / "published-clouds.yaml", kubeconfig(ctx, STACK))
 
 
 @step(
@@ -167,10 +134,10 @@ def direct(ctx, report):
     router on the publication plane, the entry point no longer reaches its instances. Then back
     to the entry point."""
     failures = []
-    with ctx.scene("vm") as inputs:
+    with ctx.scene("web") as inputs:
         edit_inputs(ctx, inputs, lambda v: v.update(exposure="public"))
-        ctx.apply("vm", empty_plan=False)
-        address = service_address(ctx, "vm")
+        ctx.apply("web", empty_plan=False)
+        address = service_address(ctx, "web")
         record(ctx, [f"service address, exposed directly: {address}"])
         try:
             https_probe(ctx, report, domains(ctx, "site-a")[0], address)
@@ -179,12 +146,12 @@ def direct(ctx, report):
         else:
             ctx.runner.echo("# No router on the publication plane: the entry point no longer reaches the instances")
             bastion, edge = entry_point_instance(ctx)
-            instance = ctx.instances("vm")[0]
+            instance = ctx.instances("web")[0]
             if reachable(ctx, bastion, edge, instance):
                 failures.append(f"the entry point still reaches {instance}")
             else:
                 record(ctx, [f"entry point -> {instance}:443 closed"])
-    back_to_entry_point(ctx, report, "vm", ["site-a", "site-b"], failures)
+    back_to_entry_point(ctx, report, "web", ["site-a", "site-b"], failures)
 
 
 def back_to_entry_point(ctx, report, key, names, failures, after_apply=None, load=False):
@@ -281,7 +248,7 @@ def hostile(ctx, report):
         ctx.apply("private", empty_plan=False)
         bastion = ctx.value("private", "bastion")
         instance = ctx.instances("private")[0]
-        target = ctx.instances("vm")[0]
+        target = ctx.instances("web")[0]
         ctx.wait_for_instances(bastion, [instance])
         # The route is on the tenant's transit router (ADR-0013): it applies at once.
         opened = [port for port in (443, 22, 9100) if reachable(ctx, bastion, instance, target, port)]

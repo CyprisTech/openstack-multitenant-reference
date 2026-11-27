@@ -152,6 +152,7 @@ def main(argv=None):
         parser.error("deploy takes the configuration file of a deployment (landing-zone.toml)")
     else:
         scenario = scenarios.load(HERE / "scenarios" / f"{args.scenario}.toml")
+        deployment.register(scenario.members)  # its tenants and shared services: the steps of lz deploy
     mode = args.mode or scenario.modes[0]
     if mode not in scenario.modes:
         parser.error(f"mode {mode} is not run by scenario {scenario.name} ({', '.join(scenario.modes)})")

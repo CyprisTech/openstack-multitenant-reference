@@ -108,7 +108,7 @@ class ProfileInputsTest(unittest.TestCase):
         from landing_zone.scenario import load as load_scenario
 
         public = load_scenario(Path(__file__).resolve().parents[2] / "tools" / "landing-zone" / "scenarios" / "public-cloud.toml")
-        for key in ("entry-point", "vm", "receiver"):
+        for key in ("entry-point", "web", "receiver"):
             self.assertEqual(public.options["inputs"][key]["bastion_placement"], "stack-network")
 
 

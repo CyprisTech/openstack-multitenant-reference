@@ -14,7 +14,7 @@ def loads(ctx):
     found = []
     if ctx.has("entry-point") and ctx.tofu.deployed(ctx.stack("entry-point")):
         found.append(Load(ctx))
-    if ctx.has("shared") and ctx.has("vm") and ctx.tofu.deployed(ctx.stack("shared")):
+    if ctx.has("shared") and ctx.has("web") and ctx.tofu.deployed(ctx.stack("shared")):
         bastion, instance = consumer_instance(ctx)
         found.append(ConsumerLoad(ctx, bastion, instance, service_address(ctx)))
     return found

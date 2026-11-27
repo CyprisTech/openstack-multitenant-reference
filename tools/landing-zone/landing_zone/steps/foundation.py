@@ -178,56 +178,16 @@ def resolver(ctx, report):
     ctx.wait_for_instances(ctx.value("resolver", "bastion"), [ctx.value("resolver", "address")])
 
 
-# The names the tenant with the shared egress may reach: the Ubuntu archives, for its packages.
-EGRESS_NAMES = [".archive.ubuntu.com", ".security.ubuntu.com"]
-
-
 @step("egress", guide=["docs/reference/test-procedure.md#2-shared-services", "stacks/shared/egress/README.md#usage"])
 def egress(ctx, report):
     """The shared egress (ADR-0016, D1), with no tenant yet: it refuses every request until step
-    egress-tenant declares one."""
+    deploy-egress-tenants declares those that go out through it."""
     ctx.set_inputs(
         "egress", cloud=ctx.cloud("egress"), plane_attachment=attachment(ctx, "egress"), monitoring=monitoring(ctx), tenants={}
     )
     ctx.apply("egress")
     ctx.wait_for_instances(ctx.value("egress", "bastion"), ctx.instances("egress"))
 
-
-@step(
-    "egress-tenant",
-    guide=["docs/reference/test-procedure.md#4-tenants-web-and-private", "stacks/shared/egress/README.md#usage"],
-)
-def egress_tenant(ctx, report):
-    """A vm tenant with egress = "shared": applied first, then declared on the shared egress with
-    its address on the internal services plane, known once its router exists; its instances wait
-    for that admission at first boot, then install their packages through the proxy."""
-    cidr = ctx.options.get("planes", {}).get("attachments", {}).get("egress-shared", {}).get("cidr", "10.23.0.0/24")
-    ctx.set_inputs(
-        "egress-shared",
-        cloud=ctx.cloud("egress-shared"),
-        name="egress-shared",
-        exposure="none",
-        egress="shared",
-        egress_network=None,
-        shared_egress={"proxy": ctx.value("egress", "proxy")},
-        instance_count=1,
-        web_cidr=cidr,
-        plane_attachment=attachment(ctx, "egress-shared"),
-        monitoring=monitoring(ctx),
-        certificates=None,
-        edge_sources=[],
-    )
-    ctx.apply("egress-shared")
-    sources = ctx.value("egress-shared", "internal_sources")
-    ctx.set_inputs(
-        "egress",
-        cloud=ctx.cloud("egress"),
-        plane_attachment=attachment(ctx, "egress"),
-        monitoring=monitoring(ctx),
-        tenants={"egress-shared": {"sources": sources, "domains": EGRESS_NAMES}},
-    )
-    ctx.apply("egress")
-    ctx.wait_for_instances(ctx.value("egress-shared", "bastion"), ctx.instances("egress-shared"))
 
 
 @step(
@@ -250,60 +210,6 @@ def edge(ctx, report):
     ctx.wait_for_instances(ctx.value("entry-point", "bastion"), ctx.instances("entry-point"))
 
 
-@step(
-    "web",
-    guide=[
-        "docs/reference/test-procedure.md#4-tenants-web-and-private",
-        "docs/getting-started/README.md#4-tenants",
-        "stacks/tenants/vm/README.md#several-tenants-of-this-stack",
-    ],
-)
-def web(ctx, report):
-    inputs = dict(
-        exposure="entry-point",
-        egress="router",
-        cloud=ctx.cloud("vm"),
-        plane_attachment=attachment(ctx, "web"),
-        monitoring=monitoring(ctx),
-        edge_sources=edge_sources(ctx),
-    )
-    # Without the test ACME authority, the tenant keeps its demonstration certificates (ADR-0008).
-    if ctx.has("acme"):
-        inputs["certificates"] = ctx.value("acme", "certificates", "web")
-    ctx.set_inputs("vm", **inputs)
-    ctx.apply("vm")
-    ctx.wait_for_instances(ctx.value("vm", "bastion"), ctx.instances("vm"))
-
-
-@step(
-    "private",
-    guide=[
-        "docs/reference/test-procedure.md#4-tenants-web-and-private",
-        "stacks/tenants/vm/README.md#private-tenant",
-        "stacks/tenants/vm/README.md#several-tenants-of-this-stack",
-    ],
-)
-def private(ctx, report):
-    """A private tenant (ADR-0016, D1): the vm stack with its own state, with neither exposure
-    nor egress; its workload pushes its metric, nothing else. It resolves names through the test
-    resolver when the scenario has one."""
-    cidr = ctx.options.get("planes", {}).get("attachments", {}).get("private", {}).get("cidr", "10.22.0.0/24")
-    inputs = dict(
-        cloud=ctx.cloud("private"),
-        name="private",
-        exposure="none",
-        egress="none",
-        instance_count=1,
-        web_cidr=cidr,
-        plane_attachment=attachment(ctx, "private"),
-        monitoring=monitoring(ctx),
-    )
-    # Without egress, its resolver is behind a plane it joins (ADR-0016, D3).
-    if ctx.has("resolver"):
-        inputs["dns_nameservers"] = [ctx.value("resolver", "resolver")]
-    ctx.set_inputs("private", **inputs)
-    ctx.apply("private")
-    ctx.wait_for_instances(ctx.value("private", "bastion"), ctx.instances("private"))
 
 
 @step(
@@ -320,7 +226,7 @@ def transit(ctx, report):
 
 
 # The tenant stacks with a published_domains output, in the order of their requests.
-PUBLISHING = ("vm", "published")
+PUBLISHING = ("web", "published")
 
 
 def request_domains(ctx):

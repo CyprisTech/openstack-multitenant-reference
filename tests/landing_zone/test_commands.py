@@ -64,14 +64,14 @@ class PlanStatusTest(unittest.TestCase):
         lines, changed = commands.plan(ctx)
         self.assertTrue(changed)
         self.assertIn("planes             not deployed", lines)
-        vm = next(line for line in lines if line.startswith("vm "))
+        vm = next(line for line in lines if line.startswith("web "))
         self.assertIn("1 replaced", vm)
         self.assertIn("1 updated", vm)
         self.assertIn("   replaced: a.replaced", "\n".join(lines))
 
     def test_status_counts_the_resources_of_each_stack(self):
         lines = commands.status(context(answer))
-        self.assertIn("vm                 3 resources", lines)
+        self.assertIn("web                3 resources", lines)
         self.assertIn("receiver           not deployed", lines)
 
 

@@ -13,7 +13,7 @@ from landing_zone.steps.shared import wait_for_revocation
 from landing_zone.tools import Result
 
 SECRET = "s3cr3t-never-printed"
-STACKS = {"shared": "stacks/shared/kubernetes", "vm": "stacks/tenants/vm"}
+STACKS = {"shared": "stacks/shared/kubernetes", "web": "stacks/tenants/vm"}
 
 
 class RevocationTest(unittest.TestCase):

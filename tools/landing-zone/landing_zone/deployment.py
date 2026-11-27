@@ -13,15 +13,13 @@ from pathlib import Path
 
 from .checks import kubeconfig
 from .kube import create_cluster, update_cluster, wait_for_bootstrap
-from .scenario import Scenario
-from .steps import STEPS
+from .scenario import SERVICE_STACKS, TENANT_STACKS, Scenario
+from .steps import GUIDES, STEPS
 from .steps.foundation import attachment, cluster_credential, edge_sources, monitoring
 
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,29}$")
 # What lz deploys in the project of a tenant or a shared service, by type: a stack, or nothing
 # but the attachment of an existing project to the planes.
-TENANT_STACKS = {"vm": "stacks/tenants/vm", "kubernetes": "stacks/tenants/kubernetes", "existing": None}
-SERVICE_STACKS = {"kubernetes": "stacks/shared/kubernetes", "existing": None}
 SHARED_STACKS = {"planes": "stacks/shared/planes", "egress": "stacks/shared/egress", "entry-point": "stacks/shared/entry-point"}
 # The attachments of the shared stacks: their name in the planes stack, and their roles.
 SHARED_ATTACHMENTS = {
@@ -242,18 +240,43 @@ def prepare(ctx, config):
             link = ctx.root / ctx.scenario.stacks[key] / OWN_INPUTS
             link.unlink(missing_ok=True)
             link.symlink_to(base / stack["inputs"])
+    register(config)
+
+
+# The guide sections of the steps of each tenant and shared service.
+MEMBER_GUIDES = {
+    "tenant": ["docs/reference/test-procedure.md#4-tenants-web-and-private", "docs/getting-started/README.md#4-tenants"],
+    "service": ["docs/reference/test-procedure.md#6-shared-cluster", "stacks/shared/kubernetes/README.md#usage"],
+    "cluster": ["docs/reference/test-procedure.md#7-published-cluster", "docs/guides/kubernetes-lifecycle.md"],
+}
+# The steps of the shared stacks that depend on the tenants.
+SHARED_GUIDES = {
+    "deploy-egress": ["stacks/shared/egress/README.md#usage"],
+    "deploy-entry-point": ["docs/getting-started/README.md#3-entry-point"],
+    "deploy-egress-tenants": ["stacks/shared/egress/README.md#usage"],
+    "deploy-publish": ["docs/guides/publish-a-domain.md"],
+}
+
+
+def register(config):
+    """The steps of the tenants and shared services of a configuration (a deployment, or the
+    scenario of the reference): tenant-<name>, service-<name>, cluster-<name>, and the steps of
+    the shared stacks that depend on them."""
     for member, path in members(config):
         if path is None:
             continue
         kind = "tenant" if member in config["tenants"] else "service"
         STEPS[f"{kind}-{member['name']}"] = partial(tenant_step if kind == "tenant" else service_step, tenant=member,
                                                     config=config)  # fmt: skip
+        GUIDES[f"{kind}-{member['name']}"] = MEMBER_GUIDES[kind]
         if member["type"] == "kubernetes":
             STEPS[f"cluster-{member['name']}"] = partial(cluster_step, tenant=member)
+            GUIDES[f"cluster-{member['name']}"] = MEMBER_GUIDES["cluster"]
     STEPS["deploy-egress"] = deploy_egress
     STEPS["deploy-entry-point"] = deploy_entry_point
     STEPS["deploy-egress-tenants"] = partial(deploy_egress_tenants, tenants=config["tenants"])
     STEPS["deploy-publish"] = partial(deploy_publish, tenants=config["tenants"])
+    GUIDES.update(SHARED_GUIDES)
 
 
 # --- steps of a deployment -------------------------------------------------------------------------
@@ -278,23 +301,41 @@ def tenant_step(ctx, report, tenant, config=None):
     before both. A Kubernetes tenant with its bootstrap instance until its cluster exists."""
     name = tenant["name"]
     inputs = dict(tenant.get("values", {}))
-    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, name), monitoring=monitoring(ctx))
-    if "acme" in ctx.external and name in ctx.external["acme"]["certificates"]:
-        inputs["certificates"] = ctx.value("acme", "certificates", name)
+    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, tenant.get("attachment", name)),
+                  monitoring=monitoring(ctx))  # fmt: skip
+    settings = certificates(ctx, name)
+    if settings is not None:
+        inputs["certificates"] = settings
     if tenant["type"] == "vm":
         inputs["name"] = name  # the vm stack's resources are named after it
+        inputs["web_cidr"] = tenant["cidr"]  # the range of its attachment
+    else:
+        inputs["cluster_cidr"] = tenant["cidr"]
     if "publication" in tenant["planes"]:
         inputs["edge_sources"] = edge_sources(ctx)
-    if tenant["type"] == "vm" and "resolver" in ctx.external and "internal" in tenant["planes"]:
+    if tenant.get("resolver") and ctx.has("resolver"):  # a tenant without egress: the resolver behind a plane
         inputs["dns_nameservers"] = [ctx.value("resolver", "resolver")]
-    if tenant.get("egress_proxy") and ctx.has("egress"):
-        inputs["shared_egress"] = {"proxy": ctx.value("egress", "proxy")}
+    if tenant.get("egress_proxy") and ctx.has("egress"):  # out through the shared egress, no egress router
+        inputs.update(shared_egress={"proxy": ctx.value("egress", "proxy")}, egress_network=None)
     if tenant["type"] == "kubernetes":
         inputs["bootstrap"] = not kubeconfig(ctx, name).exists()
     ctx.set_inputs(name, **inputs)
     ctx.apply(name)
     if tenant["type"] == "kubernetes" and inputs["bootstrap"]:
         wait_for_bootstrap(ctx, name)
+    elif tenant["type"] == "vm" and not tenant.get("egress_proxy"):  # those wait for their admission on the egress
+        ctx.wait_for_instances(ctx.value(name, "bastion"), ctx.instances(name))
+
+
+def certificates(ctx, name):
+    """The ACME settings of a tenant or a shared service: those a service provides, or the outputs
+    of the test ACME authority of the reference; None without either (demonstration mode)."""
+    if not ctx.has("acme"):
+        return None
+    every = ctx.value("acme", "certificates")
+    if ctx.runner.dry_run:
+        return f"<acme.certificates.{name}>"
+    return every.get(name) if isinstance(every, dict) else None
 
 
 def service_step(ctx, report, tenant, config):
@@ -305,12 +346,15 @@ def service_step(ctx, report, tenant, config):
     for consumer in tenant.get("consumers", []):
         member = next(t for t in config["tenants"] if t["name"] == consumer)
         existing = member["type"] == "existing"
-        consumers += member.get("internal_sources", []) if existing else ctx.value(consumer, "internal_sources")
+        sources = member.get("internal_sources", []) if existing else ctx.value(consumer, "internal_sources")
+        consumers += sources if isinstance(sources, list) else [sources]  # a placeholder in a dry run
     inputs = dict(tenant.get("values", {}))
-    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, name), monitoring=monitoring(ctx),
-                  consumers=consumers, bootstrap=not kubeconfig(ctx, name).exists())  # fmt: skip
-    if "acme" in ctx.external and name in ctx.external["acme"]["certificates"]:
-        inputs["certificates"] = ctx.value("acme", "certificates", name)
+    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, tenant.get("attachment", name)),
+                  monitoring=monitoring(ctx), consumers=consumers, cluster_cidr=tenant["cidr"],
+                  bootstrap=not kubeconfig(ctx, name).exists())  # fmt: skip
+    settings = certificates(ctx, name)
+    if settings is not None:
+        inputs["certificates"] = settings
     ctx.set_inputs(name, **inputs)
     ctx.apply(name)
     if inputs["bootstrap"]:
@@ -328,6 +372,8 @@ def deploy_egress_tenants(ctx, report, tenants):
     ctx.set_inputs("egress", cloud=ctx.cloud("egress"), plane_attachment=attachment(ctx, "egress"),
                    monitoring=monitoring(ctx), tenants=declared)  # fmt: skip
     ctx.apply("egress")
+    for name in declared:  # admitted: their instances install their packages through the proxy
+        ctx.wait_for_instances(ctx.value(name, "bastion"), ctx.instances(name))
 
 
 def deploy_publish(ctx, report, tenants):
@@ -357,6 +403,12 @@ def cluster_step(ctx, report, tenant):
     if config.exists():
         update_cluster(ctx, name, config)
         return
-    credential = ctx.work / f"{name}-clouds.yaml"
-    cluster_credential(ctx, tenant["cluster_cloud"], credential)
-    create_cluster(ctx, name, credential, config)
+    credential = ctx.work / f"{name}-clouds.yaml"  # written by step prep in a campaign
+    entry = tenant.get("cluster_cloud") or ctx.config.get("cluster_clouds", {}).get(name)
+    if not credential.exists() and entry:
+        cluster_credential(ctx, entry, credential)
+    kubectl = create_cluster(ctx, name, credential, config)
+    if tenant.get("demo"):  # the services the stack demonstrates (its demo directory)
+        from .steps.shared import deploy_demos  # noqa: PLC0415
+
+        deploy_demos(ctx, kubectl)

@@ -8,11 +8,9 @@ modes   = ["interface"]
 planes      = "stacks/shared/planes"
 receiver    = "tests/fixtures/receiver"
 entry-point = "stacks/shared/entry-point"
-vm          = { path = "stacks/tenants/vm", state = "web" }
-private     = { path = "stacks/tenants/vm", state = "private" }
 
 [sequences]
-foundation = ["prep", "planes", "receiver", "edge", "web", "private", "transit", "publish"]
+foundation = ["prep", "planes", "receiver", "edge", "tenant-web", "tenant-private", "transit", "publish"]
 checks     = ["accept", "direct", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
 # lz try: the deployment steps only, with the test fixtures, no check.
@@ -24,7 +22,7 @@ full       = ["foundation", "checks", "end"]
 [options.inputs.entry-point]
 bastion_placement = "stack-network"
 
-[options.inputs.vm]
+[options.inputs.web]
 bastion_placement = "stack-network"
 
 [options.inputs.receiver]
@@ -34,9 +32,22 @@ bastion_placement = "stack-network"
 [options.planes.attachments]
 receiver = { stack = "receiver", cidr = "10.34.0.0/28", planes = { observability = "shared" } }
 edge     = { stack = "entry-point", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
-web      = { stack = "vm", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant" } }
-private = { stack = "private", cidr = "10.22.0.0/24", planes = { observability = "tenant" } }
 
 [options.planes.tenant_ranges]
 publication   = ["10.21.0.0/16", "10.22.0.0/15"]
 observability = ["10.20.0.0/14"]
+
+# The tenants, as in the configuration of a deployment (lz deploy).
+[[tenants]]
+name   = "web"
+type   = "vm"
+cidr   = "10.21.0.0/24"
+planes = { publication = "tenant", observability = "tenant" }
+values = { exposure = "entry-point", egress = "router" }
+
+[[tenants]]
+name   = "private"
+type   = "vm"
+cidr   = "10.22.0.0/24"
+planes = { observability = "tenant" }
+values = { exposure = "none", egress = "none", instance_count = 1 }

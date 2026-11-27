@@ -6,10 +6,10 @@ import time
 
 from ..checks import isolation_test, kubeconfig, record
 from ..context import StepFailed
-from ..kube import Kubectl, copy, create_cluster, delete_cluster, demo_manifest, remote, update_cluster, wait_for_bootstrap
+from ..kube import Kubectl, copy, delete_cluster, demo_manifest, remote, update_cluster
 from ..load import Requests
 from . import step
-from .foundation import attachment, cluster_credential, monitoring, test_zone
+from .foundation import cluster_credential, test_zone
 
 STACK = "shared"
 
@@ -90,7 +90,7 @@ def service_address(ctx):
 
 def consumer_instance(ctx):
     """A tenant instance that consumes the shared services: the first instance of the vm stack."""
-    return ctx.value("vm", "bastion"), ctx.instances("vm")[0]
+    return ctx.value("web", "bastion"), ctx.instances("web")[0]
 
 
 def https_from_consumer(ctx, bastion, instance, address, extra=""):
@@ -101,39 +101,6 @@ def https_from_consumer(ctx, bastion, instance, address, extra=""):
 
 
 # --- steps -----------------------------------------------------------------------------------------
-
-
-@step(
-    "k8s-shared",
-    guide=[
-        "docs/reference/test-procedure.md#6-shared-cluster",
-        "stacks/shared/kubernetes/README.md#usage",
-    ],
-)
-def k8s_shared(ctx, report):
-    ctx.set_inputs(
-        STACK,
-        cloud=ctx.cloud(STACK),
-        plane_attachment=attachment(ctx, "k8s-shared"),
-        monitoring=monitoring(ctx),
-        consumers=ctx.value("vm", "internal_sources"),
-        certificates=ctx.value("acme", "certificates", "shared"),
-        bootstrap=True,
-    )
-    ctx.apply(STACK)
-    wait_for_bootstrap(ctx, STACK)
-
-
-@step(
-    "cluster-shared",
-    guide=[
-        "docs/reference/test-procedure.md#6-shared-cluster",
-        "stacks/shared/kubernetes/README.md#usage",
-    ],
-)
-def cluster_shared(ctx, report):
-    k = create_cluster(ctx, STACK, ctx.work / "shared-clouds.yaml", kubeconfig(ctx, STACK))
-    deploy_demos(ctx, k)
 
 
 @step(

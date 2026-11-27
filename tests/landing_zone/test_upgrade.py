@@ -8,7 +8,7 @@ from pathlib import Path
 from test_core import context
 from test_foundation import context as tenant_context
 
-from landing_zone import previous
+from landing_zone import deployment, previous
 from landing_zone.context import StepFailed
 from landing_zone.report import StepReport
 from landing_zone.scenario import load as load_scenario
@@ -88,8 +88,9 @@ class WorktreeTest(unittest.TestCase):
 
 class ScenarioTest(unittest.TestCase):
     def test_the_upgrade_names_steps_of_this_release(self):
-        steps = load()
         scenario = load_scenario(HERE / "scenarios" / "private-cloud.toml")
+        deployment.register(scenario.members)  # the steps of its tenants and shared services
+        steps = load()
         for name in scenario.options["from"]["apply"] + scenario.expand(["from-previous"]):
             self.assertIn(name, steps)
 
@@ -140,9 +141,9 @@ class IntoStateTest(unittest.TestCase):
     def test_the_default_state_becomes_the_tenants_and_is_initialised(self):
         from landing_zone.steps.upgrade import into_state
 
-        ctx = tenant_context(states={"vm": "web"})
+        ctx = tenant_context(states={"web": "web"})
         (ctx.root / "stacks/tenants/vm/terraform.tfstate").write_text("{}")
-        into_state(ctx, "vm")
+        into_state(ctx, "web")
         self.assertTrue((ctx.root / "stacks/tenants/vm/web.tfstate").exists())
         init = [(c, e) for c, e in ctx.runner.commands if "init" in c]
         self.assertTrue(init, "the tenant's data directory is initialised before its outputs are read")
@@ -152,7 +153,7 @@ class IntoStateTest(unittest.TestCase):
     def test_started_again_the_tenant_is_initialised_once_more(self):
         from landing_zone.steps.upgrade import into_state
 
-        ctx = tenant_context(states={"vm": "web"})
+        ctx = tenant_context(states={"web": "web"})
         (ctx.root / "stacks/tenants/vm/web.tfstate").write_text("{}")  # moved by the first attempt
-        into_state(ctx, "vm")
+        into_state(ctx, "web")
         self.assertTrue([c for c, _ in ctx.runner.commands if "init" in c])

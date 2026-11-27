@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from landing_zone import retry
+from landing_zone import deployment, retry
 from landing_zone.context import INPUTS, Context, StepFailed
 from landing_zone.report import StepReport
 from landing_zone.scenario import Scenario
@@ -16,7 +16,7 @@ STACKS = {
     "planes": "stacks/shared/planes",
     "receiver": "tests/fixtures/receiver",
     "entry-point": "stacks/shared/entry-point",
-    "vm": "stacks/tenants/vm",
+    "web": "stacks/tenants/vm",
 }
 OUTPUTS = {
     ("tests/fixtures/receiver", "receiver_url"): "http://10.34.0.5:9090/api/v1/write",
@@ -64,7 +64,7 @@ def context(answer=answer_outputs, stacks=STACKS, options=None, config=None, sta
     for path in stacks.values():
         (root / path).mkdir(parents=True, exist_ok=True)
     scenario = Scenario("t", "private-cloud", ["gateway"], stacks, {}, options or {}, states or {})
-    config = config or {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "vm": "web"},
+    config = config or {"clouds": {"planes": "hub", "receiver": "shared", "entry-point": "edge", "web": "web"},
                         "site": "t1", "ssh_user": "ops", "planes": {"gateway": {"publication": {"mode": "gateway"}}}}  # fmt: skip
     ctx = Context(scenario, "gateway", config, FakeRunner(answer), root, root / "work")
     ctx.sleep = lambda seconds: None
@@ -79,7 +79,7 @@ class PlanesTest(unittest.TestCase):
     def test_attachments_of_the_stacks_of_the_scenario_only(self):
         options = {"planes": {
             "attachments": {
-                "web": {"stack": "vm", "cidr": "10.21.0.0/24", "planes": {"publication": "tenant"}},
+                "web": {"stack": "web", "cidr": "10.21.0.0/24", "planes": {"publication": "tenant"}},
                 "published": {"stack": "published", "cidr": "10.24.0.0/24", "planes": {"publication": "tenant"}},
             },
             "tenant_ranges": {"publication": ["10.21.0.0/16"]},
@@ -100,11 +100,23 @@ class PlanesTest(unittest.TestCase):
             load()["planes"](ctx, StepReport("planes"))
 
 
+WEB = {"name": "web", "type": "vm", "cidr": "10.21.0.0/24", "planes": {"publication": "tenant"},
+       "values": {"exposure": "entry-point", "egress": "router"}}  # fmt: skip
+
+
+def register(*tenants):
+    """The steps of these tenants (tenant-<name>, deploy-egress-tenants), as lz deploy registers them."""
+    deployment.register({"tenants": list(tenants), "shared-services": []})
+    return load()
+
+
 class TenantInputsTest(unittest.TestCase):
     def test_web_gets_the_outputs_of_the_others_and_waits_for_each_instance(self):
         ctx = context()
-        load()["web"](ctx, StepReport("web"))
-        written = inputs(ctx, "vm")
+        register(WEB)["tenant-web"](ctx, StepReport("tenant-web"))
+        written = inputs(ctx, "web")
+        self.assertEqual(written["exposure"], "entry-point")
+        self.assertEqual(written["web_cidr"], "10.21.0.0/24")
         self.assertEqual(written["monitoring"], {"receiver": OUTPUTS[("tests/fixtures/receiver", "receiver_url")]})
         self.assertEqual(written["edge_sources"], ["10.20.0.0/24"])
         self.assertEqual(written["plane_attachment"], {"publication": {"routes": []}})
@@ -125,6 +137,7 @@ class ResolverTest(unittest.TestCase):
                 "resolver": {"planes": {"internal": {"routes": []}}},
                 "private": {"planes": {"observability": {"routes": []}, "internal": {"routes": []}}},
             },
+            ("stacks/tenants/vm", "instances"): {"private-1": "10.22.0.11"},
         }
         if cmd[0] == "tofu" and cmd[2] == "output":
             key = (cmd[1].removeprefix("-chdir="), cmd[4])
@@ -135,16 +148,19 @@ class ResolverTest(unittest.TestCase):
     def test_the_resolver_forwards_the_test_zone_and_the_private_tenant_uses_it(self):
         stacks = dict(STACKS, resolver="tests/fixtures/resolver", private="stacks/tenants/vm")
         config = {"clouds": {"planes": "hub", "receiver": "shared", "resolver": "shared", "entry-point": "edge",
-                             "vm": "web", "private": "private"},
+                             "web": "web", "private": "private"},
                   "site": "t1", "ssh_user": "ops", "test_zone": "example.org", "name_server": "192.0.2.53"}  # fmt: skip
         ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
-                      states={"vm": "web", "private": "private"})  # fmt: skip
+                      states={"web": "web", "private": "private"})  # fmt: skip
         load()["resolver"](ctx, StepReport("resolver"))
         self.assertEqual(inputs(ctx, "resolver")["forward_zones"], {"example.org": ["192.0.2.53"]})
-        load()["private"](ctx, StepReport("private"))
+        private = {"name": "private", "type": "vm", "cidr": "10.22.0.0/24", "planes": {"internal": "tenant"},
+                   "values": {"exposure": "none", "egress": "none"}, "resolver": True}  # fmt: skip
+        register(WEB, private)["tenant-private"](ctx, StepReport("tenant-private"))
         written = json.loads((ctx.root / "stacks/tenants/vm/mode.private.tfvars.json").read_text())
         self.assertEqual(written["dns_nameservers"], ["203.0.113.53"])
         self.assertEqual(written["egress"], "none")
+        self.assertNotIn("edge_sources", written)
 
 
 class SharedEgressTest(unittest.TestCase):
@@ -168,17 +184,23 @@ class SharedEgressTest(unittest.TestCase):
     def test_the_tenant_is_applied_then_declared_on_the_shared_egress(self):
         stacks = dict(STACKS, egress="stacks/shared/egress", **{"egress-shared": "stacks/tenants/vm"})
         config = {"clouds": {"planes": "hub", "receiver": "shared", "egress": "egress", "entry-point": "edge",
-                             "vm": "web", "egress-shared": "builds"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
+                             "web": "web", "egress-shared": "builds"}, "site": "t1", "ssh_user": "ops"}  # fmt: skip
         ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs), stacks=stacks, config=config,
-                      states={"vm": "web", "egress-shared": "egress-shared"})  # fmt: skip
-        load()["egress"](ctx, StepReport("egress"))
+                      states={"web": "web", "egress-shared": "egress-shared"})  # fmt: skip
+        tenant = {"name": "egress-shared", "type": "vm", "cidr": "10.23.0.0/24", "planes": {"internal": "tenant"},
+                  "values": {"exposure": "none", "egress": "shared"}, "egress_proxy": True,
+                  "egress_domains": [".archive.ubuntu.com"]}  # fmt: skip
+        steps = register(WEB, tenant)
+        steps["deploy-egress"](ctx, StepReport("deploy-egress"))
         self.assertEqual(inputs(ctx, "egress")["tenants"], {})
-        load()["egress-tenant"](ctx, StepReport("egress-tenant"))
-        tenant = json.loads((ctx.root / "stacks/tenants/vm/mode.egress-shared.tfvars.json").read_text())
-        self.assertEqual(tenant["egress"], "shared")
-        self.assertEqual(tenant["shared_egress"], {"proxy": "http://203.0.113.39:3128"})
+        steps["tenant-egress-shared"](ctx, StepReport("tenant-egress-shared"))
+        written = json.loads((ctx.root / "stacks/tenants/vm/mode.egress-shared.tfvars.json").read_text())
+        self.assertEqual(written["egress"], "shared")
+        self.assertEqual(written["shared_egress"], {"proxy": "http://203.0.113.39:3128"})
+        self.assertIsNone(written["egress_network"])
+        steps["deploy-egress-tenants"](ctx, StepReport("deploy-egress-tenants"))
         declared = inputs(ctx, "egress")["tenants"]["egress-shared"]
-        self.assertEqual(declared["sources"], ["203.0.113.23/32"])
+        self.assertEqual(declared, {"sources": ["203.0.113.23/32"], "domains": [".archive.ubuntu.com"]})
         applies = [c for c, _ in ctx.runner.commands if "apply" in c]
         self.assertEqual([c[1] for c in applies][-2:], ["-chdir=stacks/tenants/vm", "-chdir=stacks/shared/egress"])
 
@@ -199,19 +221,19 @@ class ApplyTest(unittest.TestCase):
 
         ctx = context(lambda cmd: answer_outputs(cmd, extra))
         ctx.config.update(repair_hook="/repair", repairs=2)
-        ctx.apply("vm")
+        ctx.apply("web")
         self.assertEqual(len(applies), 2)
         self.assertEqual(applies[1][-1], "-replace=x.y")
 
     def test_a_plan_with_changes_after_apply_fails(self):
         ctx = context(lambda cmd: answer_outputs(cmd, lambda c: Result(2) if "plan" in c else None))
-        with self.assertRaisesRegex(StepFailed, "plan not empty after apply: vm"):
-            ctx.apply("vm")
+        with self.assertRaisesRegex(StepFailed, "plan not empty after apply: web"):
+            ctx.apply("web")
 
     def test_a_failed_apply_without_a_hook_fails(self):
         ctx = context(lambda cmd: answer_outputs(cmd, lambda c: Result(1) if "apply" in c else None))
-        with self.assertRaisesRegex(StepFailed, "apply failed: vm"):
-            ctx.apply("vm")
+        with self.assertRaisesRegex(StepFailed, "apply failed: web"):
+            ctx.apply("web")
 
 
 class InstancesTest(unittest.TestCase):
@@ -232,7 +254,7 @@ class TenantStateTest(unittest.TestCase):
 
     def test_a_tenant_has_its_state_and_its_inputs(self):
         stacks = dict(STACKS, private="stacks/tenants/vm")
-        ctx = context(stacks=stacks, states={"vm": "web", "private": "private"})
+        ctx = context(stacks=stacks, states={"web": "web", "private": "private"})
         (ctx.root / "stacks/tenants/vm" / INPUTS).write_text("{}")  # left by an earlier layout
         ctx.set_inputs("private", name="private")
         self.assertTrue((ctx.root / "stacks/tenants/vm/mode.private.tfvars.json").exists())
@@ -286,7 +308,7 @@ class PublishTest(unittest.TestCase):
             return Result(1, stderr="vm has no published_domains output") if cmd[0] == "scripts/request-domains.sh" else None
 
         ctx = context(lambda cmd: answer_outputs(cmd, extra))
-        with self.assertRaisesRegex(StepFailed, "request-domains.sh failed for vm"):
+        with self.assertRaisesRegex(StepFailed, "request-domains.sh failed for web"):
             load()["publish"](ctx, StepReport("publish"))
 
 

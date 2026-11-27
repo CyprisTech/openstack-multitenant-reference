@@ -12,19 +12,17 @@ internal-service = "tests/fixtures/internal-service"
 resolver         = "tests/fixtures/resolver"
 egress           = "stacks/shared/egress"
 entry-point      = "stacks/shared/entry-point"
-vm               = { path = "stacks/tenants/vm", state = "web" }
-private          = { path = "stacks/tenants/vm", state = "private" }
-egress-shared    = { path = "stacks/tenants/vm", state = "egress-shared" }
-shared           = "stacks/shared/kubernetes"
-published        = "stacks/tenants/kubernetes"
 
 [sequences]
-foundation = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egress", "edge", "web", "private", "egress-tenant", "transit", "publish"]
-shared     = ["k8s-shared", "transit", "cluster-shared", "tour-shared", "accept-shared", "consumer", "volume", "rotate", "upgrade", "shared-down"]
-published  = ["k8s", "cluster", "internal-open", "transit", "tour", "publish", "accept", "direct", "direct-k8s", "hostile"]
+foundation = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egress", "edge", "tenant-web", "tenant-private",
+              "tenant-egress-shared", "deploy-egress-tenants", "transit", "publish"]
+shared     = ["service-shared", "transit", "cluster-shared", "tour-shared", "accept-shared", "consumer", "volume", "rotate",
+              "upgrade", "shared-down"]
+published  = ["tenant-published", "cluster-published", "internal-open", "transit", "tour", "publish", "accept", "direct",
+              "direct-k8s", "hostile"]
 end        = ["plans", "teardown", "leftovers"]
 # lz try: the deployment steps only, with the test fixtures, no check.
-try        = ["foundation", "k8s", "cluster", "internal-open", "transit", "publish"]
+try        = ["foundation", "tenant-published", "cluster-published", "internal-open", "transit", "publish"]
 full       = ["foundation", "shared", "published", "end"]
 # From the previous release (run.py --from <tag>): the new release applied over its states, then
 # the scenario without the steps that created them.
@@ -37,9 +35,10 @@ from-previous = ["migrate", "tour-shared", "accept-shared", "consumer", "volume"
 # its stack (a private tenant of stacks/tenants/vm instead).
 previous      = ["prep", "planes", "receiver", "acme", "internal", "edge", "web", "transit", "publish", "k8s-shared", "transit", "cluster-shared"]
 # The steps of this release that apply it over them (step migrate), then the shared cluster updated.
-apply         = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egress", "edge", "web", "private", "egress-tenant", "transit", "publish", "k8s-shared", "transit", "update-shared"]
-# The previous release kept the vm tenant in the default state of stacks/tenants/vm.
-default_state = ["vm"]
+apply         = ["prep", "planes", "receiver", "acme", "internal", "resolver", "egress", "edge", "tenant-web", "tenant-private",
+                 "tenant-egress-shared", "deploy-egress-tenants", "transit", "publish", "service-shared", "transit", "update-shared"]
+# The previous release kept the web tenant in the default state of stacks/tenants/vm.
+default_state = ["web"]
 
 [options.plans]
 skip = ["shared"]   # removed by shared-down before the end
@@ -53,13 +52,50 @@ acme             = { stack = "acme", cidr = "10.37.0.0/28", planes = { internal 
 resolver         = { stack = "resolver", cidr = "10.38.0.0/28", planes = { internal = "shared" } }
 egress           = { stack = "egress", cidr = "10.39.0.0/27", planes = { internal = "shared", observability = "tenant" } }
 edge             = { stack = "entry-point", cidr = "10.20.0.0/24", planes = { publication = "shared", observability = "tenant" } }
-web              = { stack = "vm", cidr = "10.21.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
-private          = { stack = "private", cidr = "10.22.0.0/24", planes = { observability = "tenant", internal = "tenant" } }
-egress-shared    = { stack = "egress-shared", cidr = "10.23.0.0/24", planes = { observability = "tenant", internal = "tenant" } }
-published        = { stack = "published", cidr = "10.24.0.0/24", planes = { publication = "tenant", observability = "tenant", internal = "tenant" } }
-k8s-shared       = { stack = "shared", cidr = "10.36.0.0/24", planes = { internal = "shared", observability = "tenant" } }
 
 [options.planes.tenant_ranges]
 publication   = ["10.21.0.0/16", "10.22.0.0/15", "10.24.0.0/14"]
 observability = ["10.20.0.0/14", "10.24.0.0/14", "10.36.0.0/24", "10.39.0.0/27"]
 internal      = ["10.20.0.0/14", "10.24.0.0/14"]
+
+# The tenants and the shared services, as in the configuration of a deployment (lz deploy): the
+# campaign deploys them with the same steps (tenant-<name>, service-<name>, cluster-<name>).
+[[tenants]]
+name   = "web"
+type   = "vm"
+cidr   = "10.21.0.0/24"
+planes = { publication = "tenant", observability = "tenant", internal = "tenant" }
+values = { exposure = "entry-point", egress = "router" }
+
+[[tenants]]
+name     = "private"                # ADR-0016, D1: neither exposure nor egress
+type     = "vm"
+cidr     = "10.22.0.0/24"
+planes   = { observability = "tenant", internal = "tenant" }
+values   = { exposure = "none", egress = "none", instance_count = 1 }
+resolver = true                     # the test resolver behind the internal services plane (ADR-0016, D3)
+
+[[tenants]]
+name           = "egress-shared"    # out through the shared egress (ADR-0016, D1)
+type           = "vm"
+cidr           = "10.23.0.0/24"
+planes         = { observability = "tenant", internal = "tenant" }
+values         = { exposure = "none", egress = "shared", instance_count = 1 }
+egress_proxy   = true
+egress_domains = [".archive.ubuntu.com", ".security.ubuntu.com"]
+
+[[tenants]]
+name   = "published"                # the published cluster
+type   = "kubernetes"
+cidr   = "10.24.0.0/24"
+planes = { publication = "tenant", observability = "tenant", internal = "tenant" }
+values = { exposure = "entry-point" }
+
+[[shared-services]]
+name       = "shared"               # the shared cluster
+type       = "kubernetes"
+attachment = "k8s-shared"           # its attachment's name since v0.5: kept, nothing replaced on upgrade
+cidr       = "10.36.0.0/24"
+planes     = { internal = "shared", observability = "tenant" }
+consumers  = ["web"]
+demo       = true                   # the demonstrated services (stacks/shared/kubernetes/demo)

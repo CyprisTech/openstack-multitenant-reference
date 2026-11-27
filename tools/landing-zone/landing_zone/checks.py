@@ -35,8 +35,8 @@ def isolation_test(ctx, report, cluster=None):
     if ctx.has("acme"):
         cmd += ["--acme", ctx.stack("acme")]
     # Tenants sharing the vm stack's directory: each one's outputs, from its own state.
-    if ctx.has("vm"):
-        cmd += ["--web", tenant_outputs(ctx, "vm")]
+    if ctx.has("web"):
+        cmd += ["--web", tenant_outputs(ctx, "web")]
     if ctx.has("private"):
         cmd += ["--private", tenant_outputs(ctx, "private")]
     # Name resolution (ADR-0016, D3): every instance resolves the test zone; the private tenant

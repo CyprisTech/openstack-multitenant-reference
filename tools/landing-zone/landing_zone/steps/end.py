@@ -15,7 +15,7 @@ from . import step
 # stack of the scenario in no wave goes with the second.
 CLUSTERS = ["shared", "published"]
 WAVES = [
-    ["shared", "published", "vm", "private", "egress-shared"],
+    ["shared", "published", "web", "private", "egress-shared"],
     ["internal-service", "resolver", "egress", "entry-point", "receiver", "acme"],
     ["planes"],
 ]
