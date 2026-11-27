@@ -1,8 +1,10 @@
 """The rows of the isolation test, produced from the members of a deployment (lz check)."""
 
+import re
 import unittest
+from pathlib import Path
 
-from landing_zone.isolation import Member, rows
+from landing_zone.isolation import RULES, Member, matrix, rows
 
 
 def scenario():
@@ -94,3 +96,33 @@ class UniqueTest(unittest.TestCase):
         listed = rows(members, receiver="10.34.0.8:9090")
         self.assertNotIn("internal t1-internal-1", {r["source"]["label"] for r in listed})
         self.assertIn(("web t1-web-1", "172.19.0.60", 8080, "closed"), {key(r) for r in listed})
+
+
+class MatrixTest(unittest.TestCase):
+    MATRIX = Path(__file__).resolve().parents[2] / "docs" / "reference" / "isolation-matrix.md"
+
+    def test_the_matrix_shows_the_rules_as_they_are(self):
+        found = re.search(r"<!-- BEGIN_RULES[^>]*-->\n(.*?)<!-- END_RULES -->", self.MATRIX.read_text(), re.S)
+        self.assertIsNotNone(found, "the markers of the rules are in the isolation matrix")
+        self.assertEqual(found.group(1).strip(), matrix().strip(),
+                         "regenerate the table: python3 -c 'from landing_zone import isolation; print(isolation.matrix())'")
+
+    def test_every_row_names_a_rule_of_the_table(self):
+        listed = rows(scenario(), receiver="10.34.0.8:9090")
+        self.assertEqual({r["rule"] for r in listed} - set(RULES), set())
+
+
+class OwnRowsTest(unittest.TestCase):
+    def test_the_adopters_rows_from_its_file(self):
+        import tempfile  # noqa: PLC0415
+
+        from landing_zone.commands import own_rows  # noqa: PLC0415
+
+        base = Path(tempfile.mkdtemp())
+        rows_file = '[[rows]]\nfrom = "web"\nto = "192.0.2.80"\nport = 5432\nexpected = "closed"\n'
+        rows_file += '[[rows]]\nfrom = "local"\nto = "192.0.2.81"\nport = 443\nexpected = "open"\n'
+        (base / "rows.toml").write_text(rows_file)
+        listed = own_rows({"base": str(base), "check": {"rows": "rows.toml"}}, scenario())
+        expected = [("web t1-web-1", "192.0.2.80", 5432, "closed"), ("test runner", "192.0.2.81", 443, "open")]
+        self.assertEqual([key(r) for r in listed], expected)
+        self.assertEqual({r["rule"] for r in listed}, {"own"})
