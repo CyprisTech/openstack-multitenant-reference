@@ -18,7 +18,7 @@ Specs and [ADRs](../adr/README.md) play different parts:
 
 | Spec | Status |
 |---|---|
-| [Network services and the edge](network-services.md) | Proposed |
+| [Network services and the edge, what remains](network-services.md) | Proposed (delivered in v0.6 but two parts) |
 | [Several regions](regions.md) | Proposed |
 | [Segments provided by the operator](operator-segments.md) | Proposed |
 | [Shared services on virtual machines](shared-vm.md) | Proposed |

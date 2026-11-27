@@ -1,6 +1,8 @@
 # Getting started
 
-Two ways, the same result: [`lz deploy`](../../tools/landing-zone/README.md) applies the stacks from one configuration file, or you apply them yourself, stack by stack, in the order below. `lz` runs these same steps ([ADR-0018](../adr/0018-deployment-tool.md)), and every stack can still be applied by hand after a deployment with `lz`.
+To see the reference deployed before writing your configuration, [`lz try`](../../tools/landing-zone/README.md#try-the-reference) deploys its own scenario, with its test fixtures, on test projects.
+
+To deploy your landing zone, two ways, the same result: [`lz deploy`](../../tools/landing-zone/README.md) applies the stacks from one configuration file, or you apply them yourself, stack by stack, in the order below. `lz` runs these same steps ([ADR-0018](../adr/0018-deployment-tool.md)), and every stack can still be applied by hand after a deployment with `lz`.
 
 One path for every cloud. Only step 1 depends on where the shared planes come from: the operator's external networks, or private networks you build in a hub project with a member role (on a public cloud, or on a private one that gives no planes). Every other stack takes its `plane_attachment` from step 1 and works the same way ([How a tenant joins a plane](../concepts/plane-attachment.md)). Deploy only the roles you need: [what you deploy, what we test](../reference/sizing-and-limits.md#what-you-deploy-what-we-test).
 

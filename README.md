@@ -148,6 +148,7 @@ For each need outside it, where it connects: [who it is for](docs/concepts/audie
 ## Getting started
 
 - [Getting started](docs/getting-started/README.md): one path for every cloud; only the configuration of the planes differs. About 20 minutes with the entry point and a `vm` tenant.
+- To see it first: [`lz try`](tools/landing-zone/README.md#try-the-reference) deploys the reference's own scenario, with its test fixtures, on test projects.
 - [`lz deploy`](tools/landing-zone/README.md) applies that path from one configuration file ([`examples/deployment`](examples/deployment/landing-zone.toml)); or apply the stacks by hand, in the same order.
 
 Two profiles ([ADR-0014](docs/adr/0014-profiles.md)) are tested by the maintainers. They are the same stacks; only a few inputs differ, set in each stack's `terraform.tfvars`:

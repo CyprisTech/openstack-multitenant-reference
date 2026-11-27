@@ -57,7 +57,17 @@ Before the first step, `lz` checks that every `clouds.yaml` entry it will use au
 
 ## Try the reference
 
-`lz try private-cloud` deploys the reference's own scenario with its test fixtures, on projects made for it: the [test procedure](../../docs/reference/test-procedure.md) says which projects and entries. Its tenants and shared services are declared in [`scenarios/private-cloud.toml`](scenarios/private-cloud.toml) in the same format as a deployment, and deployed by the same steps.
+Before writing your configuration, see the reference deployed: `lz try` deploys its own scenario, its test fixtures included (a metrics receiver, an ACME authority, a resolver), on projects made for it. The [test procedure](../../docs/reference/test-procedure.md#0-projects-and-prerequisites) says which projects and `clouds.yaml` entries; `campaign.local.toml` names them, with the planes and the SSH access, and each stack and fixture takes a `terraform.tfvars` from its example.
+
+```bash
+cp tools/landing-zone/campaign.local.toml.example tools/landing-zone/campaign.local.toml   # adapt
+lz try private-cloud --dry-run   # the commands, without a cloud
+lz try private-cloud             # the deployment, the published cluster included
+lz status private-cloud
+lz teardown private-cloud        # everything destroyed, then the leftover check
+```
+
+Its tenants and shared services are declared in [`scenarios/private-cloud.toml`](scenarios/private-cloud.toml) in the same format as a deployment, and deployed by the same steps: what you see is what `lz deploy` does with your configuration.
 
 ## Test campaign
 
