@@ -93,7 +93,7 @@ The [overview](#openstack-multitenant-reference) at the top shows how the parts 
 |---|---|---|
 | Decisions | [ADRs](docs/adr/README.md), [trade-offs](docs/concepts/trade-offs.md), [who it is for](docs/concepts/audiences.md) | read, challenge, adapt |
 | Building blocks | [`stacks/shared/planes`](stacks/shared/planes/README.md) (any planes, a role per plane, provided or built), [`modules/`](modules) (joining a plane, admission rules, bastion, metrics agent, ACME client, [Kubernetes cluster](modules/kubernetes-cluster/README.md)) | use as they are |
-| Deployment tool | [`lz`](tools/landing-zone/README.md): deploys a landing zone from one configuration file, and plans, upgrades and tears it down; Terraform applies each stack ([ADR-0018](docs/adr/0018-deployment-tool.md)) | `lz deploy landing-zone.toml`, or the stacks by hand |
+| Deployment tool | [`lz`](tools/landing-zone/README.md): deploys a landing zone from one configuration file, and plans, upgrades and tears it down; Terraform applies each stack ([ADR-0018](docs/adr/0018-deployment-tool.md)) | deploy, upgrade, check |
 | Reference scenario | Three planes (publication, observability, internal services); a shared entry point; a metrics receiver and an internal service, test fixtures that stand in for yours; the [shared cluster](stacks/shared/kubernetes/README.md) (a Kubernetes cluster for shared services), whose services are demonstrated, not operated; two tenant types: [`vm`](stacks/tenants/vm/README.md), as a web tenant behind the entry point and a private tenant with neither exposure nor egress, and [`kubernetes`](stacks/tenants/kubernetes/README.md); the [isolation test](docs/guides/check-isolation.md) | deploy as a working example, then adapt or extend |
 
 `stacks/shared` holds what the landing zone provides to the tenants: the connectivity (`planes`) and the services (`entry-point`, `egress`, `kubernetes`, `vm`); `stacks/tenants`, the tenants, each in its own project.
@@ -246,8 +246,9 @@ With [`lz`](tools/landing-zone/README.md), most of these tasks are a change of `
 
 ## Before production
 
-This is a reference, not an operated platform. What stays yours:
+This is a reference you deploy and run yourself, not an operated platform: nothing runs it for you between two runs of `lz`, and no one commits to its availability. What stays yours:
 
+- **running it**: running `lz` (or the stacks by hand) and following the releases ([upgrade](docs/guides/upgrade.md)); keeping the states and the kubeconfigs safe, since they are the record of the deployment and the administrators' access to the clusters; watching for drift between two runs, which `lz plan` shows and nothing corrects by itself;
 - **the tools** behind the integration points: metrics, logs and audit receivers, backup and secret stores;
 - **identity**: single sign-on for the administration access (your identity provider, or the provider's IAM);
 - **certificates**: the tenants run in demonstration mode (self-signed) until `certificates` is set ([guide](docs/guides/certificates.md));
