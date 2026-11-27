@@ -75,6 +75,8 @@ ssh ops@$B 'sudo /opt/platform/delete-cluster.sh'
 tofu -chdir=$S destroy
 ```
 
+If `delete-cluster.sh` stops with `cannot start the move operation while ... is still provisioning`, a machine has not joined the cluster yet: `clusterctl move` waits for none. The MachineHealthCheck replaces a machine that does not join within 20 minutes; wait for it, or delete that Machine (`kubectl -n platform delete machine <name>`), let its replacement join, then run `delete-cluster.sh` again. Never destroy the stack of a cluster that is still running: its machines would lose their network and the cluster could not be deleted cleanly.
+
 If step 1 was skipped, `delete-cluster.sh` stops at once and prints the command to run. A bootstrap instance kept since an earlier release still has that release's scripts, written by cloud-init when it was created: copy the current ones (`cluster-files.sh`) to its `/opt/platform` first.
 
 `delete-cluster.sh` deletes the `LoadBalancer` Services first (their load balancers belong to the cloud controller manager), then the StatefulSets (they would recreate their claims), the persistent volume claims and the pods that mount them, and waits until their Cinder volumes are gone (their reclaim policy `Delete`; a volume kept with `Retain` stays, yours to delete). It then moves Cluster API back to a kind cluster, deletes the `Cluster` and waits until its servers and API load balancer are gone. The floating IPs of the Services (gateway mode) are kept and destroyed by `tofu destroy` with the rest of the stack.
