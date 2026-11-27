@@ -53,6 +53,10 @@ The isolation matrix of the earlier designs had 44 to 46 rows; the counts are no
 
 Private cloud, OpenStack 2025.1 deployed with OpenStack-Ansible (Nova, Neutron with OVN, Cinder, Glance, Octavia amphora, Designate). Project-scoped application credentials with the `member` and `load-balancer_member` roles. OpenTofu 1.13.2, provider `terraform-provider-openstack/openstack` 3.4.0. Block storage: Cinder with LVM, a volume from an image being a full copy of it; the durations of the steps that create or replace Kubernetes machines depend on it ([sizing](../reference/sizing-and-limits.md#sizing)). Module `terraform-openstack-tenant`: v0.1.6 for the current state (its code before publication, the same as the tag); v0.1.5 for the campaigns of 2026-11-14 and 2026-11-15; v0.1.1 to v0.1.3, or unreleased commits, in the history, as each section states.
 
+## Detailed results: egress declared on the Kubernetes stacks (2026-11-27)
+
+`egress` became a required input of `tenants/kubernetes` and `shared/kubernetes`, `"router"` only: it changes no resource. A short run on eb52f68, operator planes (gateway), from empty projects: the foundation, the shared cluster created with `egress = "router"` (17 min), its acceptance (HTTPS 6/6, isolation 88/88) and its deletion; the 10 stacks the run applied planned no change; the step `plans` also planned the published cluster's stack, which the run never applied, and stopped on it (a defect of the campaign tool, which should plan the applied stacks only); the teardown removed them all, no leftover. The release campaign above ran the same code before the input existed.
+
 ## Detailed results: the release campaign of v0.6 (2026-11-27)
 
 Both runs on `main` at 862e7be, from empty projects, with `lz campaign private-cloud --record`.
