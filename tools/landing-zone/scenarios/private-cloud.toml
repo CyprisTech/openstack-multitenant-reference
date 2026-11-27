@@ -23,13 +23,13 @@ end        = ["plans", "teardown", "leftovers"]
 # lz try: the deployment steps only, with the test fixtures, no check.
 try        = ["foundation", "tenant-published", "cluster-published", "internal-open", "transit", "publish"]
 full       = ["foundation", "shared", "published", "end"]
-# From the previous release (run.py --from <tag>): the new release applied over its states, then
+# From the previous release (lz campaign --from <tag>): the new release applied over its states, then
 # the scenario without the steps that created them.
 from-previous = ["migrate", "tour-shared", "accept-shared", "consumer", "volume", "rotate", "upgrade", "shared-down", "published", "end"]
 
 # Settings of the steps.
 [options.from]
-# The steps of the previous release's run.py that deploy it: the foundation and the shared cluster,
+# The steps of the previous release that deploy it with its own campaign tool: the foundation and the shared cluster,
 # without acceptance. The previous release's isolated tenant is not deployed: this release removes
 # its stack (a private tenant of stacks/tenants/vm instead); nor is its internal service, a fixture
 # this release replaces by stacks/shared/vm (its state would stay behind a removed directory).

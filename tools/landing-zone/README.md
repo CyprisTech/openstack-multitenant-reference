@@ -80,7 +80,7 @@ Outputs, under `tools/landing-zone/work/<scenario>-<mode>` (git-ignored): `repor
 
 ## Upgrade from the previous release
 
-`--from <tag>` tests the upgrade of a deployment ([spec](../../docs/specs/upgrades.md), [ADR-0017](../../docs/adr/0017-upgrades-between-releases.md)). The release campaign runs it in one of its two modes; the other mode deploys from empty.
+`--from <tag>` tests the upgrade of a deployment ([ADR-0017](../../docs/adr/0017-upgrades-between-releases.md)). The release campaign runs it in one of its two modes; the other mode deploys from empty.
 
 1. A git worktree at the tag, `work/<scenario>-<mode>-tree`, deploys the previous release with its own campaign tool: the steps of `options.from.previous` of the scenario (the foundation and the shared cluster, without acceptance). Done once: a run started again skips it.
 2. The worktree checks out the commit under test: the states and the inputs, outside git, stay where they are, as for a user who pulls a new release. The commit must be committed: the worktree only sees commits.

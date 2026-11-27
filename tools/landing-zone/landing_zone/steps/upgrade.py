@@ -1,5 +1,5 @@
-"""The upgrade from the previous release: the new release applied over its states (spec
-docs/specs/upgrades.md, part 5). run.py --from deploys the previous release first."""
+"""The upgrade from the previous release: the new release applied over its states (ADR-0017).
+lz campaign --from deploys the previous release first."""
 
 from ..context import StepFailed
 from ..previous import Migration

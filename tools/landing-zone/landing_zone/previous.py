@@ -1,6 +1,6 @@
-"""The upgrade from the previous release (spec docs/specs/upgrades.md, parts 3 to 5).
+"""The upgrade from the previous release (ADR-0017, D2).
 
-The previous release is deployed in a git worktree at its tag, with its own run.py and the steps
+The previous release is deployed in a git worktree at its tag, with its own campaign tool and the steps
 of options.from.previous; the same worktree then checks out the commit under test. The states and
 the inputs, outside git, stay where they are, as for a user who pulls a new release. The
 campaign then applies the new release over them, stack by stack (step migrate).
