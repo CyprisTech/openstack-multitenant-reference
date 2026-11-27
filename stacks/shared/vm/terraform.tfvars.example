@@ -1,0 +1,52 @@
+# Copy to terraform.tfvars (git-ignored) and adapt to your cloud.
+cloud = "example-site-a-service"
+site  = "site-a"
+name  = "service"
+zones = ["nova"]
+image = "ubuntu-24.04"
+
+flavor           = "m1.small"
+boot_volume_size = 20 # null with a flavor that has a local disk
+instance_count   = 2  # above one, an internal load balancer per service
+
+egress         = "router"
+egress_network = { network = "public", subnet = "public" }
+
+network_mtu = 1362
+# dns_nameservers = ["192.0.2.53"]  # empty (the default): the resolvers of Neutron's DHCP (ADR-0016, D3)
+
+admin = {
+  users = { ops = ["ssh-ed25519 AAAA... ops@example.org"] }
+}
+bastion = {
+  external_network = { network = "admin" }
+  ssh_cidrs        = ["192.0.2.10/32"]
+}
+
+monitoring = { receiver = "http://203.0.113.10:9090" }
+
+# The consumers of the services: output internal_sources of each consuming tenant, and the ranges
+# of the users. Empty keeps the services closed.
+consumers = ["198.51.100.20/32"]
+
+# The services and their names; without workload, the demonstration answers on their ports.
+services = {
+  demo = { ports = [8080], domains = ["demo.int.example.org"] }
+}
+# workload   = { packages = ["..."], write_files = {}, runcmd = ["..."] }
+# tls_reload = "systemctl reload my-service"
+
+# internal_zone = { id = "00000000-0000-0000-0000-000000000000", name = "int.example.org." }
+
+# certificates = {
+#   directory_url = "https://acme.example.org/acme/acme/directory"
+#   email         = "ops@example.org"
+#   dns = {
+#     provider = "rfc2136"
+#     settings = { nameserver = "192.0.2.53:53", tsig_key_name = "acme-service", tsig_algorithm = "hmac-sha256", tsig_secret = "..." }
+#   }
+# }
+
+# How this stack joins the planes: its entry of the attachments output of stack shared/planes,
+# whether the planes are the operator's or built in a hub project. For example:
+#   tofu -chdir=../planes output -json attachments | jq '{plane_attachment: .service.planes}' > planes.auto.tfvars.json

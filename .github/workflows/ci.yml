@@ -22,6 +22,7 @@ env:
     stacks/shared/entry-point
     stacks/shared/egress
     stacks/shared/kubernetes
+    stacks/shared/vm
     stacks/tenants/vm
     stacks/tenants/kubernetes
     tests/fixtures/receiver
@@ -96,7 +97,7 @@ jobs:
       # Stacks: recommended preset plus documented variables and outputs; warnings fail the job.
       - name: stacks
         run: |
-          for d in modules/acme-client modules/admission modules/bastion modules/kubernetes-cluster modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/shared/egress stacks/shared/kubernetes stacks/tenants/vm stacks/tenants/kubernetes; do
+          for d in modules/acme-client modules/admission modules/bastion modules/kubernetes-cluster modules/metrics-agent modules/plane-attachment modules/plane-discovery modules/range-overlaps stacks/shared/planes stacks/shared/entry-point stacks/shared/egress stacks/shared/kubernetes stacks/shared/vm stacks/tenants/vm stacks/tenants/kubernetes; do
             tflint --chdir="$d" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format compact
           done
       - name: test configurations

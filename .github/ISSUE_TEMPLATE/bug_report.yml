@@ -23,6 +23,7 @@ body:
       options:
         - stacks/shared/entry-point
         - stacks/shared/egress
+        - stacks/shared/vm
         - stacks/tenants/vm
         - tests/isolation (matrix)
         - tests/integration

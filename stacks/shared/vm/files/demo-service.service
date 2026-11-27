@@ -1,0 +1,10 @@
+[Unit]
+Description=Demonstration workload of the shared service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/demo-service
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

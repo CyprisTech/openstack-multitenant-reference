@@ -13,6 +13,7 @@ updates:
     directories:
       - /stacks/shared/entry-point
       - /stacks/shared/egress
+      - /stacks/shared/vm
       - /stacks/tenants/vm
       - /modules/kubernetes-cluster
       - /tests/fixtures/receiver
