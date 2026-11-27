@@ -61,6 +61,8 @@ Both inputs are required: what a tenant exposes and what it reaches are written 
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is a tenant of type `vm` in `landing-zone.toml`: `lz` gives it its attachment, the receiver and the sources of the entry point, and publishes its domains; its other inputs are in its inputs file. By hand, as below.
+
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # adapt to your cloud
 tofu init

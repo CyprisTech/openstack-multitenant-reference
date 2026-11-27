@@ -55,6 +55,8 @@ What the entry point does not do: TLS termination, L7 routing, WAF. Each tenant 
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is `stacks.entry-point` of `landing-zone.toml`: `lz` gives it its attachment and the receiver, and publishes the domains of the tenants after theirs are applied; its settings are in its inputs file. By hand, as below.
+
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # adapt to your cloud
 tofu init

@@ -32,14 +32,14 @@ A changed workload reaches new instances only: the instances keep the user data 
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is a shared service of type `vm` in `landing-zone.toml`: `lz` gives it its name, its range, its attachment, the receiver, the certificates and the `internal_sources` of the consumers it names; its services and workload are in its inputs file. By hand, as below.
+
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # adapt; consumers = the consumers' internal_sources
 tofu -chdir=../planes output -json attachments | jq '{plane_attachment: .service.planes}' > planes.auto.tfvars.json
 tofu init && tofu apply
 tofu output services
 ```
-
-With [`lz deploy`](../../../tools/landing-zone/README.md), it is a shared service of type `vm`: `lz` gives it its attachment, the receiver and the consumers' addresses.
 
 ## Add a consumer
 

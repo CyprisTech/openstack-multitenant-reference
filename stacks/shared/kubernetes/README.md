@@ -66,6 +66,8 @@ Any other is refused: without annotation, the cloud controller would give it a f
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is a shared service of type `kubernetes` in `landing-zone.toml`: `lz` gives it its attachment, the receiver, the certificates and the `internal_sources` of the consumers it names, creates the cluster from its bootstrap instance and updates it after each apply; its other inputs are in its inputs file. By hand, as below.
+
 The same as the [Kubernetes tenant](../../tenants/kubernetes/README.md#usage): an application credential dedicated to the cluster, the node image, then `create-cluster.sh` on the bootstrap instance. In `shared/planes`, the cluster's attachment has the role `shared` on the internal services plane and `tenant` on the observability plane; each consuming tenant joins the internal services plane.
 
 ```bash

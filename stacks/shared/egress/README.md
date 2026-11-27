@@ -34,6 +34,8 @@ A new tenant: add it to `tenants` (its sources and names) and apply this stack, 
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is deployed when `clouds.egress` is set in `landing-zone.toml`: `lz` applies it with no tenant, then declares the tenants with `egress_proxy`, their sources and their `egress_domains`. By hand, as below.
+
 The egress first, with no tenant: it refuses every request. Then each tenant that goes out through it, then the egress again, with the tenant declared.
 
 ```bash

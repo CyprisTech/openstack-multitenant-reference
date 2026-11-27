@@ -109,6 +109,8 @@ Any other is refused: without annotation, the cloud controller would give it a f
 
 ## Usage
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is a tenant of type `kubernetes` in `landing-zone.toml`: `lz` gives it its attachment, the receiver and the sources of the entry point, creates the cluster from its bootstrap instance (`cluster_cloud`, the cluster's application credential) and updates it after each apply; its other inputs are in its inputs file. By hand, as below.
+
 ```bash
 cp terraform.tfvars.example terraform.tfvars    # adapt
 tofu init && tofu apply

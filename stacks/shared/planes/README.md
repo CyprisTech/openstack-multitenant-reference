@@ -80,6 +80,8 @@ A project cannot choose its own address on a network it does not own (Neutron po
 
 ## Adding, changing, removing an attachment
 
+With [`lz deploy`](../../../tools/landing-zone/README.md), it is `stacks.planes` of `landing-zone.toml`: `lz` writes its attachments from the tenants and shared services the configuration declares (their project, range and role on each plane) and the tenant ranges of each plane, then applies it again once the tenants exist; the planes themselves are in its inputs file. By hand, as below.
+
 1. Add the entry here and apply: the RBAC policies are created.
 2. Apply the attachment's stack with its `attachments.<name>.planes` (stacks read it through [`modules/plane-attachment`](../../../modules/plane-attachment/README.md)): its router joins the plane, with its routes through the transit router.
 3. Apply this stack again: it discovers the new router's address and adds the route on the transit router.
