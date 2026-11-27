@@ -14,7 +14,8 @@ hostile_next_hop = "172.31.1.1"  # the transit router on the observability plane
 # clouds_yaml = "~/.config/openstack/clouds.yaml"
 # notify_hook = "/path/to/notify"   # tells the operator: revocation awaited, campaign stopped
 # notify_steps = true               # also the start and the end of each step, with its measures
-# repair_hook = "/path/to/repair"   # repairs a known failure of your cloud, prints extra apply arguments
+# repair_hook = "/path/to/repair"   # repairs a known failure of your cloud: given the stack path and its inputs file, in the
+#                                   # stack's environment (TF_DATA_DIR of a member), prints extra apply arguments
 # repairs     = 1
 
 # The clouds.yaml entry of each stack's project, by stack key of the scenario.

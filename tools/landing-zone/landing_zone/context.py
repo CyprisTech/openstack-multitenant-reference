@@ -144,7 +144,8 @@ class Context:
         """Applies a stack, then requires an empty plan (unless empty_plan is false: a scene).
 
         repair_hook (optional, outside this repository) may clean a known failure of the test
-        cloud: given the stack path, it prints extra apply arguments, or fails.
+        cloud: given the stack path and its inputs file, in the stack's environment (the data
+        directory of a member's state), it prints extra apply arguments, or fails.
         """
         started = time.monotonic()
         self.tofu.init(self.stack(key))
@@ -159,7 +160,8 @@ class Context:
         while status != 0 and hook and attempt < repairs:
             attempt += 1
             self.runner.echo(f"apply failed on {key}: repair {attempt}/{repairs}")
-            repair = self.runner.run([hook, self.stack(key)], cwd=self.root, check=False)
+            stack = self.stack(key)
+            repair = self.runner.run([hook, stack, str(stack.inputs)], cwd=self.root, env=stack.env(), check=False)
             if repair.returncode != 0:
                 break
             status = self._apply(key, repair.stdout.split())

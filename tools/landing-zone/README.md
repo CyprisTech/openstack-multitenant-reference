@@ -147,7 +147,7 @@ Two tenants of one stack, such as the web and private tenants of `stacks/tenants
 $ TF_DATA_DIR=.terraform/tenant-private tofu -chdir=stacks/tenants/vm apply -auto-approve -input=false -no-color -var-file=mode.private.tfvars.json
 ```
 
-`notify_hook` (optional) tells the operator, given a message: when the campaign waits for someone (the revocation of the old credential, in step `rotate`) and when it stops. `repair_hook` (optional) may clean a known failure of your test cloud after a failed apply: given the stack path, it prints extra apply arguments.
+`notify_hook` (optional) tells the operator, given a message: when the campaign waits for someone (the revocation of the old credential, in step `rotate`) and when it stops. `repair_hook` (optional) may clean a known failure of your test cloud after a failed apply: given the stack path and the name of its inputs file in that directory, and run in the stack's environment (`TF_DATA_DIR` of a member's state, so that `tofu show` reads the state that failed), it prints extra apply arguments (`-replace=…`), or fails.
 
 ## Recordings
 

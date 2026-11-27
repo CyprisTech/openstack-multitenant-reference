@@ -225,6 +225,20 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual(len(applies), 2)
         self.assertEqual(applies[1][-1], "-replace=x.y")
 
+    def test_the_repair_hook_gets_the_inputs_file_and_the_state_of_a_member(self):
+        def extra(cmd):
+            if "apply" in cmd:
+                return Result(1)
+            return None
+
+        ctx = context(lambda cmd: answer_outputs(cmd, extra), states={"web": "web"})
+        ctx.config.update(repair_hook="/repair", repairs=1)
+        with self.assertRaises(StepFailed):
+            ctx.apply("web")
+        cmd, env = next((c, e) for c, e in ctx.runner.commands if c[0] == "/repair")
+        self.assertEqual(cmd[1:], ["stacks/tenants/vm", "mode.web.tfvars.json"])
+        self.assertEqual(env["TF_DATA_DIR"], ".terraform/tenant-web")
+
     def test_a_plan_with_changes_after_apply_fails(self):
         ctx = context(lambda cmd: answer_outputs(cmd, lambda c: Result(2) if "plan" in c else None))
         with self.assertRaisesRegex(StepFailed, "plan not empty after apply: web"):
