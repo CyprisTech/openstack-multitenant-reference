@@ -185,10 +185,13 @@ def egress(ctx, report):
     ],
 )
 def edge(ctx, report):
-    """The entry point, with no domain yet (step publish publishes them). During the upgrade from
-    the previous release, the domains already published stay: they are being served."""
+    """The entry point, with no domain yet (step publish publishes them). The domains already
+    published stay, since they are being served: during the upgrade from the previous release, and
+    in a run started again after the first publication (step publish then measures its load on
+    them)."""
     domains = ctx.root / ctx.stack("entry-point") / "domains.auto.tfvars.json"
-    if not ctx.runner.dry_run and ctx.migration is None:
+    published = (ctx.work / "published-once").exists()
+    if not ctx.runner.dry_run and ctx.migration is None and not published:
         domains.unlink(missing_ok=True)
     ctx.set_inputs(
         "entry-point", cloud=ctx.cloud("entry-point"), plane_attachment=attachment(ctx, "edge"), monitoring=monitoring(ctx)

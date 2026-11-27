@@ -389,3 +389,32 @@ class SharedServiceTest(unittest.TestCase):
         ssh = [c for c, _ in ctx.runner.commands if c[0] == "ssh"]
         self.assertEqual([c[-2] for c in ssh], ["ops@10.37.0.11"])  # its instances, through its bastion
         self.assertIn("ops@192.0.2.40", ssh[0])
+
+
+class EdgeTest(unittest.TestCase):
+    @staticmethod
+    def outputs(cmd):
+        values = {
+            ("stacks/shared/planes", "attachments"): {"edge": {"planes": {"publication": {"routes": []}}}},
+            ("stacks/shared/entry-point", "instances"): {"t1-edge-1": "10.20.0.11"},
+            ("stacks/shared/entry-point", "bastion"): "192.0.2.50",
+        }
+        if cmd[0] == "tofu" and cmd[2] == "output" and (cmd[1].removeprefix("-chdir="), cmd[4]) in values:
+            return Result(0, json.dumps(values[(cmd[1].removeprefix("-chdir="), cmd[4])]))
+        return None
+
+    def test_a_run_started_again_keeps_the_published_domains(self):
+        ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs))
+        domains = ctx.root / "stacks/shared/entry-point/domains.auto.tfvars.json"
+        domains.write_text("{}")
+        ctx.work.mkdir(parents=True, exist_ok=True)
+        (ctx.work / "published-once").touch()
+        load()["edge"](ctx, StepReport("edge"))
+        self.assertTrue(domains.exists())  # served: the step does not withdraw them
+
+    def test_the_first_run_starts_with_no_domain(self):
+        ctx = context(answer=lambda cmd: answer_outputs(cmd, self.outputs))
+        domains = ctx.root / "stacks/shared/entry-point/domains.auto.tfvars.json"
+        domains.write_text("{}")
+        load()["edge"](ctx, StepReport("edge"))
+        self.assertFalse(domains.exists())
