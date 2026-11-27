@@ -20,6 +20,7 @@ mock_provider "openstack" {
 }
 
 variables {
+  egress         = "router"
   cloud          = "example"
   exposure       = "entry-point"
   site           = "site-a"
@@ -141,4 +142,15 @@ run "no_service_on_a_private_cluster" {
   }
 
   expect_failures = [terraform_data.exposure]
+}
+
+run "egress_router_only_until_the_shared_egress_for_clusters" {
+  command = plan
+
+  variables {
+    exposure = "none"
+    egress   = "shared"
+  }
+
+  expect_failures = [var.egress]
 }

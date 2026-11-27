@@ -67,6 +67,21 @@ variable "network_mtu" {
   default     = null
 }
 
+variable "egress" {
+  description = <<-EOT
+    How the cluster reaches the Internet (ADR-0016, D1), for its container images, its charts and
+    the APIs it calls: "router", its own router to egress_network, without filtering or logging.
+    The shared egress of the landing zone ("shared") comes for clusters in v0.7, and "none" with
+    the registry caches of v0.8. Required: what a tenant reaches is declared.
+  EOT
+  type        = string
+
+  validation {
+    condition     = var.egress == "router"
+    error_message = "egress must be \"router\": the shared egress for clusters comes in v0.7, \"none\" with the registry caches in v0.8."
+  }
+}
+
 variable "egress_network" {
   description = "External network giving the default route (packages, container images). The cluster gets no public address on it, except the ingress with exposure = \"public\" (an entry with plane \"egress\")."
   type = object({

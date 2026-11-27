@@ -7,7 +7,7 @@ The **shared egress** of the landing zone ([ADR-0016](../../../docs/adr/0016-net
 - **The log** of each proxy is `/var/log/squid/access.log` on the instance: every request, allowed or refused, with the tenant's address. Sending it to your log tools is an integration point of `v0.8`.
 - **The proxies go out through the stack's own egress router** (`egress_network`) and resolve names with the resolvers of its network.
 
-A tenant with `egress = "shared"` (stack [`vm`](../../tenants/vm/README.md)) has no egress router and no default route: it joins the internal services plane and takes the `proxy` output as its `shared_egress.proxy`. Kubernetes tenants keep their own egress router until the integration point of registry mirrors (`v0.8`).
+A tenant with `egress = "shared"` (stack [`vm`](../../tenants/vm/README.md)) has no egress router and no default route: it joins the internal services plane and takes the `proxy` output as its `shared_egress.proxy`. Kubernetes clusters go out through their own router (`egress = "router"`, without filtering or logging) until the shared egress for clusters, in `v0.7`.
 
 ```mermaid
 flowchart LR

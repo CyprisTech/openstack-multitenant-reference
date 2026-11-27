@@ -20,6 +20,7 @@ mock_provider "openstack" {
 }
 
 variables {
+  egress         = "router"
   cloud          = "example"
   site           = "site-a"
   image          = "ubuntu-24.04"
@@ -126,4 +127,15 @@ run "declared_services_distinct_hosts" {
   }
 
   expect_failures = [terraform_data.service_hosts]
+}
+
+run "egress_router_only_until_the_shared_egress_for_clusters" {
+  command = plan
+
+  variables {
+    zones  = ["az-1"]
+    egress = "none"
+  }
+
+  expect_failures = [var.egress]
 }

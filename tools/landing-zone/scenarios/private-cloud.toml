@@ -89,7 +89,7 @@ name   = "published"                # the published cluster
 type   = "kubernetes"
 cidr   = "10.24.0.0/24"
 planes = { publication = "tenant", observability = "tenant", internal = "tenant" }
-values = { exposure = "entry-point" }
+values = { exposure = "entry-point", egress = "router" }
 
 [[shared-services]]
 name      = "internal-service"      # a shared service on virtual machines, the one the published cluster consumes
@@ -107,3 +107,4 @@ cidr       = "10.36.0.0/24"
 planes     = { internal = "shared", observability = "tenant" }
 consumers  = ["web"]
 demo       = true                   # the demonstrated services (stacks/shared/kubernetes/demo)
+values     = { egress = "router" }

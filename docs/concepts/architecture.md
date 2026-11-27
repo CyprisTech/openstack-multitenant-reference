@@ -221,7 +221,7 @@ The contract between the sources and the receivers:
 
 ## Network services
 
-**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered, and the package mirrors, planned in `v0.8` with the other integration points. The shared egress is [`stacks/shared/egress`](../../stacks/shared/egress/README.md), for `vm` tenants; a `kubernetes` tenant keeps its own egress router until the registry mirrors.
+**Status:** planned in `v0.6`, except the egress through the tenant's own router, delivered, the shared egress for Kubernetes clusters, planned in `v0.7`, and the package mirrors, planned in `v0.8` with the other integration points. The shared egress is [`stacks/shared/egress`](../../stacks/shared/egress/README.md), for `vm` tenants. A Kubernetes cluster declares its egress too, `egress = "router"` only until then: it reaches the Internet through its own router, without filtering or logging.
 
 What every tenant needs from the network, split by level ([ADR-0016](../adr/0016-network-services-and-edge-by-level.md)):
 

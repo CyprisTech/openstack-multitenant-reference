@@ -7,6 +7,7 @@ image = "ubuntu-24.04"
 flavor           = "m1.medium" # bootstrap instance: kind runs there
 boot_volume_size = 20 # null with a flavor that has a local disk
 
+egress         = "router" # its own router to egress_network (the shared egress for clusters comes in v0.7)
 egress_network = { network = "public", subnet = "public" }
 # admin_network = { network = "admin", subnet = "admin", cidr = "100.64.0.0/24" } # recommended; null uses the internal services plane
 

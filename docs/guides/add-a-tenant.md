@@ -28,7 +28,7 @@ Create the project (provider's console or API, or [`cloud-baseline`](https://git
 
 ## 2. Type and address range
 
-Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances, published through the entry point, with their own address, or private: `exposure = "none"`, `egress = "none"`, [ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md) (a cluster with its ingress, published through the entry point or with its own address, or private: `exposure = "none"`, no ingress). Both stacks require `exposure`, and `vm` requires `egress` too: no default decides what a tenant exposes or reaches.
+Choose the tenant type: [`vm`](../../stacks/tenants/vm/README.md) (instances, published through the entry point, with their own address, or private: `exposure = "none"`, `egress = "none"`, [ADR-0016](../adr/0016-network-services-and-edge-by-level.md), D1) or [`kubernetes`](../../stacks/tenants/kubernetes/README.md) (a cluster with its ingress, published through the entry point or with its own address, or private: `exposure = "none"`, no ingress). Both stacks require `exposure` and `egress`: no default decides what a tenant exposes or reaches. A cluster takes `egress = "router"` only, until the shared egress for clusters in `v0.7`.
 
 Choose its address range outside the planes' ranges. On hub planes (interface mode) it must also differ from every other attachment of the plane — and fall inside the plane's `tenant_ranges` aggregates, so that no shared service needs a new route. On operator planes (gateway mode), tenants may share ranges.
 
