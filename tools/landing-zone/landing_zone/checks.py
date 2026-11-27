@@ -49,9 +49,9 @@ def isolation_test(ctx, report, cluster=None):
     if ctx.has("egress") and ctx.has("egress-shared"):
         cmd += ["--egress", ctx.stack("egress"), "--egress-tenant", tenant_outputs(ctx, "egress-shared")]
     if cluster == "shared":
-        cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared")]
+        cmd += ["--shared-kubeconfig", kubeconfig(ctx, "shared"), "--shared", tenant_outputs(ctx, "shared")]
     elif cluster == "published":
-        cmd += ["--published-kubeconfig", kubeconfig(ctx, "published")]
+        cmd += ["--published-kubeconfig", kubeconfig(ctx, "published"), "--published", tenant_outputs(ctx, "published")]
         cmd += ["--internal-service", tenant_outputs(ctx, "internal-service")]
     result = ctx.runner.run(cmd, cwd=ctx.root, check=False)
     output = result.stdout + result.stderr

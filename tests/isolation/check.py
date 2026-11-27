@@ -130,6 +130,8 @@ def parse_args():
     ap.add_argument("--private", help="the private tenant: its directory or a file of its outputs (required)")
     ap.add_argument("--user", default="ops")
     ap.add_argument("--published-kubeconfig")
+    ap.add_argument("--published", help="the published cluster's stack: its directory or a file of its outputs "
+                    "(default: <stacks>/tenants/kubernetes)")
     ap.add_argument("--kubectl", default="kubectl")
     ap.add_argument("--internal-service", default="stacks/shared/vm",
                     help="the internal service the published cluster consumes: its directory or a file of its outputs")
@@ -137,6 +139,8 @@ def parse_args():
     ap.add_argument("--tool", default="tofu")
     ap.add_argument("--acme", help="directory of the test ACME authority (tests/fixtures/acme)")
     ap.add_argument("--shared-kubeconfig", help="kubeconfig of the shared cluster (stacks/shared/kubernetes)")
+    ap.add_argument("--shared", help="the shared cluster's stack: its directory or a file of its outputs "
+                    "(default: <stacks>/shared/kubernetes)")
     ap.add_argument("--zone", help="zone of the landing zone, which every instance must resolve")
     ap.add_argument("--public-name", default="openstack.org", help="a public name every instance must resolve")
     ap.add_argument("--resolver", help="directory of the test resolver (tests/fixtures/resolver), used by the private tenant")
@@ -389,7 +393,7 @@ def published_cluster_rows(d, args):
     kubectl = [args.kubectl, "--kubeconfig", args.published_kubeconfig, "--request-timeout=30s"]
     # The ingress address created by the stack, and the one the Service carries: the cloud
     # controller manager silently allocates another address when the requested one is unavailable.
-    plat = outputs(args.tool, os.path.join(args.stacks, "tenants", "kubernetes"))
+    plat = outputs(args.tool, args.published or os.path.join(args.stacks, "tenants", "kubernetes"))
     ingress = next(iter(plat["published_domains"].values()))["backends"][0].split(":")[0]
     svc_ingress = kget(kubectl, "get", "svc", "-A", "-l", "app.kubernetes.io/name=traefik", "-o",
                        "jsonpath={.items[0].status.loadBalancer.ingress[0].ip}")  # fmt: skip
@@ -431,7 +435,7 @@ def shared_cluster_rows(d, args):
     if not args.shared_kubeconfig:
         return []
     p = d.p
-    shared = outputs(args.tool, os.path.join(args.stacks, "shared", "kubernetes"))
+    shared = outputs(args.tool, args.shared or os.path.join(args.stacks, "shared", "kubernetes"))
     sk = d.start_probe(args.shared_kubeconfig)
     s_ingress = shared["services"]["ingress"].split(":")[0]
     s_echo = shared["services"]["echo"].split(":")[0]

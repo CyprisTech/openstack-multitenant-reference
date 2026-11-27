@@ -37,8 +37,9 @@ previous      = ["prep", "planes", "receiver", "acme", "edge", "web", "transit",
 # The steps of this release that apply it over them (step migrate), then the shared cluster updated.
 apply         = ["prep", "planes", "receiver", "acme", "service-internal-service", "resolver", "egress", "edge", "tenant-web", "tenant-private",
                  "tenant-egress-shared", "deploy-egress-tenants", "transit", "publish", "service-shared", "transit", "update-shared"]
-# The previous release kept the web tenant in the default state of stacks/tenants/vm.
-default_state = ["web"]
+# The previous release kept the web tenant and the shared cluster in the default state of their
+# directory; this release gives each its own state.
+default_state = ["web", "shared"]
 
 [options.plans]
 skip = ["shared"]   # removed by shared-down before the end
