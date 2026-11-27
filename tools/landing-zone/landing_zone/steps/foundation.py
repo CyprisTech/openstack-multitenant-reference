@@ -105,7 +105,7 @@ def planes(ctx, report):
     options = ctx.options.get("planes", {})
     attachments = {}
     for name, spec in options.get("attachments", {}).items():
-        if ctx.has(spec["stack"]):
+        if ctx.has(spec["stack"]) or spec.get("existing"):  # an existing project: attached only
             attachments[name] = {"project_id": ctx.project_id(spec["stack"]), "cidr": spec["cidr"], "planes": spec["planes"]}
     inputs = dict(cloud=ctx.cloud("planes"), site=ctx.setting("site"), attachments=attachments,
                   tenant_ranges=options.get("tenant_ranges", {}))  # fmt: skip

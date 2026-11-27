@@ -32,9 +32,13 @@ inputs = "../planes/hub.tfvars.example"
 cidr   = "10.20.0.0/24"             # the range of the entry point's network
 inputs = "../../stacks/shared/entry-point/terraform.tfvars.example"
 
-[external]                          # your shared services, which lz does not deploy
-monitoring = { receiver = "https://metrics.example.org/api/v1/write" }
-# resolvers = ["10.38.0.5"]         # a resolver behind the internal services plane, for tenants without egress
+[external]                          # values given to the tenants as they are (services outside the landing zone)
+receiver = "https://metrics.example.org/api/v1/write"   # the remote write URL of your metrics receiver
+# resolver = "10.38.0.5"            # a resolver behind the internal services plane, for tenants without egress
+
+# Tenants consume, shared services offer. Their type says what lz deploys in their project:
+# "vm" or "kubernetes" (a stack of the reference), or "existing" (nothing: lz attaches the
+# project to the planes, for a project you run yourself).
 
 [[tenants]]                         # one block per tenant, each in its own project and state
 name   = "shop"
@@ -42,7 +46,8 @@ type   = "vm"
 cloud  = "shop"
 cidr   = "10.21.0.0/24"
 planes = { publication = "tenant", observability = "tenant" }
-inputs = "../../stacks/tenants/vm/terraform.tfvars.example"   # exposure, egress, domains, sizes…
+inputs = "../../stacks/tenants/vm/terraform.tfvars.example"   # its own inputs: exposure, egress, domains, sizes…
+# values = { instance_count = 2 }   # inputs given here rather than in a file
 # egress_proxy   = true             # out through the shared egress, with egress = "shared" in its inputs
 # egress_domains = [".ubuntu.com"]  # the names it may reach there
 
@@ -54,3 +59,29 @@ cluster_cloud = "apps-cluster"      # the clouds.yaml entry of the cluster's app
 cidr          = "10.24.0.0/22"
 planes        = { publication = "tenant", observability = "tenant" }
 inputs        = "../../stacks/tenants/kubernetes/terraform.tfvars.example"
+
+[[tenants]]
+name   = "legacy"
+type   = "existing"                 # a project you keep: attached to the planes, nothing deployed
+cloud  = "legacy"
+cidr   = "10.25.0.0/24"
+planes = { observability = "tenant", internal = "tenant" }
+internal_sources = ["10.25.0.0/24"] # its addresses on the internal services plane, for the services it consumes
+
+# [[shared-services]]               # the shared cluster, offering services on the internal plane
+# name          = "platform"
+# type          = "kubernetes"
+# cloud         = "platform"
+# cluster_cloud = "platform-cluster"
+# cidr          = "10.36.0.0/24"
+# planes        = { internal = "shared", observability = "tenant" }
+# consumers     = ["shop", "apps", "legacy"]
+# inputs        = "../../stacks/shared/kubernetes/terraform.tfvars.example"
+
+[[shared-services]]
+name     = "metrics"
+type     = "existing"               # your receiver, in a project of its own on the observability plane
+cloud    = "metrics"
+cidr     = "10.34.0.0/28"
+planes   = { observability = "shared" }
+provides = { receiver = "https://10.34.0.5:9090/api/v1/write" }   # given to every tenant (wins over [external])

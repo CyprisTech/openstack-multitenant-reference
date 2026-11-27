@@ -18,21 +18,27 @@ from .steps import STEPS
 from .steps.foundation import attachment, cluster_credential, edge_sources, monitoring
 
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,29}$")
-TENANT_STACKS = {"vm": "stacks/tenants/vm", "kubernetes": "stacks/tenants/kubernetes"}
+# What lz deploys in the project of a tenant or a shared service, by type: a stack, or nothing
+# but the attachment of an existing project to the planes.
+TENANT_STACKS = {"vm": "stacks/tenants/vm", "kubernetes": "stacks/tenants/kubernetes", "existing": None}
+SERVICE_STACKS = {"kubernetes": "stacks/shared/kubernetes", "existing": None}
 SHARED_STACKS = {"planes": "stacks/shared/planes", "egress": "stacks/shared/egress", "entry-point": "stacks/shared/entry-point"}
 # The attachments of the shared stacks: their name in the planes stack, and their roles.
 SHARED_ATTACHMENTS = {
     "entry-point": ("edge", {"publication": "shared", "observability": "tenant"}),
     "egress": ("egress", {"internal": "shared", "observability": "tenant"}),
 }
-# The adopter's own inputs of a shared stack, beside its other inputs: read by tofu by itself, so
-# that the scripts of the guides plan the stack as lz does; before mode.auto.tfvars.json, which wins.
-OWN_INPUTS = "lz-inputs.auto.tfvars"
-RESERVED = {*SHARED_STACKS, "edge", "shared", "receiver", "acme", "resolver", "internal-service"}
+RESERVED = {*SHARED_STACKS, "edge", "receiver", "acme", "resolver", "internal-service"}
 PLANES = {"publication", "observability", "internal"}
 ROLES = {"tenant", "shared"}
 PROFILES = {"private-cloud", "public-cloud"}
 MODES = {"gateway", "interface"}
+# The values a shared service of the adopter, or the [external] table, may give the tenants: the
+# remote write URL of a metrics receiver, a resolver, the ACME settings of each tenant.
+PROVIDED = {"receiver", "resolver", "certificates"}
+# The adopter's own inputs of a shared stack, beside its other inputs: read by tofu by itself, so
+# that the scripts of the guides plan the stack as lz does; before mode.auto.tfvars.json, which wins.
+OWN_INPUTS = "lz-inputs.auto.tfvars"
 
 
 class ConfigError(Exception):
@@ -55,7 +61,16 @@ def load(path):
     if problems:
         raise ConfigError(path, problems)
     config["base"] = str(path.parent)
+    config.setdefault("shared-services", [])
     return config
+
+
+def provided(config):
+    """The values given to the tenants: the [external] table, then those of the shared services."""
+    values = {k: v for k, v in config.get("external", {}).items() if k in PROVIDED}
+    for service in config.get("shared-services", []):
+        values.update(service.get("provides", {}))
+    return values
 
 
 def check(config, base):
@@ -71,9 +86,11 @@ def check(config, base):
     for key in ("planes", "entry-point"):
         if not clouds.get(key):
             problems.append(f"clouds.{key}: the clouds.yaml entry of the {key} stack's project")
-    receiver = config.get("external", {}).get("monitoring", {}).get("receiver", "")
-    if not str(receiver).startswith(("http://", "https://")):
-        problems.append("external.monitoring.receiver: the remote write URL of your metrics receiver")
+    unknown = set(config.get("external", {})) - PROVIDED
+    if unknown:
+        problems.append(f"external: unknown {', '.join(sorted(unknown))} (one of {', '.join(sorted(PROVIDED))})")
+    if not str(provided(config).get("receiver", "")).startswith(("http://", "https://")):
+        problems.append("external.receiver: the remote write URL of your metrics receiver (or a shared service that provides it)")
     for key, stack in config.get("stacks", {}).items():
         if key not in SHARED_STACKS:
             problems.append(f"stacks.{key}: not a shared stack ({', '.join(sorted(SHARED_STACKS))})")
@@ -89,7 +106,7 @@ def check(config, base):
                 problems.append(f"stacks.{key}.cidr: the range of the {key} stack's network, e.g. 10.20.0.0/24")
     admin = config.get("admin", {})
     if not admin.get("ssh_user") or not admin.get("ssh_key"):
-        problems.append("admin.ssh_user, admin.ssh_key: the user and the key lz connects with to the bootstrap instances")
+        problems.append("admin.ssh_user, admin.ssh_key: the user and the key lz connects with to the instances")
     state = config.get("state")
     if state is not None:
         if not state.get("backend"):
@@ -100,29 +117,47 @@ def check(config, base):
     if not tenants:
         problems.append("tenants: at least one [[tenants]] block")
     seen = set()
-    for index, tenant in enumerate(tenants):
-        where = f"tenants[{index}]" + (f" ({tenant['name']})" if tenant.get("name") else "")
-        name = tenant.get("name", "")
-        if not NAME.match(name) or name in RESERVED:
-            problems.append(f"{where}.name: a short name (lowercase letters, digits, dashes), not {', '.join(sorted(RESERVED))}")
-        elif name in seen:
-            problems.append(f"{where}.name: {name} is used twice")
-        seen.add(name)
-        if tenant.get("type") not in TENANT_STACKS:
-            problems.append(f"{where}.type: one of {', '.join(TENANT_STACKS)}")
-        if not tenant.get("cloud"):
-            problems.append(f"{where}.cloud: the clouds.yaml entry of the tenant's project")
-        try:
-            ipaddress.ip_network(tenant.get("cidr", ""))
-        except ValueError:
-            problems.append(f"{where}.cidr: the range of the tenant's network, e.g. 10.21.0.0/24")
-        planes = tenant.get("planes", {})
-        if not planes or any(p not in PLANES or r not in ROLES for p, r in planes.items()):
-            problems.append(f"{where}.planes: each plane ({', '.join(sorted(PLANES))}) with its role (tenant or shared)")
-        if not tenant.get("inputs") or not (base / tenant["inputs"]).exists():
-            problems.append(f"{where}.inputs: the tenant's own inputs file (exposure, egress, domains, sizes), which must exist")
-        if tenant.get("type") == "kubernetes" and not tenant.get("cluster_cloud"):
-            problems.append(f"{where}.cluster_cloud: the clouds.yaml entry of the cluster's application credential")
+    names = {t.get("name") for t in tenants}
+    for kind, members, types in (("tenants", tenants, TENANT_STACKS), ("shared-services", config.get("shared-services", []),
+                                                                       SERVICE_STACKS)):  # fmt: skip
+        for index, member in enumerate(members):
+            problems += check_member(kind, index, member, types, base, seen, names)
+    return problems
+
+
+def check_member(kind, index, member, types, base, seen, tenants):
+    """The problems of a tenant or a shared service."""
+    problems = []
+    name = member.get("name", "")
+    where = f"{kind}[{index}]" + (f" ({name})" if name else "")
+    if not NAME.match(name) or name in RESERVED:
+        problems.append(f"{where}.name: a short name (lowercase letters, digits, dashes), not {', '.join(sorted(RESERVED))}")
+    elif name in seen:
+        problems.append(f"{where}.name: {name} is used twice")
+    seen.add(name)
+    kind_type = member.get("type")
+    if kind_type not in types:
+        problems.append(f"{where}.type: one of {', '.join(types)}")
+    if not member.get("cloud"):
+        problems.append(f"{where}.cloud: the clouds.yaml entry of its project")
+    try:
+        ipaddress.ip_network(member.get("cidr", ""))
+    except ValueError:
+        problems.append(f"{where}.cidr: the range of its network, e.g. 10.21.0.0/24")
+    planes = member.get("planes", {})
+    if not planes or any(p not in PLANES or r not in ROLES for p, r in planes.items()):
+        problems.append(f"{where}.planes: each plane ({', '.join(sorted(PLANES))}) with its role (tenant or shared)")
+    if member.get("inputs") and not (base / member["inputs"]).exists():
+        problems.append(f"{where}.inputs: no file {member['inputs']}")
+    if kind_type == "existing" and (member.get("inputs") or member.get("values")):
+        problems.append(f"{where}: an existing project takes no inputs: lz only attaches it to the planes")
+    if kind_type == "kubernetes" and not member.get("cluster_cloud"):
+        problems.append(f"{where}.cluster_cloud: the clouds.yaml entry of the cluster's application credential")
+    if member.get("provides") and (kind != "shared-services" or set(member["provides"]) - PROVIDED):
+        problems.append(f"{where}.provides: a shared service's values for the tenants, among {', '.join(sorted(PROVIDED))}")
+    for consumer in member.get("consumers", []):
+        if consumer not in tenants:
+            problems.append(f"{where}.consumers: {consumer} is not a tenant")
     return problems
 
 
@@ -132,6 +167,12 @@ def backend(config, key):
     if not state:
         return None
     return {"type": state["backend"], "config": state.get("config", {}), "key": state["key"].format(stack=key)}
+
+
+def members(config):
+    """The tenants and the shared services, with the stack lz deploys for each (None: existing)."""
+    found = [(t, TENANT_STACKS[t["type"]]) for t in config["tenants"]]
+    return found + [(s, SERVICE_STACKS[s["type"]]) for s in config.get("shared-services", [])]
 
 
 def scenario(config):
@@ -147,11 +188,14 @@ def scenario(config):
         if key in SHARED_ATTACHMENTS:
             name, roles = SHARED_ATTACHMENTS[key]
             attachments[name] = {"stack": key, "cidr": config["stacks"][key]["cidr"], "planes": roles}
-    for tenant in config["tenants"]:
-        name = tenant["name"]
-        stacks[name], states[name] = TENANT_STACKS[tenant["type"]], name
-        options["stacks"][name] = {"inputs": [str(base / tenant["inputs"])], "backend": backend(config, name)}
-        attachments[name] = {"stack": name, "cidr": tenant["cidr"], "planes": tenant["planes"]}
+    for member, path in members(config):
+        name = member["name"]
+        attachments[name] = {"stack": name, "cidr": member["cidr"], "planes": member["planes"], "existing": path is None}
+        if path is None:
+            continue
+        stacks[name], states[name] = path, name
+        own = [str(base / member["inputs"])] if member.get("inputs") else []
+        options["stacks"][name] = {"inputs": own, "backend": backend(config, name)}
     # The ranges each plane routes to: those of the attachments that take it as tenants.
     ranges = {}
     for spec in attachments.values():
@@ -159,15 +203,18 @@ def scenario(config):
             if role == "tenant":
                 ranges.setdefault(plane, []).append(spec["cidr"])
     options["planes"]["tenant_ranges"] = ranges
-    options["clusters"] = [t["name"] for t in config["tenants"] if t["type"] == "kubernetes"]
     options["planes"]["own_inputs"] = True  # the planes themselves are in the stack's own inputs file
+    deployed = [m for m, path in members(config) if path]
+    options["clusters"] = [m["name"] for m in deployed if m["type"] == "kubernetes"]
+    services = [s for s in config.get("shared-services", []) if s["type"] != "existing"]
     sequence = ["prep", "planes"]
     sequence += ["deploy-egress"] if "egress" in stacks else []
     sequence += ["deploy-entry-point"]
-    sequence += [f"tenant-{t['name']}" for t in config["tenants"]]
+    sequence += [f"tenant-{t['name']}" for t in config["tenants"] if t["type"] != "existing"]
+    sequence += [f"service-{s['name']}" for s in services]  # after the tenants: their consumers' sources
     sequence += ["deploy-egress-tenants"] if "egress" in stacks else []
     sequence += ["transit", "deploy-publish"]
-    sequence += [f"cluster-{t['name']}" for t in config["tenants"] if t["type"] == "kubernetes"]
+    sequence += [f"cluster-{m['name']}" for m in deployed if m["type"] == "kubernetes"]
     return Scenario(
         name="deploy", profile=config["profile"], modes=[config["mode"]], stacks=stacks, states=states,
         sequences={"deploy": sequence}, options=options,
@@ -175,14 +222,17 @@ def scenario(config):
 
 
 def prepare(ctx, config):
-    """The context of a deployment: the adopter's services as values, the settings lz reads, and
-    the steps of each tenant."""
-    external = config.get("external", {})
-    ctx.external = {"receiver": {"receiver_url": external["monitoring"]["receiver"]}}
-    if external.get("resolvers"):
-        ctx.external["resolver"] = {"resolver": external["resolvers"][0]}
+    """The context of a deployment: the values given to the tenants, the settings lz reads, and
+    the steps of each tenant and shared service."""
+    given = provided(config)
+    ctx.external = {"receiver": {"receiver_url": given["receiver"]}}
+    if given.get("resolver"):
+        ctx.external["resolver"] = {"resolver": given["resolver"]}
+    if given.get("certificates"):
+        ctx.external["acme"] = {"certificates": given["certificates"]}
     ctx.config.setdefault("clouds", {}).update(config.get("clouds", {}))
-    ctx.config["clouds"].update({t["name"]: t["cloud"] for t in config["tenants"]})
+    for member, _ in members(config):
+        ctx.config["clouds"][member["name"]] = member["cloud"]
     ctx.config.setdefault("site", config["site"])
     ctx.config.setdefault("ssh_user", config["admin"]["ssh_user"])
     ctx.config.setdefault("ssh_key", config["admin"]["ssh_key"])
@@ -192,10 +242,14 @@ def prepare(ctx, config):
             link = ctx.root / ctx.scenario.stacks[key] / OWN_INPUTS
             link.unlink(missing_ok=True)
             link.symlink_to(base / stack["inputs"])
-    for tenant in config["tenants"]:
-        STEPS[f"tenant-{tenant['name']}"] = partial(tenant_step, tenant=tenant)
-        if tenant["type"] == "kubernetes":
-            STEPS[f"cluster-{tenant['name']}"] = partial(cluster_step, tenant=tenant)
+    for member, path in members(config):
+        if path is None:
+            continue
+        kind = "tenant" if member in config["tenants"] else "service"
+        STEPS[f"{kind}-{member['name']}"] = partial(tenant_step if kind == "tenant" else service_step, tenant=member,
+                                                    config=config)  # fmt: skip
+        if member["type"] == "kubernetes":
+            STEPS[f"cluster-{member['name']}"] = partial(cluster_step, tenant=member)
     STEPS["deploy-egress"] = deploy_egress
     STEPS["deploy-entry-point"] = deploy_entry_point
     STEPS["deploy-egress-tenants"] = partial(deploy_egress_tenants, tenants=config["tenants"])
@@ -218,12 +272,15 @@ def deploy_entry_point(ctx, report):
     ctx.apply("entry-point")
 
 
-def tenant_step(ctx, report, tenant):
-    """A tenant: what the landing zone gives it (its attachment, the receiver, the sources of the
-    entry point, a resolver), then its own inputs file; a Kubernetes tenant with its bootstrap
-    instance."""
+def tenant_step(ctx, report, tenant, config=None):
+    """A tenant: its values, then what the landing zone gives it (its attachment, the receiver, the
+    sources of the entry point, a resolver, its certificates), which win; its own inputs file comes
+    before both. A Kubernetes tenant with its bootstrap instance until its cluster exists."""
     name = tenant["name"]
-    inputs = dict(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, name), monitoring=monitoring(ctx))
+    inputs = dict(tenant.get("values", {}))
+    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, name), monitoring=monitoring(ctx))
+    if "acme" in ctx.external and name in ctx.external["acme"]["certificates"]:
+        inputs["certificates"] = ctx.value("acme", "certificates", name)
     if tenant["type"] == "vm":
         inputs["name"] = name  # the vm stack's resources are named after it
     if "publication" in tenant["planes"]:
@@ -237,6 +294,26 @@ def tenant_step(ctx, report, tenant):
     ctx.set_inputs(name, **inputs)
     ctx.apply(name)
     if tenant["type"] == "kubernetes" and inputs["bootstrap"]:
+        wait_for_bootstrap(ctx, name)
+
+
+def service_step(ctx, report, tenant, config):
+    """A shared service deployed by lz (the shared cluster): admitted to its consumers, the tenants
+    it names, by their addresses on the internal services plane."""
+    name = tenant["name"]
+    consumers = []
+    for consumer in tenant.get("consumers", []):
+        member = next(t for t in config["tenants"] if t["name"] == consumer)
+        existing = member["type"] == "existing"
+        consumers += member.get("internal_sources", []) if existing else ctx.value(consumer, "internal_sources")
+    inputs = dict(tenant.get("values", {}))
+    inputs.update(cloud=ctx.cloud(name), plane_attachment=attachment(ctx, name), monitoring=monitoring(ctx),
+                  consumers=consumers, bootstrap=not kubeconfig(ctx, name).exists())  # fmt: skip
+    if "acme" in ctx.external and name in ctx.external["acme"]["certificates"]:
+        inputs["certificates"] = ctx.value("acme", "certificates", name)
+    ctx.set_inputs(name, **inputs)
+    ctx.apply(name)
+    if inputs["bootstrap"]:
         wait_for_bootstrap(ctx, name)
 
 
@@ -259,7 +336,7 @@ def deploy_publish(ctx, report, tenants):
     import os  # noqa: PLC0415
 
     for tenant in tenants:
-        if "publication" not in tenant["planes"]:
+        if "publication" not in tenant["planes"] or tenant["type"] == "existing":
             continue
         stack = ctx.stack(tenant["name"])
         result = ctx.runner.run(["scripts/request-domains.sh", stack, "--tool", ctx.tool], cwd=ctx.root, env=stack.env(),
