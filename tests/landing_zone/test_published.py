@@ -146,6 +146,13 @@ class TeardownTest(unittest.TestCase):
         self.assertEqual(entry.measures["destroyed"], "4/4")
         self.assertEqual(len(entry.measures["waves"].split(", ")), 3)
 
+    def test_an_external_service_is_not_destroyed(self):
+        ctx = context(answer(), stacks=STACKS, states=STATES)
+        ctx.external = {"receiver": {"receiver_url": "https://metrics.example.org/api/v1/write"}}
+        entry = StepReport("teardown")
+        load()["teardown"](ctx, entry)  # the receiver given by the configuration: not a stack
+        self.assertEqual(entry.measures["destroyed"], "4/4")
+
 
 if __name__ == "__main__":
     unittest.main()

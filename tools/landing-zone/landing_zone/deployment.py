@@ -213,6 +213,7 @@ def scenario(config):
     sequence += ["deploy-egress-tenants"] if "egress" in stacks else []
     sequence += ["transit", "deploy-publish"]
     sequence += [f"cluster-{m['name']}" for m in deployed if m["type"] == "kubernetes"]
+    options["from"] = {"apply": sequence}  # lz upgrade: the same steps, applied over the deployed release
     return Scenario(
         name="deploy", profile=config["profile"], modes=[config["mode"]], stacks=stacks, states=states,
         sequences={"deploy": sequence}, options=options,

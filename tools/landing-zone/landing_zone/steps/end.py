@@ -50,7 +50,7 @@ def teardown(ctx, report):
     # The next campaign publishes for the first time again: no load during that publication.
     (ctx.work / "published-once").unlink(missing_ok=True)
     listed = {k for wave in WAVES for k in wave}
-    waves = [[k for k in wave if ctx.has(k)] for wave in WAVES]
+    waves = [[k for k in wave if k in ctx.scenario.stacks] for wave in WAVES]  # not the external services
     # The stacks of a deployment (lz deploy): its tenants with the clusters and tenants, the
     # shared stacks it adds with the shared services.
     others = [k for k in ctx.scenario.stacks if k not in listed]

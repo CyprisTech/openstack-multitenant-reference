@@ -35,6 +35,12 @@ class ExampleTest(unittest.TestCase):
                           "deploy-publish", "cluster-apps"])  # fmt: skip
 
 
+class UpgradeTest(unittest.TestCase):
+    def test_lz_upgrade_applies_the_steps_of_deploy(self):
+        scenario = deployment.scenario(deployment.load(EXAMPLE))
+        self.assertEqual(scenario.options["from"]["apply"], scenario.expand(["deploy"]))
+
+
 class ChecksTest(unittest.TestCase):
     def problems(self, text):
         with tempfile.TemporaryDirectory() as base:
