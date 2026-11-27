@@ -2,7 +2,7 @@
 
 Order matters: what depends on another stack goes first.
 
-**With [`lz`](../../tools/landing-zone/README.md):** `tools/landing-zone/lz teardown landing-zone.toml` runs the order below in waves (the clusters and the tenants, the shared services, the planes), then checks that nothing is left in the projects of its stacks. It destroys what its states hold, and nothing in a project of type `existing`, which it only attached.
+**With [`lz`](../../tools/landing-zone/README.md):** `lz teardown landing-zone.toml` runs the order below in waves (the clusters and the tenants, the shared services, the planes), then checks that nothing is left in the projects of its stacks. It destroys what its states hold, and nothing in a project of type `existing`, which it only attached.
 
 By hand:
 

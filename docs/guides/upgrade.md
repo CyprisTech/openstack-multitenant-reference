@@ -7,8 +7,8 @@ Upgrade one release at a time: each release is tested from the one before it ([A
 The steps of *Before* below, then, with the reference checked out at the new release:
 
 ```bash
-tools/landing-zone/lz plan landing-zone.toml      # what each stack would change; exit code 2 when something would
-tools/landing-zone/lz upgrade landing-zone.toml   # each stack planned then applied, in the order of the deployment; the clusters updated
+lz plan landing-zone.toml      # what each stack would change; exit code 2 when something would
+lz upgrade landing-zone.toml   # each stack planned then applied, in the order of the deployment; the clusters updated
 ```
 
 `lz upgrade` applies the stacks as `lz deploy` does, each one planned first; `migration.json`, in its work directory, lists what each apply replaced and destroyed. Then *Check*, below. By hand: the sections below.

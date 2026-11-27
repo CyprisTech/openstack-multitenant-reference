@@ -56,15 +56,16 @@ The fixtures stand for your own receivers, internal services and certificate aut
 
 ## Deploy with `lz`
 
-With the projects of step 0 and their `clouds.yaml` entries:
+With the projects of step 0 and their `clouds.yaml` entries, and `lz` on the `PATH`, from the root of the reference's checkout:
 
 ```bash
-mkdir -p ../my-landing-zone && cp -r examples/deployment/. ../my-landing-zone/   # your deployment repository
+export PATH="$PWD/tools/landing-zone:$PATH"   # once per shell; lz runs from any directory
+lz init ../my-landing-zone      # your deployment repository: landing-zone.toml and an inputs file per stack
 # edit landing-zone.toml: profile, plane mode, a clouds.yaml entry per project, the ranges,
-# the tenants and the shared services, the backend of the states; one inputs file per stack
-tools/landing-zone/lz deploy ../my-landing-zone/landing-zone.toml --dry-run   # the commands, without a cloud
-tools/landing-zone/lz deploy ../my-landing-zone/landing-zone.toml
-tools/landing-zone/lz status ../my-landing-zone/landing-zone.toml
+# the tenants and the shared services, the backend of the states; then each inputs file
+lz deploy ../my-landing-zone/landing-zone.toml --dry-run   # the commands, without a cloud
+lz deploy ../my-landing-zone/landing-zone.toml
+lz status ../my-landing-zone/landing-zone.toml
 ```
 
 `lz` checks the file before anything runs, then runs steps 1 to 6 below, each apply followed by an empty plan, and creates the Kubernetes clusters from their bootstrap instance. It writes what the stacks give each other (the attachments of the planes, the receiver, the sources of the entry point, the consumers of the shared services); every other input is in the stacks' own files, as in their READMEs. A run started again goes on from the states. Then [step 7](#7-check). The commands, the configuration and where the states and kubeconfigs go: [`lz`](../../tools/landing-zone/README.md).

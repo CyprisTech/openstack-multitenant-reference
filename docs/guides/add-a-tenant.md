@@ -17,7 +17,7 @@ inputs = "shop.tfvars"                # exposure, egress, domains, sizes, as in 
 ```
 
 ```bash
-tools/landing-zone/lz deploy landing-zone.toml
+lz deploy landing-zone.toml
 ```
 
 `lz` declares the attachment (step 3), applies the planes, the tenant and the planes again (steps 5 and 6), and publishes its domains (step 7). `lz deploy` destroys nothing: to remove a tenant, follow *Remove a tenant* below, then remove its block. By hand: steps 3 to 7.

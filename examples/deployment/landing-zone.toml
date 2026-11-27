@@ -1,8 +1,8 @@
-# The configuration of a deployment, read by lz deploy (ADR-0018). Copy this directory into your
-# deployment repository, then adapt each file:
+# The configuration of a deployment, read by lz deploy (ADR-0018). lz init <directory> writes it in
+# your deployment repository, with the inputs file of each stack beside it; then adapt each file:
 #
-#     tools/landing-zone/lz deploy path/to/landing-zone.toml --dry-run    # the commands, without a cloud
-#     tools/landing-zone/lz deploy path/to/landing-zone.toml
+#     lz deploy path/to/landing-zone.toml --dry-run    # the commands, without a cloud
+#     lz deploy path/to/landing-zone.toml
 #
 # lz writes what the stacks give each other (attachments, the receiver, the sources of the entry
 # point); every other input of a stack is in its own file below, as in the stack's README.

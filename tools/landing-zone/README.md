@@ -6,13 +6,19 @@ Python 3.11 or later, standard library only. Other tools on the machine that run
 
 ## Deploy your landing zone
 
-1. Copy [`examples/deployment`](../../examples/deployment) into your deployment repository, and the `terraform.tfvars.example` of each stack you use beside it.
+`lz` runs from the reference's checkout, from any directory: put it on the `PATH` once per shell, from the root of the checkout. The commands below assume it.
+
+```bash
+export PATH="$PWD/tools/landing-zone:$PATH"
+```
+
+1. `lz init path/to/my-landing-zone` writes your deployment repository: `landing-zone.toml` from the [example](../../examples/deployment/landing-zone.toml), and beside it the `terraform.tfvars.example` of each stack it names, as `<name>.tfvars`.
 2. Edit `landing-zone.toml`: the profile and the plane mode, a `clouds.yaml` entry per project, the ranges, the tenants and the shared services, the backend of the states. The comments of the example say what each key is; `lz` checks the file before anything runs, and says which key is wrong.
 3. Look at the commands, then deploy:
 
 ```bash
-tools/landing-zone/lz deploy path/to/landing-zone.toml --dry-run   # the commands, without a cloud
-tools/landing-zone/lz deploy path/to/landing-zone.toml
+lz deploy path/to/landing-zone.toml --dry-run   # the commands, without a cloud
+lz deploy path/to/landing-zone.toml
 ```
 
 **What the configuration declares.** Tenants consume, shared services offer; each is in its own project. Its `type` says what `lz` deploys there:
@@ -35,6 +41,7 @@ Each command takes the configuration file of a deployment, or a scenario of the 
 
 | Command | What it does |
 |---|---|
+| `init` | a deployment repository: `landing-zone.toml` and an inputs file per stack, from the example |
 | `deploy` | your landing zone, from its configuration file |
 | `plan` | what an apply would change in each deployed stack, kept in `<work>/plans`; nothing is changed. Exit code 2 when something would change |
 | `status` | what is deployed: each stack and the number of its resources, the kubeconfig of each cluster |
@@ -60,11 +67,11 @@ Before the first step, `lz` checks that every `clouds.yaml` entry it will use au
 ```bash
 cp tools/landing-zone/campaign.local.toml.example tools/landing-zone/campaign.local.toml   # adapt
 # and a terraform.tfvars for each stack and fixture, from its terraform.tfvars.example
-tools/landing-zone/lz campaign private-cloud --mode gateway full
-tools/landing-zone/lz apply private-cloud --mode interface planes tenant-web   # or a few steps
-tools/landing-zone/lz campaign public-cloud full
-tools/landing-zone/lz campaign private-cloud --dry-run full                   # the commands, without a cloud
-tools/landing-zone/lz campaign private-cloud --mode interface --from v0.5.1   # the upgrade from a release
+lz campaign private-cloud --mode gateway full
+lz apply private-cloud --mode interface planes tenant-web   # or a few steps
+lz campaign public-cloud full
+lz campaign private-cloud --dry-run full                   # the commands, without a cloud
+lz campaign private-cloud --mode interface --from v0.5.1   # the upgrade from a release
 PYTHONPATH=tools/landing-zone python3 -m unittest discover -s tests/landing_zone -t tests/landing_zone
 ```
 
