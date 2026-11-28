@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- ADR-0015 to ADR-0018 accepted.
+
 ## [0.6.0] - 2026-11-27
 
 Network services and the edge by level ([ADR-0016](docs/adr/0016-network-services-and-edge-by-level.md)), upgrades between releases ([ADR-0017](docs/adr/0017-upgrades-between-releases.md)) and `lz`, the deployment tool of the reference ([ADR-0018](docs/adr/0018-deployment-tool.md)). Tested by the release campaign of 2026-11-27 in both plane modes, the hub planes upgraded from v0.5.1 ([test results](docs/concepts/test-results.md)).

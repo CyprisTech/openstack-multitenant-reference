@@ -1,10 +1,10 @@
 # ADR-0016: Network services and the edge, by level
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-23
 - **Deciders:** maintainers
 - **Refines:** [ADR-0003](0003-scope-and-boundary.md) D3 (the tenant types: `isolated` becomes a configuration of `vm`, D1) and D4 (network services in scope: egress, DNS resolution, time, package mirrors), [ADR-0004](0004-planes-and-isolation.md) (planes), [ADR-0006](0006-exposure.md) (exposure)
-- **Supersedes, once accepted:** [ADR-0006](0006-exposure.md) D3 for the source of the routes of the entry point (D5 below); their delivery as instance metadata is kept
+- **Supersedes:** [ADR-0006](0006-exposure.md) D3 for the source of the routes of the entry point (D5 below); their delivery as instance metadata is kept
 
 ## Context
 

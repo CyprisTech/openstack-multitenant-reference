@@ -1,6 +1,6 @@
 # ADR-0018: The campaign becomes the deployment tool
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-26
 - **Deciders:** maintainers
 - **Refines / Supersedes:** refines 0005 (stacks, contracts and access) and 0017 (upgrades between releases)

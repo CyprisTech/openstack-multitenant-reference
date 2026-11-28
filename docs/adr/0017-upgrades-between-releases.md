@@ -1,10 +1,10 @@
 # ADR-0017: Upgrades between releases
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-23
 - **Deciders:** maintainers
 - **Refines:** [ADR-0009](0009-kubernetes-lifecycle.md) (Kubernetes lifecycle), [ADR-0002](0002-platform-kubernetes.md) (the bootstrap instance)
-- **Supersedes, once accepted:** [ADR-0009](0009-kubernetes-lifecycle.md) D1 for the administration path during operations (D3 below)
+- **Supersedes:** [ADR-0009](0009-kubernetes-lifecycle.md) D1 for the administration path during operations (D3 below)
 
 ## Context
 
@@ -47,4 +47,4 @@ After `clusterctl move`, the administration path of a cluster during operations 
 - `create-cluster.sh` creates and moves the cluster, then calls `update-cluster.sh`; the README of the Kubernetes stacks and the Kubernetes lifecycle guide describe how a cluster takes a release.
 - The campaign can deploy a previous release and apply the commit under test over it (`lz campaign --from`); the test results say which mode went through the upgrade.
 - The CHANGELOG's migration notes are drafted from the report of the release campaign.
-- ADR-0009 D1 keeps what the reference owns, except the administration path, which this ADR supersedes once accepted.
+- ADR-0009 D1 keeps what the reference owns, except the administration path, which this ADR supersedes.
