@@ -67,7 +67,7 @@ def migrate(ctx, report):
         ctx.migration.write()
         lines = ctx.migration.summary()
         ctx.migration = None
-    report.measures["requests"] = "; ".join(f"{load.label}: {load.summary()}" for load in running) or "none"
+    report.measures["migration load"] = "; ".join(f"{load.label}: {load.summary()}" for load in running) or "none"
     report.measures["migration"] = "; ".join(lines) or "nothing replaced or destroyed"
     for line in lines:
         ctx.runner.echo(f"migration: {line}")

@@ -289,7 +289,7 @@ class PublishTest(unittest.TestCase):
         script = [(c, env) for c, env in ctx.runner.commands if c[0] == "scripts/publish-domains.sh"]
         self.assertEqual(script[0][0], ["scripts/publish-domains.sh", "--tool", "tofu"])
         self.assertEqual(script[0][1]["OS_CLOUD"], "edge")
-        self.assertNotIn("load", entry.measures)
+        self.assertNotIn("publication load", entry.measures)
         self.assertTrue((ctx.work / "published-once").exists())
 
     def test_a_failed_publication_fails_the_step(self):

@@ -266,7 +266,7 @@ def publish(ctx, report, load=None):
     if not ctx.runner.dry_run:
         marker.touch()
     if loader:
-        report.measures["load"] = loader.summary()
+        report.measures["publication load"] = loader.summary()
         with (ctx.work / "https.txt").open("a") as f:
             f.write(f"requests during the publication: {loader.summary()}\n")
     if result.returncode != 0:

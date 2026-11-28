@@ -171,6 +171,9 @@ class Deployment:
         self.edge_vm = sorted(self.edge["instances"].items())[0]
         self.web_vm = sorted(self.web["instances"].items())[0]
         self.prv_vm = sorted(self.prv["instances"].items())[0]
+        # The tenant that goes out through the shared egress, when the test is given it.
+        self.egt = outputs(args.tool, args.egress_tenant) if args.egress_tenant else None
+        self.egt_vm = sorted(self.egt["instances"].items())[0] if self.egt else None
         self.public_ip = self.edge["load_balancer"]["floating_ip"]
         self.service = self.web["service_address"].split(":")[0]
         self.receiver = self.rcv["receiver_url"].split("//")[1].split(":")[0]
@@ -288,7 +291,8 @@ def load_balancer_rows(name, kubectl, entry_namespace, entry_address):
 def monitoring_rows(d):
     """Monitoring (ADR-0007): nothing reaches a tenant's metrics (the pushes come from the rules)."""
     rows = []
-    for name, ip in ((d.edge_vm[0], d.edge_vm[1]), (d.web_vm[0], d.web_vm[1]), (d.prv_vm[0], d.prv_vm[1])):
+    instances = [d.edge_vm, d.web_vm, d.prv_vm] + ([d.egt_vm] if d.egt_vm else [])
+    for name, ip in instances:
         rows.append(("receiver", f"{name} metrics (private {ip})", 9100, "closed", d.from_receiver(ip, 9100)))
     return rows
 
@@ -300,7 +304,7 @@ def lateral_rows(d):
     rows = [(name, f"receiver {d.receiver} (SSH)", 22, "closed", probe(d.receiver, 22)) for name, probe in d.tenants()]
     rows.append(("receiver", f"web service address {d.service}", 443, "closed", d.from_receiver(d.service, 443)))
     rows.append(("receiver", f"edge {d.edge_vm[0]} (private {d.edge_vm[1]})", 443, "closed", d.from_receiver(d.edge_vm[1], 443)))
-    for tenant in ("edge", "web", "private"):
+    for tenant in ("edge", "web", "private") + (("egress-shared",) if d.egt else ()):
         rows.append(("receiver", f"series pushed by {tenant}", "-", "yes", lambda t=tenant: d.pushed(t)))
     return rows
 
