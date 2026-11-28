@@ -92,7 +92,14 @@ run "long_names_split_in_items" {
 
   variables {
     tenants = {
-      builds = { sources = ["203.0.113.21/32"], domains = [for i in range(30) : ".mirror-${i}.example.org"] }
+      builds = { sources = ["203.0.113.21/32"], domains = [
+        ".mirror-0.example.org", ".mirror-1.example.org", ".mirror-2.example.org", ".mirror-3.example.org", ".mirror-4.example.org",
+        ".mirror-5.example.org", ".mirror-6.example.org", ".mirror-7.example.org", ".mirror-8.example.org", ".mirror-9.example.org",
+        ".mirror-10.example.org", ".mirror-11.example.org", ".mirror-12.example.org", ".mirror-13.example.org", ".mirror-14.example.org",
+        ".mirror-15.example.org", ".mirror-16.example.org", ".mirror-17.example.org", ".mirror-18.example.org", ".mirror-19.example.org",
+        ".mirror-20.example.org", ".mirror-21.example.org", ".mirror-22.example.org", ".mirror-23.example.org", ".mirror-24.example.org",
+        ".mirror-25.example.org", ".mirror-26.example.org", ".mirror-27.example.org", ".mirror-28.example.org", ".mirror-29.example.org",
+      ] }
     }
   }
 

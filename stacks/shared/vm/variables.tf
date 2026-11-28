@@ -195,7 +195,7 @@ variable "services" {
     error_message = "services needs at least one service, each with at least one port."
   }
   validation {
-    condition     = alltrue([for s in var.services : s.sources == null || alltrue([for c in s.sources : can(cidrhost(c, 0)) && !endswith(c, "/0")])])
+    condition     = alltrue([for s in var.services : alltrue([for c in coalesce(s.sources, []) : can(cidrhost(c, 0)) && !endswith(c, "/0")])])
     error_message = "services sources are CIDRs, without a default route (/0): the plane is shared."
   }
   validation {

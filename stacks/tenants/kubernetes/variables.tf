@@ -67,6 +67,8 @@ variable "network_mtu" {
   default     = null
 }
 
+# Declared for the interface: "router" is today's only egress of a cluster; "shared" (v0.7) will use it.
+# tflint-ignore: terraform_unused_declarations
 variable "egress" {
   description = <<-EOT
     How the cluster reaches the Internet (ADR-0016, D1), for its container images, its charts and
